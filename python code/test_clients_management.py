@@ -1,10 +1,16 @@
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from clients_management import Client, ClientManager
 from clients_progress_ui import Plan, parse_task_items
+from sync_documents import TARGET
 
 try:
     from package_app import resolve_desktop_dir
@@ -111,6 +117,11 @@ class ClientManagerTests(unittest.TestCase):
         desktop_dir = resolve_desktop_dir()
         self.assertTrue(desktop_dir.exists())
         self.assertTrue(str(desktop_dir).endswith("Desktop") or str(desktop_dir).endswith("Desktop") or "Desktop" in str(desktop_dir))
+
+    def test_sync_documents_target_uses_current_project_root(self):
+        project_root = Path(__file__).resolve().parent.parent
+        expected_target = project_root / "python code" / "docs" / "documents.txt"
+        self.assertEqual(TARGET.resolve(), expected_target.resolve())
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ This will:
 The script creates a shortcut named:
 
 ```text
-Marketing Booster.lnk
+Marketing Booster AR.lnk
 ```
 
 ## 3) Notes

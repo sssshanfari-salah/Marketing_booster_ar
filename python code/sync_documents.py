@@ -4,8 +4,10 @@ import hashlib
 import time
 from pathlib import Path
 
-SOURCE = Path(r"C:\Users\ssssh\Documents\Document Manager\documents.txt")
-TARGET = Path(r"C:\Users\ssssh\OneDrive\Documents\Marketing booster\python code\docs\documents.txt")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DOCS_DIR = PROJECT_ROOT / "python code" / "docs"
+SOURCE = DOCS_DIR / "documents.txt"
+TARGET = DOCS_DIR / "documents.txt"
 
 
 def sync_once() -> bool:

@@ -1,5 +1,4 @@
-('C:\\Users\\ssssh\\OneDrive\\Documents\\Marketing '
- 'booster\\build\\marketing_booster\\PYZ-00.pyz',
+('C:\\Users\\ssssh\\OneDrive\\Documents\\Marketing_booster_ar\\build\\marketing_booster_ar\\PYZ-00.pyz',
  [('__future__',
    'C:\\Users\\ssssh\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\__future__.py',
    'PYMODULE'),
@@ -58,11 +57,11 @@
    'C:\\Users\\ssssh\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib\\calendar.py',
    'PYMODULE'),
   ('clients_management',
-   'C:\\Users\\ssssh\\OneDrive\\Documents\\Marketing booster\\python '
+   'C:\\Users\\ssssh\\OneDrive\\Documents\\Marketing_booster_ar\\python '
    'code\\clients_management.py',
    'PYMODULE'),
   ('clients_progress_ui',
-   'C:\\Users\\ssssh\\OneDrive\\Documents\\Marketing booster\\python '
+   'C:\\Users\\ssssh\\OneDrive\\Documents\\Marketing_booster_ar\\python '
    'code\\clients_progress_ui.py',
    'PYMODULE'),
   ('codeop',

@@ -1,6 +1,6 @@
- # Project name
+# Project name
 
-Marketing Booster
+Marketing Booster AR
 
 ## Objective
 

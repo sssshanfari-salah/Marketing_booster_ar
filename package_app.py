@@ -8,9 +8,11 @@ SOURCE_DIR = APP_DIR / "python code"
 DIST_DIR = APP_DIR / "dist"
 BUILD_DIR = APP_DIR / "build"
 APP_NAME = "marketing_booster_ar"
-APP_DISPLAY_NAME = "Marketing Booster"
+APP_DISPLAY_NAME = "Marketing Booster AR"
 SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
 TARGET_ICON = APP_DIR / "starco_icon.ico"
+LEGACY_APP_NAMES = ["marketing_booster"]
+LEGACY_DISPLAY_NAMES = ["Marketing Booster"]
 
 
 def resolve_desktop_dir():
@@ -31,6 +33,27 @@ def resolve_desktop_dir():
 
 
 DESKTOP_DIR = resolve_desktop_dir()
+
+
+def remove_stale_artifacts():
+    for legacy_name in LEGACY_APP_NAMES:
+        stale_paths = [
+            DIST_DIR / f"{legacy_name}.exe",
+            DIST_DIR / legacy_name / f"{legacy_name}.exe",
+        ]
+        for stale in stale_paths:
+            if stale.exists():
+                if stale.is_dir():
+                    for child in stale.iterdir():
+                        child.unlink()
+                    stale.rmdir()
+                else:
+                    stale.unlink()
+
+    for legacy_name in LEGACY_DISPLAY_NAMES:
+        desktop_link = DESKTOP_DIR / f"{legacy_name}.lnk"
+        if desktop_link.exists():
+            desktop_link.unlink()
 
 
 def find_built_exe():
@@ -64,6 +87,10 @@ def ensure_pywin32():
 
 
 def build_app():
+    DIST_DIR.mkdir(parents=True, exist_ok=True)
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    remove_stale_artifacts()
+
     if not ensure_pyinstaller():
         print("PyInstaller is not installed. Installing it now...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
@@ -72,6 +99,7 @@ def build_app():
         sys.executable,
         "-m",
         "PyInstaller",
+        "--clean",
         "--onefile",
         "--windowed",
         "--name",
@@ -90,6 +118,7 @@ def build_app():
             sys.executable,
             "-m",
             "PyInstaller",
+            "--clean",
             "--onefile",
             "--windowed",
             "--name",

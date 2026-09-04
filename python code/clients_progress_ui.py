@@ -133,10 +133,12 @@ def parse_task_items(raw_value, fallback_total=0):
         if fallback_total <= 0:
             return []
         return [T("Task {i}", i=i) for i in range(1, fallback_total + 1)]
-        for item in chunk.split(","):
-            task = item.strip()
-            if task:
-                items.append(task)
+
+    items = []
+    for chunk in text.replace("\n", ",").split(","):
+        task = chunk.strip()
+        if task:
+            items.append(task)
 
     return items
 
