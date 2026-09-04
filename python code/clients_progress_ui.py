@@ -234,8 +234,8 @@ class TaskDetailsWindow(tk.Toplevel):
     def __init__(self, master=None, client_name="Client", plan=None, all_tasks=None, pending_tasks=None):
         super().__init__(master)
         self.title(T("Task Details - {client_name}", client_name=client_name))
-        self.geometry("560x430")
-        self.minsize(460, 320)
+        self.geometry("720x520")
+        self.minsize(620, 420)
 
         self.plan = plan
         self.master_app = master
@@ -747,13 +747,14 @@ class ProgressApp(tk.Tk):
         for idx, (text, command) in enumerate(action_buttons):
             column = idx % 2
             row = idx // 2
-            ttk.Button(
+            button = ttk.Button(
                 button_row,
                 text=text,
                 command=command,
                 style="Action.TButton",
-                width=15,
-            ).grid(row=row, column=column, sticky="ew", padx=(0, 4), pady=(0, 4))
+            )
+            button.grid(row=row, column=column, sticky="ew", padx=(0, 4), pady=(0, 4))
+            button.configure(width=max(18, len(text) + 4))
 
         task_entry_row = ttk.Frame(tasks_frame)
         task_entry_row.grid(row=2, column=0, columnspan=5, sticky="ew", padx=(10, 10), pady=(0, 8))
