@@ -33,7 +33,7 @@ TRANSLATIONS = {
     "Client: {client_name}": "العميل: {client_name}",
     "All Tasks": "جميع المهام",
     "Pending Tasks": "المهام المعلقة",
-    "Mark Done": "تحديد كمكتمل",
+    "Mark Done": "تم ألانجاز",
     "Close": "إغلاق",
     "No task plan": "لا توجد خطة مهام",
     "There is no active task plan to update.": "لا توجد خطة مهام نشطة لتحديثها.",
@@ -234,7 +234,7 @@ class TaskDetailsWindow(tk.Toplevel):
     def __init__(self, master=None, client_name="Client", plan=None, all_tasks=None, pending_tasks=None):
         super().__init__(master)
         self.title(T("Task Details - {client_name}", client_name=client_name))
-        self.geometry("720x520")
+        self.geometry("820x620")
         self.minsize(620, 420)
 
         self.plan = plan

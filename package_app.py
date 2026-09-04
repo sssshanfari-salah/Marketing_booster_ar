@@ -1,6 +1,8 @@
 import os
-import sys
+import shutil
 import subprocess
+import sys
+import time
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
@@ -90,14 +92,68 @@ def ensure_pywin32():
         return False
 
 
+def force_remove_path(path, retries=8, delay=0.5):
+    if not path.exists():
+        return
+
+    for attempt in range(retries):
+        try:
+            if path.is_dir() and not path.is_symlink():
+                for root, dirs, files in os.walk(path, topdown=False):
+                    for name in files:
+                        file_path = Path(root) / name
+                        try:
+                            file_path.unlink()
+                        except PermissionError:
+                            os.chmod(file_path, 0o777)
+                            file_path.unlink()
+                    for name in dirs:
+                        dir_path = Path(root) / name
+                        try:
+                            dir_path.rmdir()
+                        except OSError:
+                            os.chmod(dir_path, 0o777)
+                            dir_path.rmdir()
+                path.rmdir()
+            else:
+                path.unlink()
+            return
+        except (PermissionError, OSError):
+            if attempt == retries - 1:
+                raise
+            os.chmod(path, 0o777)
+            if path.is_dir():
+                for child in path.iterdir():
+                    try:
+                        os.chmod(child, 0o777)
+                    except OSError:
+                        pass
+            time.sleep(delay)
+
+
+def remove_directory(path):
+    if not path.exists():
+        return
+
+    try:
+        force_remove_path(path)
+    except (PermissionError, OSError):
+        print(f"Warning: could not fully remove {path}. Continuing with the rebuild attempt.")
+
+
 def build_app():
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     remove_stale_artifacts()
+    remove_directory(BUILD_DIR)
+    remove_directory(DIST_DIR)
 
     if not ensure_pyinstaller():
         print("PyInstaller is not installed. Installing it now...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+
+    DIST_DIR.mkdir(parents=True, exist_ok=True)
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
     cmd = [
         sys.executable,
