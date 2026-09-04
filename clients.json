@@ -1,0 +1,63 @@
+[
+  {
+    "name": "Bin Salim",
+    "contact": "99999999",
+    "business": "machineries suppliers 'Hilti'",
+    "email": "",
+    "shop_number": "",
+    "reviews": []
+  },
+  {
+    "name": "Bin Salim",
+    "contact": "99999999",
+    "business": "machineries suppliers 'Hilti'",
+    "email": "",
+    "shop_number": "",
+    "reviews": []
+  },
+  {
+    "name": "Ali",
+    "contact": "N/A",
+    "business": "N/A",
+    "email": "",
+    "shop_number": "",
+    "reviews": []
+  },
+  {
+    "name": "Khalid Salim",
+    "contact": "97709770",
+    "business": "real estate management",
+    "email": "",
+    "shop_number": "",
+    "reviews": []
+  },
+  {
+    "name": "Fahad",
+    "contact": "90876587",
+    "business": "furniture",
+    "email": "fahad@gmail.co",
+    "shop_number": "",
+    "reviews": []
+  },
+  {
+    "name": "Salah",
+    "contact": "96181142",
+    "business": "real estate",
+    "email": "sssshanfari@yahoo.com",
+    "shop_number": "",
+    "reviews": []
+  },
+  {
+    "name": "Mohammed",
+    "contact": "94440006",
+    "business": "consultancy office",
+    "email": "mohammed94@gmail.com",
+    "shop_number": "3",
+    "reviews": [
+      {
+        "date": "2026-09-03 11:35:02",
+        "review": "please make sure prayer room ac on all time during day time"
+      }
+    ]
+  }
+]
