@@ -5,6 +5,12 @@ from urllib.parse import quote
 import tkinter as tk
 from tkinter import ttk, messagebox
 
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = None
+    ImageTk = None
+
 from clients_management import Client, ClientManager
 
 APP_ICON = Path(__file__).resolve().parent.parent / "starco_icon.ico"
@@ -22,7 +28,7 @@ TRANSLATIONS = {
     "There is no active task plan to update.": "لا توجد خطة مهام نشطة لتحديثها.",
     "No task selected": "لم يتم تحديد أي مهمة",
     "Select a task from the pending list first.": "حدد مهمة من القائمة المعلقة أولاً.",
-    "Client Progress Manager": "مدير تقدم العملاء",
+    "Client Progress Manager": "مدير العملاء",
     "Client Details": "تفاصيل العميل",
     "Client Name": "اسم العميل",
     "Contact": "رقم التواصل",
@@ -560,8 +566,37 @@ class ProgressApp(tk.Tk):
         main.rowconfigure(2, weight=0)
         main.rowconfigure(3, weight=1)
 
-        title = ttk.Label(main, text=T("Client Progress Manager"), style="Header.TLabel")
-        title.grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
+        header = ttk.Frame(main)
+        header.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(0, 8))
+        header.columnconfigure(0, weight=0)
+        header.columnconfigure(1, weight=1)
+        header.columnconfigure(2, weight=0)
+
+        try:
+            if Image is not None and ImageTk is not None and APP_ICON.exists():
+                logo_image = Image.open(APP_ICON)
+                if logo_image.size[0] > 0 and logo_image.size[1] > 0:
+                    logo_image = logo_image.resize((32, 32), Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS)
+                    self.header_logo_image = ImageTk.PhotoImage(logo_image)
+                    logo_label = tk.Label(header, image=self.header_logo_image, bd=0, highlightthickness=0)
+                    logo_label.grid(row=0, column=0, sticky="w", padx=(0, 10))
+                else:
+                    raise ValueError("empty icon size")
+            else:
+                raise ValueError("Pillow not available or icon missing")
+        except Exception:
+            self.header_logo_image = None
+            logo_label = tk.Label(header, text="★", font=("Segoe UI", 18, "bold"), fg="#1f2937", bd=0)
+            logo_label.grid(row=0, column=0, sticky="w", padx=(0, 10))
+
+        title = tk.Label(
+            header,
+            text=T("Client Progress Manager"),
+            font=("Segoe UI", 14, "bold"),
+            fg="#1f2937",
+            anchor="center",
+        )
+        title.grid(row=0, column=1, sticky="ew")
 
         details_frame = ttk.LabelFrame(main, text=T("Client Details"), style="Section.TLabelframe")
         details_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=(0, 6), pady=(0, 8))
