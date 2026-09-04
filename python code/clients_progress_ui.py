@@ -9,6 +9,109 @@ from clients_management import Client, ClientManager
 
 APP_ICON = Path(__file__).resolve().parent.parent / "starco_icon.ico"
 
+TRANSLATIONS = {
+    "Tkinter could not start in this environment.": "تعذر启动 واجهة Tkinter في هذا البيئة.",
+    "Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.": "يرجى تشغيل هذا الملف من محطة Windows عادية أو من محطة VS Code، وليس من وحدة تحكم رأسية أو وضع التصحيح.",
+    "Client": "العميل",
+    "Client: {client_name}": "العميل: {client_name}",
+    "All Tasks": "جميع المهام",
+    "Pending Tasks": "المهام المعلقة",
+    "Mark Done": "تحديد كمكتمل",
+    "Close": "إغلاق",
+    "No task plan": "لا توجد خطة مهام",
+    "There is no active task plan to update.": "لا توجد خطة مهام نشطة لتحديثها.",
+    "No task selected": "لم يتم تحديد أي مهمة",
+    "Select a task from the pending list first.": "حدد مهمة من القائمة المعلقة أولاً.",
+    "Client Progress Manager": "مدير تقدم العملاء",
+    "Client Details": "تفاصيل العميل",
+    "Client Name": "اسم العميل",
+    "Contact": "رقم التواصل",
+    "Business": "نوع النشاط",
+    "Shop Number": "رقم المحل",
+    "Email": "البريد الإلكتروني",
+    "Client Review": "مراجعة العميل",
+    "Add Review": "إضافة مراجعة",
+    "Open Review Log": "فتح سجل المراجعات",
+    "Create Client Plan": "إنشاء خطة العميل",
+    "Save Client": "حفظ العميل",
+    "Delete Selected Client": "حذف العميل المحدد",
+    "Progress Overview": "نظرة عامة على التقدم",
+    "Progress": "التقدم",
+    "Total Tasks": "إجمالي المهام",
+    "Tasks": "المهام",
+    "New task": "مهمة جديدة",
+    "No client selected": "لم يتم تحديد عميل",
+    "No pending tasks": "لا توجد مهام معلقة",
+    "No tasks yet": "لا توجد مهام بعد",
+    "No client plan": "لا توجد خطة عميل",
+    "Create a client plan first.": "أنشئ خطة العميل أولاً.",
+    "Missing client": "اسم العميل مفقود",
+    "Please enter a client name.": "يرجى إدخال اسم العميل.",
+    "Missing contact": "رقم التواصل مفقود",
+    "Please enter the client contact number.": "يرجى إدخال رقم التواصل الخاص بالعميل.",
+    "Missing business": "نوع النشاط مفقود",
+    "Please enter the client business type.": "يرجى إدخال نوع نشاط العميل.",
+    "Missing tasks": "المهام مفقودة",
+    "Enter at least one task or set a total task count greater than zero.": "أدخل مهمة واحدة على الأقل أو قم بتعيين إجمالي مهام أكبر من صفر.",
+    "Review saved": "تم حفظ المراجعة",
+    "Review saved for '{name}'.": "تم حفظ المراجعة للعميل '{name}'.",
+    "No review": "لا توجد مراجعة",
+    "Please type a review before saving it.": "يرجى كتابة مراجعة قبل حفظها.",
+    "Client Reviews Log": "سجل مراجعات العملاء",
+    "Date": "التاريخ",
+    "Review": "المراجعة",
+    "No reviews yet": "لا توجد مراجعات بعد",
+    "All Clients Progress": "تقدم جميع العملاء",
+    "Edit Selected Client": "تعديل العميل المحدد",
+    "Refresh": "تحديث",
+    "Delete client?": "حذف العميل؟",
+    "Are you sure you want to delete '{client_name}' from the client list?": "هل أنت متأكد أنك تريد حذف '{client_name}' من قائمة العملاء؟",
+    "Client deleted": "تم حذف العميل",
+    "'{client_name}' was removed successfully.": "تم حذف '{client_name}' بنجاح.",
+    "Client not found": "لم يتم العثور على العميل",
+    "'{client_name}' was not found in the saved client list.": "لم يتم العثور على '{client_name}' في قائمة العملاء المحفوظة.",
+    "Saved progress only": "تقدم محفوظ فقط",
+    "Select a client row first.": "حدد صف عميل أولاً.",
+    "Select a client from the list first.": "حدد عميلًا من القائمة أولاً.",
+    "Add Task": "إضافة مهمة",
+    "Tasks Details": "تفاصيل المهام",
+    "Refresh Progress": "تحديث التقدم",
+    "Open All Clients": "فتح جميع العملاء",
+    "Send Email": "إرسال بريد إلكتروني",
+    "Save & Exit": "حفظ والخروج",
+    "Cancel": "إلغاء",
+    "Please enter a client name before saving.": "يرجى إدخال اسم العميل قبل الحفظ.",
+    "Please enter the client contact number before saving.": "يرجى إدخال رقم التواصل الخاص بالعميل قبل الحفظ.",
+    "Please enter the client business type before saving.": "يرجى إدخال نوع نشاط العميل قبل الحفظ.",
+    "This client does not have an email saved yet.": "هذا العميل لا يحتوي على بريد إلكتروني محفوظ بعد.",
+    "Select or create a client before adding a review.": "حدد عميلًا أو أنشئ عميلًا قبل إضافة مراجعة.",
+    "No email": "لا يوجد بريد إلكتروني",
+    "Task Details - {client_name}": "تفاصيل المهام - {client_name}",
+    "<New Client>": "<عميل جديد>",
+    "Select an existing client first.": "حدد عميلًا موجودًا أولاً.",
+    "Client saved": "تم حفظ العميل",
+    "'{name}' was saved successfully.": "تم حفظ '{name}' بنجاح.",
+    "No client plan": "لا توجد خطة عميل",
+    "Select a task from the pending list.": "حدد مهمة من القائمة المعلقة.",
+    "No review": "لا توجد مراجعة",
+    "Select or create a client before adding a review.": "حدد عميلًا أو أنشئ عميلًا قبل إضافة مراجعة.",
+    "Please type a review before saving it.": "يرجى كتابة مراجعة قبل حفظها.",
+    "Client not found": "لم يتم العثور على العميل",
+    "No client selected": "لم يتم تحديد عميل",
+    "No pending tasks": "لا توجد مهام معلقة",
+    "No tasks yet": "لا توجد مهام بعد",
+    "Please enter a client name before saving.": "يرجى إدخال اسم العميل قبل الحفظ.",
+    "Please enter the client contact number before saving.": "يرجى إدخال رقم التواصل الخاص بالعميل قبل الحفظ.",
+    "Please enter the client business type before saving.": "يرجى إدخال نوع نشاط العميل قبل الحفظ.",
+}
+
+
+def T(text, **kwargs):
+    translated = TRANSLATIONS.get(text, text)
+    if kwargs:
+        return translated.format(**kwargs)
+    return translated
+
 
 def safe_main():
     try:
@@ -16,10 +119,9 @@ def safe_main():
         app.mainloop()
     except tk.TclError as exc:
         message = (
-            "Tkinter could not start in this environment.\n\n"
-            "Please run this script in a normal Windows terminal or VS Code terminal, "
-            "not in a headless/debug console.\n\n"
-            f"Details: {exc}"
+            T("Tkinter could not start in this environment.") + "\n\n"
+            + T("Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.")
+            + f"\n\nDetails: {exc}"
         )
         print(message, file=sys.stderr)
         raise SystemExit(1)
@@ -30,10 +132,7 @@ def parse_task_items(raw_value, fallback_total=0):
     if not text:
         if fallback_total <= 0:
             return []
-        return [f"Task {i}" for i in range(1, fallback_total + 1)]
-
-    items = []
-    for chunk in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        return [T("Task {i}", i=i) for i in range(1, fallback_total + 1)]
         for item in chunk.split(","):
             task = item.strip()
             if task:
@@ -115,7 +214,7 @@ class Plan:
 class TaskDetailsWindow(tk.Toplevel):
     def __init__(self, master=None, client_name="Client", plan=None, all_tasks=None, pending_tasks=None):
         super().__init__(master)
-        self.title(f"Task Details - {client_name}")
+        self.title(T("Task Details - {client_name}", client_name=client_name))
         self.geometry("560x430")
         self.minsize(460, 320)
 
@@ -125,15 +224,15 @@ class TaskDetailsWindow(tk.Toplevel):
         main = ttk.Frame(self, padding=14)
         main.pack(fill="both", expand=True)
 
-        ttk.Label(main, text=f"Client: {client_name}", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
+        ttk.Label(main, text=T("Client: {client_name}", client_name=client_name), font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(0, 10))
 
         task_columns = ttk.Frame(main)
         task_columns.pack(fill="both", expand=True)
         task_columns.columnconfigure(0, weight=1)
         task_columns.columnconfigure(1, weight=1)
 
-        ttk.Label(task_columns, text="All Tasks", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 6))
-        ttk.Label(task_columns, text="Pending Tasks", font=("Segoe UI", 11, "bold")).grid(row=0, column=1, sticky="w", pady=(0, 6))
+        ttk.Label(task_columns, text=T("All Tasks"), font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 6))
+        ttk.Label(task_columns, text=T("Pending Tasks"), font=("Segoe UI", 11, "bold")).grid(row=0, column=1, sticky="w", pady=(0, 6))
 
         all_scroll = ttk.Scrollbar(task_columns, orient="vertical")
         pending_scroll = ttk.Scrollbar(task_columns, orient="vertical")
@@ -153,8 +252,8 @@ class TaskDetailsWindow(tk.Toplevel):
 
         button_row = ttk.Frame(main)
         button_row.pack(fill="x", pady=(0, 8))
-        ttk.Button(button_row, text="Mark Done", command=self.mark_selected_done).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text="Close", command=self.close_window).pack(side="left")
+        ttk.Button(button_row, text=T("Mark Done"), command=self.mark_selected_done).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Close"), command=self.close_window).pack(side="left")
 
     def populate_lists(self, all_tasks=None, pending_tasks=None):
         self.all_box.delete(0, tk.END)
@@ -167,13 +266,13 @@ class TaskDetailsWindow(tk.Toplevel):
             for task in tasks:
                 self.all_box.insert(tk.END, task)
         else:
-            self.all_box.insert(tk.END, "No tasks yet")
+            self.all_box.insert(tk.END, T("No tasks yet"))
 
         if pending:
             for task in pending:
                 self.pending_box.insert(tk.END, task)
         else:
-            self.pending_box.insert(tk.END, "No pending tasks")
+            self.pending_box.insert(tk.END, T("No pending tasks"))
 
     def close_window(self):
         self.destroy()
@@ -185,12 +284,12 @@ class TaskDetailsWindow(tk.Toplevel):
 
     def mark_selected_done(self):
         if self.plan is None:
-            messagebox.showwarning("No task plan", "There is no active task plan to update.")
+            messagebox.showwarning(T("No task plan"), T("There is no active task plan to update."))
             return
 
         selected = self.pending_box.curselection()
         if not selected:
-            messagebox.showwarning("No task selected", "Select a task from the pending list first.")
+            messagebox.showwarning(T("No task selected"), T("Select a task from the pending list first."))
             return
 
         task = self.pending_box.get(selected[0])
@@ -205,7 +304,7 @@ class TaskDetailsWindow(tk.Toplevel):
 class ClientReviewsLogWindow(tk.Toplevel):
     def __init__(self, master=None, manager=None):
         super().__init__(master)
-        self.title("Client Reviews Log")
+        self.title(T("Client Reviews Log"))
         self.geometry("900x500")
         self.minsize(760, 360)
 
@@ -218,10 +317,10 @@ class ClientReviewsLogWindow(tk.Toplevel):
             show="headings",
             height=18,
         )
-        self.tree.heading("client", text="Client")
-        self.tree.heading("business", text="Business")
-        self.tree.heading("date", text="Date")
-        self.tree.heading("review", text="Review")
+        self.tree.heading("client", text=T("Client"))
+        self.tree.heading("business", text=T("Business"))
+        self.tree.heading("date", text=T("Date"))
+        self.tree.heading("review", text=T("Review"))
         self.tree.column("client", width=170, anchor="w")
         self.tree.column("business", width=170, anchor="w")
         self.tree.column("date", width=160, anchor="center")
@@ -230,7 +329,7 @@ class ClientReviewsLogWindow(tk.Toplevel):
 
         self.refresh_view()
 
-        ttk.Button(self, text="Close", command=self.destroy).pack(pady=(0, 12))
+        ttk.Button(self, text=T("Close"), command=self.destroy).pack(pady=(0, 12))
 
     def refresh_view(self):
         for item in self.tree.get_children():
@@ -238,7 +337,7 @@ class ClientReviewsLogWindow(tk.Toplevel):
 
         reviews = self.manager.get_all_reviews()
         if not reviews:
-            self.tree.insert("", tk.END, values=("No reviews yet", "", "", ""))
+            self.tree.insert("", tk.END, values=(T("No reviews yet"), "", "", ""))
             return
 
         for review in reviews:
@@ -257,7 +356,7 @@ class ClientReviewsLogWindow(tk.Toplevel):
 class AllClientsProgressWindow(tk.Toplevel):
     def __init__(self, master=None):
         super().__init__(master)
-        self.title("All Clients Progress")
+        self.title(T("All Clients Progress"))
         self.geometry("720x440")
         self.minsize(620, 360)
 
@@ -267,10 +366,10 @@ class AllClientsProgressWindow(tk.Toplevel):
             columns=("client", "business", "progress", "tasks"),
             show="headings",
         )
-        self.tree.heading("client", text="Client")
-        self.tree.heading("business", text="Business")
-        self.tree.heading("progress", text="Progress")
-        self.tree.heading("tasks", text="Pending / Total")
+        self.tree.heading("client", text=T("Client"))
+        self.tree.heading("business", text=T("Business"))
+        self.tree.heading("progress", text=T("Progress"))
+        self.tree.heading("tasks", text="المتبقي / الإجمالي")
         self.tree.column("client", width=190, anchor="w")
         self.tree.column("business", width=220, anchor="w")
         self.tree.column("progress", width=110, anchor="center")
@@ -281,15 +380,15 @@ class AllClientsProgressWindow(tk.Toplevel):
 
         button_row = ttk.Frame(self)
         button_row.pack(pady=(0, 12))
-        ttk.Button(button_row, text="Edit Selected Client", command=self.edit_selected_client).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text="Delete Selected Client", command=self.delete_selected_client).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text="Refresh", command=self.refresh_view).pack(side="left")
+        ttk.Button(button_row, text=T("Edit Selected Client"), command=self.edit_selected_client).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Delete Selected Client"), command=self.delete_selected_client).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left")
         self.refresh_view()
 
     def edit_selected_client(self, event=None):
         selection = self.tree.selection()
         if not selection:
-            messagebox.showwarning("No client selected", "Select a client row first.")
+            messagebox.showwarning(T("No client selected"), T("Select a client row first."))
             return
 
         values = self.tree.item(selection[0], "values")
@@ -307,7 +406,7 @@ class AllClientsProgressWindow(tk.Toplevel):
     def delete_selected_client(self):
         selection = self.tree.selection()
         if not selection:
-            messagebox.showwarning("No client selected", "Select a client row first.")
+            messagebox.showwarning(T("No client selected"), T("Select a client row first."))
             return
 
         values = self.tree.item(selection[0], "values")
@@ -316,8 +415,8 @@ class AllClientsProgressWindow(tk.Toplevel):
 
         client_name = values[0]
         confirm = messagebox.askyesno(
-            "Delete client?",
-            f"Are you sure you want to delete '{client_name}' from the client list?",
+            T("Delete client?"),
+            T("Are you sure you want to delete '{client_name}' from the client list?", client_name=client_name),
         )
         if not confirm:
             return
@@ -328,11 +427,11 @@ class AllClientsProgressWindow(tk.Toplevel):
                 self.master.refresh_client_combo()
             if self.master and hasattr(self.master, "clear_client_form"):
                 self.master.clear_client_form()
-            messagebox.showinfo("Client deleted", f"'{client_name}' was removed successfully.")
+            messagebox.showinfo(T("Client deleted"), T("'{client_name}' was removed successfully.", client_name=client_name))
             self.refresh_view()
             return
 
-        messagebox.showwarning("Client not found", f"'{client_name}' was not found in the saved client list.")
+        messagebox.showwarning(T("Client not found"), T("'{client_name}' was not found in the saved client list.", client_name=client_name))
 
     def refresh_view(self):
         for item in self.tree.get_children():
@@ -459,36 +558,36 @@ class ProgressApp(tk.Tk):
         main.rowconfigure(2, weight=0)
         main.rowconfigure(3, weight=1)
 
-        title = ttk.Label(main, text="Client Progress Manager", style="Header.TLabel")
+        title = ttk.Label(main, text=T("Client Progress Manager"), style="Header.TLabel")
         title.grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 8))
 
-        details_frame = ttk.LabelFrame(main, text="Client Details", style="Section.TLabelframe")
+        details_frame = ttk.LabelFrame(main, text=T("Client Details"), style="Section.TLabelframe")
         details_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=(0, 6), pady=(0, 8))
         details_frame.columnconfigure(1, weight=1)
 
-        ttk.Label(details_frame, text="Client Name").grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 6))
+        ttk.Label(details_frame, text=T("Client Name")).grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 6))
         self.client_combo = ttk.Combobox(details_frame, textvariable=self.client_name_var, state="normal")
         self.client_combo.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=(8, 6))
         self.client_combo.bind("<<ComboboxSelected>>", self.on_client_name_selected)
         self.refresh_client_combo()
 
-        ttk.Label(details_frame, text="Contact").grid(row=1, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        ttk.Label(details_frame, text=T("Contact")).grid(row=1, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.contact_entry = ttk.Entry(details_frame, textvariable=self.contact_var)
         self.contact_entry.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        ttk.Label(details_frame, text="Business").grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        ttk.Label(details_frame, text=T("Business")).grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.business_entry = ttk.Entry(details_frame, textvariable=self.business_var)
         self.business_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        ttk.Label(details_frame, text="Shop Number").grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        ttk.Label(details_frame, text=T("Shop Number")).grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.shop_number_entry = ttk.Entry(details_frame, textvariable=self.shop_number_var)
         self.shop_number_entry.grid(row=3, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        ttk.Label(details_frame, text="Email").grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
+        ttk.Label(details_frame, text=T("Email")).grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
         self.email_entry = ttk.Entry(details_frame, textvariable=self.email_var)
         self.email_entry.grid(row=4, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
-        review_frame = ttk.LabelFrame(main, text="Client Review", style="Section.TLabelframe")
+        review_frame = ttk.LabelFrame(main, text=T("Client Review"), style="Section.TLabelframe")
         review_frame.grid(row=1, column=2, columnspan=2, sticky="nsew", padx=(6, 0), pady=(0, 8))
         review_frame.columnconfigure(0, weight=1)
 
@@ -497,8 +596,8 @@ class ProgressApp(tk.Tk):
 
         review_buttons = ttk.Frame(review_frame)
         review_buttons.grid(row=1, column=0, sticky="w", padx=(10, 10), pady=(0, 8))
-        ttk.Button(review_buttons, text="Add Review", command=self.add_client_review, style="Action.TButton").pack(side="left", padx=(0, 8))
-        ttk.Button(review_buttons, text="Open Review Log", command=self.open_reviews_log, style="Action.TButton").pack(side="left")
+        ttk.Button(review_buttons, text=T("Add Review"), command=self.add_client_review, style="Action.TButton").pack(side="left", padx=(0, 8))
+        ttk.Button(review_buttons, text=T("Open Review Log"), command=self.open_reviews_log, style="Action.TButton").pack(side="left")
 
         action_row = ttk.Frame(main)
         action_row.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(0, 8))
@@ -507,15 +606,15 @@ class ProgressApp(tk.Tk):
 
         action_center = ttk.Frame(action_row)
         action_center.grid(row=0, column=0, columnspan=2, sticky="n")
-        ttk.Button(action_center, text="Create Client Plan", command=self.create_plan, style="Action.TButton", width=18).pack(side="left", padx=(0, 8))
-        ttk.Button(action_center, text="Save Client", command=self.save_current_client, style="Action.TButton", width=18).pack(side="left", padx=(0, 8))
-        ttk.Button(action_center, text="Delete Selected Client", command=self.delete_selected_client, style="Action.TButton", width=18).pack(side="left")
+        ttk.Button(action_center, text=T("Create Client Plan"), command=self.create_plan, style="Action.TButton", width=18).pack(side="left", padx=(0, 8))
+        ttk.Button(action_center, text=T("Save Client"), command=self.save_current_client, style="Action.TButton", width=18).pack(side="left", padx=(0, 8))
+        ttk.Button(action_center, text=T("Delete Selected Client"), command=self.delete_selected_client, style="Action.TButton", width=18).pack(side="left")
 
-        progress_box = ttk.LabelFrame(main, text="Progress Overview", style="Section.TLabelframe")
+        progress_box = ttk.LabelFrame(main, text=T("Progress Overview"), style="Section.TLabelframe")
         progress_box.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(0, 8))
         progress_box.columnconfigure(1, weight=1)
 
-        ttk.Label(progress_box, text="Progress").grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 4))
+        ttk.Label(progress_box, text=T("Progress")).grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 4))
         self.progress_var = tk.StringVar(value="0%")
         ttk.Label(progress_box, textvariable=self.progress_var, font=("Segoe UI", 10, "bold")).grid(row=0, column=1, sticky="w", padx=(0, 10), pady=(8, 4))
 
@@ -523,11 +622,11 @@ class ProgressApp(tk.Tk):
         self.progress_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=(10, 10), pady=(0, 10))
         self._apply_progress_bar_color(0)
 
-        ttk.Label(progress_box, text="Total Tasks").grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
+        ttk.Label(progress_box, text=T("Total Tasks")).grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
         self.total_entry = ttk.Entry(progress_box, textvariable=self.total_tasks_var, state="readonly")
         self.total_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
-        tasks_frame = ttk.LabelFrame(main, text="Tasks", style="Section.TLabelframe")
+        tasks_frame = ttk.LabelFrame(main, text=T("Tasks"), style="Section.TLabelframe")
         tasks_frame.grid(row=4, column=0, columnspan=4, sticky="nsew", pady=(0, 8))
         tasks_frame.columnconfigure(0, weight=2)
         tasks_frame.columnconfigure(1, weight=0)
@@ -536,8 +635,8 @@ class ProgressApp(tk.Tk):
         tasks_frame.columnconfigure(4, weight=1, minsize=180)
         tasks_frame.rowconfigure(1, weight=1)
 
-        ttk.Label(tasks_frame, text="All Tasks", font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", padx=(10, 0), pady=(8, 4))
-        ttk.Label(tasks_frame, text="Pending Tasks", font=("Segoe UI", 10, "bold")).grid(row=0, column=2, sticky="w", padx=(10, 0), pady=(8, 4))
+        ttk.Label(tasks_frame, text=T("All Tasks"), font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", padx=(10, 0), pady=(8, 4))
+        ttk.Label(tasks_frame, text=T("Pending Tasks"), font=("Segoe UI", 10, "bold")).grid(row=0, column=2, sticky="w", padx=(10, 0), pady=(8, 4))
 
         list_area = ttk.Frame(tasks_frame)
         list_area.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=(10, 0), pady=(0, 8))
@@ -588,13 +687,13 @@ class ProgressApp(tk.Tk):
         button_row.columnconfigure(1, weight=1)
 
         action_buttons = [
-            ("Add Task", self.add_task),
-            ("Tasks Details", self.open_task_details_window),
-            ("Refresh Progress", self.refresh_display),
-            ("Open All Clients", self.open_all_clients),
-            ("Send Email", self.send_email_to_client),
-            ("Save & Exit", self.save_and_exit),
-            ("Cancel", self.cancel_and_exit),
+            (T("Add Task"), self.add_task),
+            (T("Tasks Details"), self.open_task_details_window),
+            (T("Refresh Progress"), self.refresh_display),
+            (T("Open All Clients"), self.open_all_clients),
+            (T("Send Email"), self.send_email_to_client),
+            (T("Save & Exit"), self.save_and_exit),
+            (T("Cancel"), self.cancel_and_exit),
         ]
 
         for idx, (text, command) in enumerate(action_buttons):
@@ -610,7 +709,7 @@ class ProgressApp(tk.Tk):
 
         task_entry_row = ttk.Frame(tasks_frame)
         task_entry_row.grid(row=2, column=0, columnspan=5, sticky="ew", padx=(10, 10), pady=(0, 8))
-        ttk.Label(task_entry_row, text="New task").pack(side="left", padx=(0, 8))
+        ttk.Label(task_entry_row, text=T("New task")).pack(side="left", padx=(0, 8))
         self.new_task_entry = ttk.Entry(task_entry_row, textvariable=self.new_task_var)
         self.new_task_entry.pack(side="left", fill="x", expand=True)
 
@@ -622,12 +721,13 @@ class ProgressApp(tk.Tk):
     def refresh_client_combo(self):
         self.client_manager.load_clients()
         names = [client.name for client in self.client_manager.clients]
-        combo_values = ["<New Client>"] + names
+        new_client_label = T("<New Client>")
+        combo_values = [new_client_label] + names
         self.client_combo.configure(values=combo_values)
         if self.client_name_var.get() in combo_values:
             self.client_combo.set(self.client_name_var.get())
         else:
-            self.client_combo.set("<New Client>")
+            self.client_combo.set(new_client_label)
 
     def clear_client_form(self):
         self.plan = None
@@ -643,8 +743,8 @@ class ProgressApp(tk.Tk):
         self.progress_bar.configure(style="Red.Horizontal.TProgressbar")
         self.all_tasks_box.delete(0, tk.END)
         self.pending_tasks_box.delete(0, tk.END)
-        self.all_tasks_box.insert(tk.END, "No client selected")
-        self.pending_tasks_box.insert(tk.END, "No pending tasks")
+        self.all_tasks_box.insert(tk.END, T("No client selected"))
+        self.pending_tasks_box.insert(tk.END, T("No pending tasks"))
 
     def on_client_name_selected(self, event=None):
         name = self.client_name_var.get().strip()
@@ -652,7 +752,7 @@ class ProgressApp(tk.Tk):
             self.clear_client_form()
             return
 
-        if name == "<New Client>":
+        if name == T("<New Client>"):
             self.clear_client_form()
             self.client_name_var.set("")
             return
@@ -690,47 +790,47 @@ class ProgressApp(tk.Tk):
 
     def delete_selected_client(self):
         name = self.client_name_var.get().strip()
-        if not name or name == "<New Client>":
-            messagebox.showwarning("No client selected", "Select an existing client first.")
+        if not name or name == T("<New Client>"):
+            messagebox.showwarning(T("No client selected"), T("Select an existing client first."))
             return
 
         confirm = messagebox.askyesno(
-            "Delete client?",
-            f"Are you sure you want to delete '{name}' from the client list?",
+            T("Delete client?"),
+            T("Are you sure you want to delete '{client_name}' from the client list?", client_name=name),
         )
         if not confirm:
             return
 
         removed = self.client_manager.delete_client(name)
         if not removed:
-            messagebox.showwarning("Client not found", f"'{name}' was not found in the saved client list.")
+            messagebox.showwarning(T("Client not found"), T("'{client_name}' was not found in the saved client list.", client_name=name))
             return
 
         Plan.Clients_progress.pop(name, None)
         self.refresh_client_combo()
         self.clear_client_form()
-        messagebox.showinfo("Client deleted", f"'{name}' was removed successfully.")
+        messagebox.showinfo(T("Client deleted"), T("'{client_name}' was removed successfully.", client_name=name))
 
     def create_plan(self):
         name = self.client_name_var.get().strip()
         if not name:
-            messagebox.showwarning("Missing client", "Please enter a client name.")
+            messagebox.showwarning(T("Missing client"), T("Please enter a client name."))
             return
 
         contact = self.contact_var.get().strip()
         business = self.business_var.get().strip()
         if not contact:
-            messagebox.showwarning("Missing contact", "Please enter the client contact number.")
+            messagebox.showwarning(T("Missing contact"), T("Please enter the client contact number."))
             return
         if not business:
-            messagebox.showwarning("Missing business", "Please enter the client business type.")
+            messagebox.showwarning(T("Missing business"), T("Please enter the client business type."))
             return
 
         email = self.email_var.get().strip()
         tasks = self._parse_task_list()
 
         if not tasks:
-            messagebox.showwarning("Missing tasks", "Enter at least one task or set a total task count greater than zero.")
+            messagebox.showwarning(T("Missing tasks"), T("Enter at least one task or set a total task count greater than zero."))
             return
 
         self.client_manager.load_clients()
@@ -754,7 +854,7 @@ class ProgressApp(tk.Tk):
 
     def open_task_details_window(self):
         if self.plan is None:
-            messagebox.showwarning("No client plan", "Create a client plan first.")
+            messagebox.showwarning(T("No client plan"), T("Create a client plan first."))
             return
 
         TaskDetailsWindow(
@@ -767,7 +867,7 @@ class ProgressApp(tk.Tk):
 
     def add_task(self):
         if self.plan is None:
-            messagebox.showwarning("No client plan", "Create a client plan first.")
+            messagebox.showwarning(T("No client plan"), T("Create a client plan first."))
             return
 
         task = self.new_task_var.get().strip()
@@ -784,7 +884,7 @@ class ProgressApp(tk.Tk):
 
         selected = self.pending_tasks_box.curselection()
         if not selected:
-            messagebox.showwarning("No task selected", "Select a task from the pending list.")
+            messagebox.showwarning(T("No task selected"), T("Select a task from the pending list."))
             return
 
         task = self.pending_tasks_box.get(selected[0])
@@ -804,8 +904,8 @@ class ProgressApp(tk.Tk):
         self.pending_tasks_box.delete(0, tk.END)
 
         if self.plan is None:
-            self.all_tasks_box.insert(tk.END, "No client selected")
-            self.pending_tasks_box.insert(tk.END, "No pending tasks")
+            self.all_tasks_box.insert(tk.END, T("No client selected"))
+            self.pending_tasks_box.insert(tk.END, T("No pending tasks"))
             return
 
         self.plan.sync_task_lists(all_tasks=self.plan.all_tasks, pending_tasks=self.plan.pending_tasks)
@@ -818,13 +918,13 @@ class ProgressApp(tk.Tk):
             for task in self.plan.all_tasks:
                 self.all_tasks_box.insert(tk.END, task)
         else:
-            self.all_tasks_box.insert(tk.END, "No tasks yet")
+            self.all_tasks_box.insert(tk.END, T("No tasks yet"))
 
         if self.plan.pending_tasks:
             for task in self.plan.pending_tasks:
                 self.pending_tasks_box.insert(tk.END, task)
         else:
-            self.pending_tasks_box.insert(tk.END, "No pending tasks")
+            self.pending_tasks_box.insert(tk.END, T("No pending tasks"))
 
     def load_client_progress(self, client_name, business="N/A"):
         self.client_manager.load_clients()
@@ -852,7 +952,7 @@ class ProgressApp(tk.Tk):
                 total = int(default_total) if default_total else 5
             except ValueError:
                 total = 5
-            all_tasks = [f"Task {i}" for i in range(1, total + 1)]
+            all_tasks = [T("Task {i}", i=i) for i in range(1, total + 1)]
 
         pending_tasks = list(saved.get("pending_tasks", all_tasks))
         self.client_name_var.set(client_name)
@@ -864,17 +964,17 @@ class ProgressApp(tk.Tk):
     def save_current_client(self):
         self.client_manager.load_clients()
         name = self.client_name_var.get().strip()
-        if not name or name == "<New Client>":
-            messagebox.showwarning("Missing client", "Please enter a client name before saving.")
+        if not name or name == T("<New Client>"):
+            messagebox.showwarning(T("Missing client"), T("Please enter a client name before saving."))
             return
 
         contact = self.contact_var.get().strip()
         business = self.business_var.get().strip()
         if not contact:
-            messagebox.showwarning("Missing contact", "Please enter the client contact number before saving.")
+            messagebox.showwarning(T("Missing contact"), T("Please enter the client contact number before saving."))
             return
         if not business:
-            messagebox.showwarning("Missing business", "Please enter the client business type before saving.")
+            messagebox.showwarning(T("Missing business"), T("Please enter the client business type before saving."))
             return
 
         existing = next(
@@ -910,12 +1010,12 @@ class ProgressApp(tk.Tk):
         self.plan.client_name = client.name
         self.plan.update_clients_progress()
         self.refresh_display()
-        messagebox.showinfo("Client saved", f"'{name}' was saved successfully.")
+        messagebox.showinfo(T("Client saved"), T("'{name}' was saved successfully.", name=name))
 
     def send_email_to_client(self):
         email = self.email_var.get().strip()
         if not email:
-            messagebox.showwarning("No email", "This client does not have an email saved yet.")
+            messagebox.showwarning(T("No email"), T("This client does not have an email saved yet."))
             return
 
         gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(email)}"
@@ -934,21 +1034,21 @@ class ProgressApp(tk.Tk):
 
     def add_client_review(self):
         name = self.client_name_var.get().strip()
-        if not name or name == "<New Client>":
-            messagebox.showwarning("No client selected", "Select or create a client before adding a review.")
+        if not name or name == T("<New Client>"):
+            messagebox.showwarning(T("No client selected"), T("Select or create a client before adding a review."))
             return
 
         review = self.review_text.get("1.0", "end").strip()
         if not review:
-            messagebox.showwarning("No review", "Please type a review before saving it.")
+            messagebox.showwarning(T("No review"), T("Please type a review before saving it."))
             return
 
         if not self.client_manager.add_review(name, review):
-            messagebox.showwarning("Client not found", f"'{name}' was not found in the saved client list.")
+            messagebox.showwarning(T("Client not found"), T("'{client_name}' was not found in the saved client list.", client_name=name))
             return
 
         self.review_text.delete("1.0", tk.END)
-        messagebox.showinfo("Review saved", f"Review saved for '{name}'.")
+        messagebox.showinfo(T("Review saved"), T("Review saved for '{name}'.", name=name))
 
     def open_reviews_log(self):
         self.client_manager.load_clients()
