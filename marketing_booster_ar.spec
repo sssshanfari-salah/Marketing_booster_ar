@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['C:/Users/ssssh/OneDrive/Documents/Marketing booster/python code/main.py'],
+    ['C:/Users/ssssh/OneDrive/Documents/Marketing_booster_ar/python code/main.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='marketing_booster',
+    name='marketing_booster_ar',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -35,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['C:/Users/ssssh/OneDrive/Documents/Marketing booster/starco_icon.ico'],
+    icon=['C:/Users/ssssh/OneDrive/Documents/Marketing_booster_ar/starco_icon.ico'],
 )

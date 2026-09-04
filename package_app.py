@@ -7,7 +7,9 @@ APP_DIR = Path(__file__).resolve().parent
 SOURCE_DIR = APP_DIR / "python code"
 DIST_DIR = APP_DIR / "dist"
 BUILD_DIR = APP_DIR / "build"
-SPEC_FILE = APP_DIR / "marketing_booster.spec"
+APP_NAME = "marketing_booster_ar"
+APP_DISPLAY_NAME = "Marketing Booster"
+SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
 TARGET_ICON = APP_DIR / "starco_icon.ico"
 
 
@@ -33,8 +35,8 @@ DESKTOP_DIR = resolve_desktop_dir()
 
 def find_built_exe():
     candidates = [
-        DIST_DIR / "marketing_booster.exe",
-        DIST_DIR / "marketing_booster" / "marketing_booster.exe",
+        DIST_DIR / f"{APP_NAME}.exe",
+        DIST_DIR / APP_NAME / f"{APP_NAME}.exe",
     ]
     for candidate in candidates:
         if candidate.exists():
@@ -73,7 +75,7 @@ def build_app():
         "--onefile",
         "--windowed",
         "--name",
-        "marketing_booster",
+        APP_NAME,
         "--distpath",
         str(DIST_DIR),
         "--workpath",
@@ -91,7 +93,7 @@ def build_app():
             "--onefile",
             "--windowed",
             "--name",
-            "marketing_booster",
+            APP_NAME,
             "--icon",
             str(TARGET_ICON),
             "--distpath",
@@ -121,7 +123,7 @@ def create_shortcut():
         return None
 
     DESKTOP_DIR.mkdir(parents=True, exist_ok=True)
-    desktop_link = DESKTOP_DIR / "Marketing Booster.lnk"
+    desktop_link = DESKTOP_DIR / f"{APP_DISPLAY_NAME}.lnk"
 
     try:
         import win32com.client as win32com_client
