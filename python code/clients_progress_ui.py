@@ -13,7 +13,18 @@ except ImportError:
 
 from clients_management import Client, ClientManager
 
-APP_ICON = Path(__file__).resolve().parent.parent / "starco_icon.ico"
+APP_ICON = None
+for candidate in [
+    Path(sys._MEIPASS) / "starco_icon.ico" if getattr(sys, "_MEIPASS", None) else None,
+    Path(__file__).resolve().parent.parent / "starco_icon.ico",
+    Path(__file__).resolve().parent / "starco_icon.ico",
+]:
+    if candidate is not None and candidate.exists():
+        APP_ICON = candidate
+        break
+
+if APP_ICON is None:
+    APP_ICON = Path(__file__).resolve().parent.parent / "starco_icon.ico"
 
 TRANSLATIONS = {
     "Tkinter could not start in this environment.": "تعذر启动 واجهة Tkinter في هذا البيئة.",

@@ -55,6 +55,10 @@ def remove_stale_artifacts():
         if desktop_link.exists():
             desktop_link.unlink()
 
+    desktop_link = DESKTOP_DIR / f"{APP_DISPLAY_NAME}.lnk"
+    if desktop_link.exists():
+        desktop_link.unlink()
+
 
 def find_built_exe():
     candidates = [
@@ -110,29 +114,17 @@ def build_app():
         str(BUILD_DIR),
         "--specpath",
         str(APP_DIR),
-        str(SOURCE_DIR / "main.py"),
     ]
 
     if TARGET_ICON.exists():
-        cmd = [
-            sys.executable,
-            "-m",
-            "PyInstaller",
-            "--clean",
-            "--onefile",
-            "--windowed",
-            "--name",
-            APP_NAME,
+        cmd.extend([
             "--icon",
             str(TARGET_ICON),
-            "--distpath",
-            str(DIST_DIR),
-            "--workpath",
-            str(BUILD_DIR),
-            "--specpath",
-            str(APP_DIR),
-            str(SOURCE_DIR / "main.py"),
-        ]
+            "--add-data",
+            f"{TARGET_ICON};.",
+        ])
+
+    cmd.append(str(SOURCE_DIR / "main.py"))
 
     print("Building app...")
     subprocess.check_call(cmd, cwd=str(APP_DIR))
