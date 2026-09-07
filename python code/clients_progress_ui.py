@@ -1,9 +1,16 @@
+import os
 import sys
+import tempfile
 import webbrowser
 from pathlib import Path
 from urllib.parse import quote
 import tkinter as tk
 from tkinter import ttk, messagebox
+
+try:
+    import win32print
+except ImportError:
+    win32print = None
 
 try:
     from PIL import Image, ImageTk
@@ -119,6 +126,8 @@ TRANSLATIONS = {
         "Language": "Language",
         "English": "English",
         "العربية": "العربية",
+        "Print": "Print",
+        "No printers registered on this laptop.": "No printers registered on this laptop.",
     },
     "ar": {
         "Tkinter could not start in this environment.": "تعذر启动 واجهة Tkinter في هذا البيئة.",
@@ -210,8 +219,66 @@ TRANSLATIONS = {
         "Language": "اللغة",
         "English": "English",
         "العربية": "العربية",
+        "Print": "طباعة",
+        "No printers registered on this laptop.": "لا توجد طابعات مسجلة في هذا الجهاز.",
     },
 }
+
+
+def get_registered_printers():
+    if win32print is None:
+        return []
+
+    try:
+        printers = win32print.EnumPrinters(
+            win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS,
+            None,
+            1,
+        )
+        return [printer[2] for printer in printers if isinstance(printer, tuple) and len(printer) >= 3]
+    except Exception:
+        return []
+
+
+def print_report_document(title, lines):
+    report_lines = [str(item) for item in lines]
+    safe_title = "".join(ch if ch.isalnum() or ch in " _-" else "_" for ch in str(title)).strip() or "report"
+    printers = get_registered_printers()
+
+    if not printers:
+        messagebox.showwarning(T("Print"), T("No printers registered on this laptop."))
+        return False
+
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False, prefix=f"{safe_title}_") as temp_file:
+            temp_file.write(str(title) + "\n")
+            temp_file.write("=" * max(20, len(str(title))) + "\n\n")
+            for line in report_lines:
+                temp_file.write(line + "\n")
+            temp_path = temp_file.name
+
+        if hasattr(os, "startfile"):
+            try:
+                default_printer = win32print.GetDefaultPrinter() if win32print is not None else None
+            except Exception:
+                default_printer = None
+
+            if default_printer:
+                try:
+                    import win32api
+                    win32api.ShellExecute(0, "printto", temp_path, f'"{default_printer}"', None, 0)
+                    return True
+                except Exception:
+                    pass
+
+            os.startfile(temp_path, "print")
+            return True
+
+        messagebox.showinfo(T("Print"), f"Printed report saved to: {temp_path}")
+        return True
+    except Exception as exc:
+        messagebox.showerror(T("Print"), f"Unable to print report: {exc}")
+        return False
 
 
 def set_language(lang):
@@ -374,7 +441,17 @@ class TaskDetailsWindow(tk.Toplevel):
         button_row = ttk.Frame(main)
         button_row.pack(fill="x", pady=(0, 8))
         ttk.Button(button_row, text=T("Mark Done"), command=self.mark_selected_done).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Close"), command=self.close_window).pack(side="left")
+
+    def print_report(self):
+        client_name = self.plan.client_name if self.plan else self.master_app.client_name_var.get().strip() if self.master_app else "Client"
+        title = T("Task Details - {client_name}", client_name=client_name)
+        lines = [title, "", T("All Tasks") + ":"]
+        lines.extend(self.plan.all_tasks if self.plan else [])
+        lines.extend(["", T("Pending Tasks") + ":"])
+        lines.extend(self.plan.pending_tasks if self.plan else [])
+        print_report_document(title, lines)
 
     def populate_lists(self, all_tasks=None, pending_tasks=None):
         self.all_box.delete(0, tk.END)
@@ -450,7 +527,23 @@ class ClientReviewsLogWindow(tk.Toplevel):
 
         self.refresh_view()
 
-        ttk.Button(self, text=T("Close"), command=self.destroy).pack(pady=(0, 12))
+        button_row = ttk.Frame(self)
+        button_row.pack(pady=(0, 12))
+        ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Close"), command=self.destroy).pack(side="left")
+
+    def print_report(self):
+        reviews = self.manager.get_all_reviews()
+        title = T("Client Reviews Log")
+        lines = [title, ""]
+        if not reviews:
+            lines.append(T("No reviews yet"))
+        else:
+            for review in reviews:
+                lines.append(f"{review.get('client_name', '')} | {review.get('business', '')} | {review.get('date', '')}")
+                lines.append(f"{review.get('review', '')}")
+                lines.append("")
+        print_report_document(title, lines)
 
     def refresh_view(self):
         for item in self.tree.get_children():
@@ -503,8 +596,23 @@ class AllClientsProgressWindow(tk.Toplevel):
         button_row.pack(pady=(0, 12))
         ttk.Button(button_row, text=T("Edit Selected Client"), command=self.edit_selected_client).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Delete Selected Client"), command=self.delete_selected_client).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left")
+        ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left")
         self.refresh_view()
+
+    def print_report(self):
+        title = T("All Clients Progress")
+        lines = [title, ""]
+        self.manager.load_clients()
+        for client in self.manager.clients:
+            progress_info = Plan.Clients_progress.get(client.name, {})
+            progress = progress_info.get("progress", 0)
+            pending_tasks = progress_info.get("pending_tasks", [])
+            all_tasks = progress_info.get("all_tasks", [])
+            lines.append(f"{client.name} | {client.business} | {progress}% | {len(pending_tasks)} / {len(all_tasks)}")
+        if not self.manager.clients:
+            lines.append(T("No client selected"))
+        print_report_document(title, lines)
 
     def edit_selected_client(self, event=None):
         selection = self.tree.selection()
