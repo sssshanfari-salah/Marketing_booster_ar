@@ -9,7 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from clients_management import Client, ClientManager
-from clients_progress_ui import Plan, parse_task_items
+from clients_progress_ui import Plan, T, parse_task_items, set_language
 from sync_documents import TARGET
 
 try:
@@ -109,6 +109,13 @@ class ClientManagerTests(unittest.TestCase):
 
         tasks = parse_task_items("", fallback_total=3)
         self.assertEqual(tasks, ["Task 1", "Task 2", "Task 3"])
+
+    def test_language_switch_supports_english_and_arabic(self):
+        self.assertEqual(T("Client Details"), "Client Details")
+        set_language("ar")
+        self.assertEqual(T("Client Details"), "تفاصيل العميل")
+        set_language("eng")
+        self.assertEqual(T("Client Details"), "Client Details")
 
     def test_resolve_desktop_dir_uses_existing_windows_desktop(self):
         if resolve_desktop_dir is None:

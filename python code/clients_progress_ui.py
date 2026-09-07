@@ -26,105 +26,207 @@ for candidate in [
 if APP_ICON is None:
     APP_ICON = Path(__file__).resolve().parent.parent / "starco_icon.ico"
 
+CURRENT_LANGUAGE = "eng"
+
 TRANSLATIONS = {
-    "Tkinter could not start in this environment.": "تعذر启动 واجهة Tkinter في هذا البيئة.",
-    "Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.": "يرجى تشغيل هذا الملف من محطة Windows عادية أو من محطة VS Code، وليس من وحدة تحكم رأسية أو وضع التصحيح.",
-    "Client": "العميل",
-    "Client: {client_name}": "العميل: {client_name}",
-    "All Tasks": "جميع المهام",
-    "Pending Tasks": "المهام المعلقة",
-    "Mark Done": "تم ألانجاز",
-    "Close": "إغلاق",
-    "No task plan": "لا توجد خطة مهام",
-    "There is no active task plan to update.": "لا توجد خطة مهام نشطة لتحديثها.",
-    "No task selected": "لم يتم تحديد أي مهمة",
-    "Select a task from the pending list first.": "حدد مهمة من القائمة المعلقة أولاً.",
-    "Client Progress Manager": "مدير العملاء",
-    "Client Details": "تفاصيل العميل",
-    "Client Name": "اسم العميل",
-    "Contact": "رقم التواصل",
-    "Business": "نوع النشاط",
-    "Shop Number": "رقم المحل",
-    "Email": "البريد الإلكتروني",
-    "Client Review": "ملاحظات العميل",
-    "Add Review": "إضافة ملاحظة",
-    "Open Review Log": "فتح سجل الملاحظات",
-    "Create Client Plan": "إنشاء خطة العميل",
-    "Save Client": "حفظ العميل",
-    "Delete Selected Client": "حذف العميل المحدد",
-    "Progress Overview": "نظرة عامة على التقدم",
-    "Progress": "التقدم",
-    "Total Tasks": "إجمالي المهام",
-    "Tasks": "المهام",
-    "New task": "مهمة جديدة",
-    "No client selected": "لم يتم تحديد عميل",
-    "No pending tasks": "لا توجد مهام معلقة",
-    "No tasks yet": "لا توجد مهام بعد",
-    "No client plan": "لا توجد خطة عميل",
-    "Create a client plan first.": "أنشئ خطة العميل أولاً.",
-    "Missing client": "اسم العميل مفقود",
-    "Please enter a client name.": "يرجى إدخال اسم العميل.",
-    "Missing contact": "رقم التواصل مفقود",
-    "Please enter the client contact number.": "يرجى إدخال رقم التواصل الخاص بالعميل.",
-    "Missing business": "نوع النشاط مفقود",
-    "Please enter the client business type.": "يرجى إدخال نوع نشاط العميل.",
-    "Missing tasks": "المهام مفقودة",
-    "Enter at least one task or set a total task count greater than zero.": "أدخل مهمة واحدة على الأقل أو قم بتعيين إجمالي مهام أكبر من صفر.",
-    "Review saved": "تم حفظ الملاحظة",
-    "Review saved for '{name}'.": "تم حفظ الملاحظة للعميل '{name}'.",
-    "No review": "لا توجد ملاحظة",
-    "Please type a review before saving it.": "يرجى كتابة ملاحظة قبل حفظها.",
-    "Client Reviews Log": "سجل ملاحظات العملاء",
-    "Date": "التاريخ",
-    "Review": "الملاحظة",
-    "No reviews yet": "لا توجد ملاحظات بعد",
-    "All Clients Progress": "تقدم جميع العملاء",
-    "Edit Selected Client": "تعديل العميل المحدد",
-    "Refresh": "تحديث",
-    "Delete client?": "حذف العميل؟",
-    "Are you sure you want to delete '{client_name}' from the client list?": "هل أنت متأكد أنك تريد حذف '{client_name}' من قائمة العملاء؟",
-    "Client deleted": "تم حذف العميل",
-    "'{client_name}' was removed successfully.": "تم حذف '{client_name}' بنجاح.",
-    "Client not found": "لم يتم العثور على العميل",
-    "'{client_name}' was not found in the saved client list.": "لم يتم العثور على '{client_name}' في قائمة العملاء المحفوظة.",
-    "Saved progress only": "تقدم محفوظ فقط",
-    "Select a client row first.": "حدد صف عميل أولاً.",
-    "Select a client from the list first.": "حدد عميلًا من القائمة أولاً.",
-    "Add Task": "إضافة مهمة",
-    "Tasks Details": "تفاصيل المهام",
-    "Refresh Progress": "تحديث التقدم",
-    "Open All Clients": "فتح جميع العملاء",
-    "Send Email": "إرسال بريد إلكتروني",
-    "Save & Exit": "حفظ والخروج",
-    "Cancel": "إلغاء",
-    "Please enter a client name before saving.": "يرجى إدخال اسم العميل قبل الحفظ.",
-    "Please enter the client contact number before saving.": "يرجى إدخال رقم التواصل الخاص بالعميل قبل الحفظ.",
-    "Please enter the client business type before saving.": "يرجى إدخال نوع نشاط العميل قبل الحفظ.",
-    "This client does not have an email saved yet.": "هذا العميل لا يحتوي على بريد إلكتروني محفوظ بعد.",
-    "Select or create a client before adding a review.": "حدد عميلًا أو أنشئ عميلًا قبل إضافة مراجعة.",
-    "No email": "لا يوجد بريد إلكتروني",
-    "Task Details - {client_name}": "تفاصيل المهام - {client_name}",
-    "<New Client>": "<عميل جديد>",
-    "Select an existing client first.": "حدد عميلًا موجودًا أولاً.",
-    "Client saved": "تم حفظ العميل",
-    "'{name}' was saved successfully.": "تم حفظ '{name}' بنجاح.",
-    "No client plan": "لا توجد خطة عميل",
-    "Select a task from the pending list.": "حدد مهمة من القائمة المعلقة.",
-    "No review": "لا توجد مراجعة",
-    "Select or create a client before adding a review.": "حدد عميلًا أو أنشئ عميلًا قبل إضافة ملاحظة.",
-    "Please type a review before saving it.": "يرجى كتابة ملاحظة قبل حفظها.",
-    "Client not found": "لم يتم العثور على العميل",
-    "No client selected": "لم يتم تحديد عميل",
-    "No pending tasks": "لا توجد مهام معلقة",
-    "No tasks yet": "لا توجد مهام بعد",
-    "Please enter a client name before saving.": "يرجى إدخال اسم العميل قبل الحفظ.",
-    "Please enter the client contact number before saving.": "يرجى إدخال رقم التواصل الخاص بالعميل قبل الحفظ.",
-    "Please enter the client business type before saving.": "يرجى إدخال نوع نشاط العميل قبل الحفظ.",
+    "eng": {
+        "Tkinter could not start in this environment.": "Tkinter could not start in this environment.",
+        "Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.": "Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.",
+        "Client": "Client",
+        "Client: {client_name}": "Client: {client_name}",
+        "All Tasks": "All Tasks",
+        "Pending Tasks": "Pending Tasks",
+        "Mark Done": "Mark Done",
+        "Close": "Close",
+        "No task plan": "No task plan",
+        "There is no active task plan to update.": "There is no active task plan to update.",
+        "No task selected": "No task selected",
+        "Select a task from the pending list first.": "Select a task from the pending list first.",
+        "Client Progress Manager": "Client Progress Manager",
+        "Client Details": "Client Details",
+        "Client Name": "Client Name",
+        "Contact": "Contact",
+        "Business": "Business",
+        "Shop Number": "Shop Number",
+        "Email": "Email",
+        "Client Review": "Client Review",
+        "Add Review": "Add Review",
+        "Open Review Log": "Open Review Log",
+        "Create Client Plan": "Create Client Plan",
+        "Save Client": "Save Client",
+        "Delete Selected Client": "Delete Selected Client",
+        "Progress Overview": "Progress Overview",
+        "Progress": "Progress",
+        "Total Tasks": "Total Tasks",
+        "Tasks": "Tasks",
+        "New task": "New task",
+        "No client selected": "No client selected",
+        "No pending tasks": "No pending tasks",
+        "No tasks yet": "No tasks yet",
+        "No client plan": "No client plan",
+        "Create a client plan first.": "Create a client plan first.",
+        "Missing client": "Missing client",
+        "Please enter a client name.": "Please enter a client name.",
+        "Missing contact": "Missing contact",
+        "Please enter the client contact number.": "Please enter the client contact number.",
+        "Missing business": "Missing business",
+        "Please enter the client business type.": "Please enter the client business type.",
+        "Missing tasks": "Missing tasks",
+        "Enter at least one task or set a total task count greater than zero.": "Enter at least one task or set a total task count greater than zero.",
+        "Review saved": "Review saved",
+        "Review saved for '{name}'.": "Review saved for '{name}'.",
+        "No review": "No review",
+        "Please type a review before saving it.": "Please type a review before saving it.",
+        "Client Reviews Log": "Client Reviews Log",
+        "Date": "Date",
+        "Review": "Review",
+        "No reviews yet": "No reviews yet",
+        "All Clients Progress": "All Clients Progress",
+        "Edit Selected Client": "Edit Selected Client",
+        "Refresh": "Refresh",
+        "Delete client?": "Delete client?",
+        "Are you sure you want to delete '{client_name}' from the client list?": "Are you sure you want to delete '{client_name}' from the client list?",
+        "Client deleted": "Client deleted",
+        "'{client_name}' was removed successfully.": "'{client_name}' was removed successfully.",
+        "Client not found": "Client not found",
+        "'{client_name}' was not found in the saved client list.": "'{client_name}' was not found in the saved client list.",
+        "Saved progress only": "Saved progress only",
+        "Select a client row first.": "Select a client row first.",
+        "Select a client from the list first.": "Select a client from the list first.",
+        "Add Task": "Add Task",
+        "Tasks Details": "Tasks Details",
+        "Refresh Progress": "Refresh Progress",
+        "Open All Clients": "Open All Clients",
+        "Send Email": "Send Email",
+        "Save & Exit": "Save & Exit",
+        "Cancel": "Cancel",
+        "Please enter a client name before saving.": "Please enter a client name before saving.",
+        "Please enter the client contact number before saving.": "Please enter the client contact number before saving.",
+        "Please enter the client business type before saving.": "Please enter the client business type before saving.",
+        "This client does not have an email saved yet.": "This client does not have an email saved yet.",
+        "Select or create a client before adding a review.": "Select or create a client before adding a review.",
+        "No email": "No email",
+        "Task Details - {client_name}": "Task Details - {client_name}",
+        "<New Client>": "<New Client>",
+        "Select an existing client first.": "Select an existing client first.",
+        "Client saved": "Client saved",
+        "'{name}' was saved successfully.": "'{name}' was saved successfully.",
+        "No client plan": "No client plan",
+        "Select a task from the pending list.": "Select a task from the pending list.",
+        "No review": "No review",
+        "Please type a review before saving it.": "Please type a review before saving it.",
+        "Task {i}": "Task {i}",
+        "Language": "Language",
+        "English": "English",
+        "العربية": "العربية",
+    },
+    "ar": {
+        "Tkinter could not start in this environment.": "تعذر启动 واجهة Tkinter في هذا البيئة.",
+        "Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.": "يرجى تشغيل هذا الملف من محطة Windows عادية أو من محطة VS Code، وليس من وحدة تحكم رأسية أو وضع التصحيح.",
+        "Client": "العميل",
+        "Client: {client_name}": "العميل: {client_name}",
+        "All Tasks": "جميع المهام",
+        "Pending Tasks": "المهام المعلقة",
+        "Mark Done": "تم الإنجاز",
+        "Close": "إغلاق",
+        "No task plan": "لا توجد خطة مهام",
+        "There is no active task plan to update.": "لا توجد خطة مهام نشطة لتحديثها.",
+        "No task selected": "لم يتم تحديد أي مهمة",
+        "Select a task from the pending list first.": "حدد مهمة من القائمة المعلقة أولاً.",
+        "Client Progress Manager": "مدير العملاء",
+        "Client Details": "تفاصيل العميل",
+        "Client Name": "اسم العميل",
+        "Contact": "رقم التواصل",
+        "Business": "نوع النشاط",
+        "Shop Number": "رقم المحل",
+        "Email": "البريد الإلكتروني",
+        "Client Review": "ملاحظات العميل",
+        "Add Review": "إضافة ملاحظة",
+        "Open Review Log": "فتح سجل الملاحظات",
+        "Create Client Plan": "إنشاء خطة العميل",
+        "Save Client": "حفظ العميل",
+        "Delete Selected Client": "حذف العميل المحدد",
+        "Progress Overview": "نظرة عامة على التقدم",
+        "Progress": "التقدم",
+        "Total Tasks": "إجمالي المهام",
+        "Tasks": "المهام",
+        "New task": "مهمة جديدة",
+        "No client selected": "لم يتم تحديد عميل",
+        "No pending tasks": "لا توجد مهام معلقة",
+        "No tasks yet": "لا توجد مهام بعد",
+        "No client plan": "لا توجد خطة عميل",
+        "Create a client plan first.": "أنشئ خطة العميل أولاً.",
+        "Missing client": "اسم العميل مفقود",
+        "Please enter a client name.": "يرجى إدخال اسم العميل.",
+        "Missing contact": "رقم التواصل مفقود",
+        "Please enter the client contact number.": "يرجى إدخال رقم التواصل الخاص بالعميل.",
+        "Missing business": "نوع النشاط مفقود",
+        "Please enter the client business type.": "يرجى إدخال نوع نشاط العميل.",
+        "Missing tasks": "المهام مفقودة",
+        "Enter at least one task or set a total task count greater than zero.": "أدخل مهمة واحدة على الأقل أو قم بتعيين إجمالي مهام أكبر من صفر.",
+        "Review saved": "تم حفظ الملاحظة",
+        "Review saved for '{name}'.": "تم حفظ الملاحظة للعميل '{name}'.",
+        "No review": "لا توجد ملاحظة",
+        "Please type a review before saving it.": "يرجى كتابة ملاحظة قبل حفظها.",
+        "Client Reviews Log": "سجل ملاحظات العملاء",
+        "Date": "التاريخ",
+        "Review": "الملاحظة",
+        "No reviews yet": "لا توجد ملاحظات بعد",
+        "All Clients Progress": "تقدم جميع العملاء",
+        "Edit Selected Client": "تعديل العميل المحدد",
+        "Refresh": "تحديث",
+        "Delete client?": "حذف العميل؟",
+        "Are you sure you want to delete '{client_name}' from the client list?": "هل أنت متأكد أنك تريد حذف '{client_name}' من قائمة العملاء؟",
+        "Client deleted": "تم حذف العميل",
+        "'{client_name}' was removed successfully.": "تم حذف '{client_name}' بنجاح.",
+        "Client not found": "لم يتم العثور على العميل",
+        "'{client_name}' was not found in the saved client list.": "لم يتم العثور على '{client_name}' في قائمة العملاء المحفوظة.",
+        "Saved progress only": "تقدم محفوظ فقط",
+        "Select a client row first.": "حدد صف عميل أولاً.",
+        "Select a client from the list first.": "حدد عميلًا من القائمة أولاً.",
+        "Add Task": "إضافة مهمة",
+        "Tasks Details": "تفاصيل المهام",
+        "Refresh Progress": "تحديث التقدم",
+        "Open All Clients": "فتح جميع العملاء",
+        "Send Email": "إرسال بريد إلكتروني",
+        "Save & Exit": "حفظ والخروج",
+        "Cancel": "إلغاء",
+        "Please enter a client name before saving.": "يرجى إدخال اسم العميل قبل الحفظ.",
+        "Please enter the client contact number before saving.": "يرجى إدخال رقم التواصل الخاص بالعميل قبل الحفظ.",
+        "Please enter the client business type before saving.": "يرجى إدخال نوع نشاط العميل قبل الحفظ.",
+        "This client does not have an email saved yet.": "هذا العميل لا يحتوي على بريد إلكتروني محفوظ بعد.",
+        "Select or create a client before adding a review.": "حدد عميلًا أو أنشئ عميلًا قبل إضافة ملاحظة.",
+        "No email": "لا يوجد بريد إلكتروني",
+        "Task Details - {client_name}": "تفاصيل المهام - {client_name}",
+        "<New Client>": "<عميل جديد>",
+        "Select an existing client first.": "حدد عميلًا موجودًا أولاً.",
+        "Client saved": "تم حفظ العميل",
+        "'{name}' was saved successfully.": "تم حفظ '{name}' بنجاح.",
+        "No client plan": "لا توجد خطة عميل",
+        "Select a task from the pending list.": "حدد مهمة من القائمة المعلقة.",
+        "No review": "لا توجد مراجعة",
+        "Please type a review before saving it.": "يرجى كتابة ملاحظة قبل حفظها.",
+        "Task {i}": "المهمة {i}",
+        "Language": "اللغة",
+        "English": "English",
+        "العربية": "العربية",
+    },
 }
 
 
+def set_language(lang):
+    global CURRENT_LANGUAGE
+    code = str(lang or "eng").strip().lower()
+    if code in ("ar", "arabic"):
+        CURRENT_LANGUAGE = "ar"
+    else:
+        CURRENT_LANGUAGE = "eng"
+    return CURRENT_LANGUAGE
+
+
 def T(text, **kwargs):
-    translated = TRANSLATIONS.get(text, text)
+    language_map = TRANSLATIONS.get(CURRENT_LANGUAGE, TRANSLATIONS["eng"])
+    translated = language_map.get(text, text)
     if kwargs:
         return translated.format(**kwargs)
     return translated
@@ -566,6 +668,9 @@ class ProgressApp(tk.Tk):
         self.style.configure("Yellow.Horizontal.TProgressbar", background="#f9a825", troughcolor="#e0e0e0")
         self.style.configure("Green.Horizontal.TProgressbar", background="#2e7d32", troughcolor="#e0e0e0")
 
+        self.translatable_labels = []
+        self.translatable_buttons = []
+
         main = ttk.Frame(self, padding=14)
         main.pack(fill="both", expand=True)
 
@@ -607,35 +712,64 @@ class ProgressApp(tk.Tk):
             fg="#1f2937",
             anchor="center",
         )
+        self.translatable_labels.append((title, "Client Progress Manager"))
         title.grid(row=0, column=1, sticky="ew")
 
+        lang_frame = ttk.Frame(header)
+        lang_frame.grid(row=0, column=2, sticky="e", padx=(10, 0))
+        lang_label = ttk.Label(lang_frame, text=T("Language"))
+        lang_label.pack(side="left", padx=(0, 6))
+        self.translatable_labels.append((lang_label, "Language"))
+        self.language_var = tk.StringVar(value=CURRENT_LANGUAGE)
+        self.language_combo = ttk.Combobox(
+            lang_frame,
+            textvariable=self.language_var,
+            state="readonly",
+            width=12,
+            values=["eng", "ar"],
+        )
+        self.language_combo.pack(side="left")
+        self.language_combo.bind("<<ComboboxSelected>>", self.switch_language)
+
         details_frame = ttk.LabelFrame(main, text=T("Client Details"), style="Section.TLabelframe")
+        self.translatable_labels.append((details_frame, "Client Details"))
         details_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=(0, 6), pady=(0, 8))
         details_frame.columnconfigure(1, weight=1)
 
-        ttk.Label(details_frame, text=T("Client Name")).grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 6))
+        client_name_label = ttk.Label(details_frame, text=T("Client Name"))
+        client_name_label.grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 6))
+        self.translatable_labels.append((client_name_label, "Client Name"))
         self.client_combo = ttk.Combobox(details_frame, textvariable=self.client_name_var, state="normal")
         self.client_combo.grid(row=0, column=1, sticky="ew", padx=(0, 10), pady=(8, 6))
         self.client_combo.bind("<<ComboboxSelected>>", self.on_client_name_selected)
         self.refresh_client_combo()
 
-        ttk.Label(details_frame, text=T("Contact")).grid(row=1, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        contact_label = ttk.Label(details_frame, text=T("Contact"))
+        contact_label.grid(row=1, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        self.translatable_labels.append((contact_label, "Contact"))
         self.contact_entry = ttk.Entry(details_frame, textvariable=self.contact_var)
         self.contact_entry.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        ttk.Label(details_frame, text=T("Business")).grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        business_label = ttk.Label(details_frame, text=T("Business"))
+        business_label.grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        self.translatable_labels.append((business_label, "Business"))
         self.business_entry = ttk.Entry(details_frame, textvariable=self.business_var)
         self.business_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        ttk.Label(details_frame, text=T("Shop Number")).grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        shop_label = ttk.Label(details_frame, text=T("Shop Number"))
+        shop_label.grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        self.translatable_labels.append((shop_label, "Shop Number"))
         self.shop_number_entry = ttk.Entry(details_frame, textvariable=self.shop_number_var)
         self.shop_number_entry.grid(row=3, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        ttk.Label(details_frame, text=T("Email")).grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
+        email_label = ttk.Label(details_frame, text=T("Email"))
+        email_label.grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
+        self.translatable_labels.append((email_label, "Email"))
         self.email_entry = ttk.Entry(details_frame, textvariable=self.email_var)
         self.email_entry.grid(row=4, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
         review_frame = ttk.LabelFrame(main, text=T("Client Review"), style="Section.TLabelframe")
+        self.translatable_labels.append((review_frame, "Client Review"))
         review_frame.grid(row=1, column=2, columnspan=2, sticky="nsew", padx=(6, 0), pady=(0, 8))
         review_frame.columnconfigure(0, weight=1)
 
@@ -644,8 +778,12 @@ class ProgressApp(tk.Tk):
 
         review_buttons = ttk.Frame(review_frame)
         review_buttons.grid(row=1, column=0, sticky="w", padx=(10, 10), pady=(0, 8))
-        ttk.Button(review_buttons, text=T("Add Review"), command=self.add_client_review, style="Action.TButton").pack(side="left", padx=(0, 8))
-        ttk.Button(review_buttons, text=T("Open Review Log"), command=self.open_reviews_log, style="Action.TButton").pack(side="left")
+        add_review_button = ttk.Button(review_buttons, text=T("Add Review"), command=self.add_client_review, style="Action.TButton")
+        add_review_button.pack(side="left", padx=(0, 8))
+        self.translatable_buttons.append((add_review_button, "Add Review"))
+        open_log_button = ttk.Button(review_buttons, text=T("Open Review Log"), command=self.open_reviews_log, style="Action.TButton")
+        open_log_button.pack(side="left")
+        self.translatable_buttons.append((open_log_button, "Open Review Log"))
 
         action_row = ttk.Frame(main)
         action_row.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(0, 8))
@@ -654,27 +792,40 @@ class ProgressApp(tk.Tk):
 
         action_center = ttk.Frame(action_row)
         action_center.grid(row=0, column=0, columnspan=2, sticky="n")
-        ttk.Button(action_center, text=T("Create Client Plan"), command=self.create_plan, style="Action.TButton", width=18).pack(side="left", padx=(0, 8))
-        ttk.Button(action_center, text=T("Save Client"), command=self.save_current_client, style="Action.TButton", width=18).pack(side="left", padx=(0, 8))
-        ttk.Button(action_center, text=T("Delete Selected Client"), command=self.delete_selected_client, style="Action.TButton", width=18).pack(side="left")
+        create_plan_button = ttk.Button(action_center, text=T("Create Client Plan"), command=self.create_plan, style="Action.TButton", width=18)
+        create_plan_button.pack(side="left", padx=(0, 8))
+        self.translatable_buttons.append((create_plan_button, "Create Client Plan"))
+        save_client_button = ttk.Button(action_center, text=T("Save Client"), command=self.save_current_client, style="Action.TButton", width=18)
+        save_client_button.pack(side="left", padx=(0, 8))
+        self.translatable_buttons.append((save_client_button, "Save Client"))
+        delete_client_button = ttk.Button(action_center, text=T("Delete Selected Client"), command=self.delete_selected_client, style="Action.TButton", width=18)
+        delete_client_button.pack(side="left")
+        self.translatable_buttons.append((delete_client_button, "Delete Selected Client"))
 
         progress_box = ttk.LabelFrame(main, text=T("Progress Overview"), style="Section.TLabelframe")
+        self.translatable_labels.append((progress_box, "Progress Overview"))
         progress_box.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(0, 8))
         progress_box.columnconfigure(1, weight=1)
 
-        ttk.Label(progress_box, text=T("Progress")).grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 4))
+        progress_label = ttk.Label(progress_box, text=T("Progress"))
+        progress_label.grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 4))
+        self.translatable_labels.append((progress_label, "Progress"))
         self.progress_var = tk.StringVar(value="0%")
-        ttk.Label(progress_box, textvariable=self.progress_var, font=("Segoe UI", 10, "bold")).grid(row=0, column=1, sticky="w", padx=(0, 10), pady=(8, 4))
+        progress_value_label = ttk.Label(progress_box, textvariable=self.progress_var, font=("Segoe UI", 10, "bold"))
+        progress_value_label.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=(8, 4))
 
         self.progress_bar = ttk.Progressbar(progress_box, orient="horizontal", length=500, mode="determinate")
         self.progress_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=(10, 10), pady=(0, 10))
         self._apply_progress_bar_color(0)
 
-        ttk.Label(progress_box, text=T("Total Tasks")).grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
+        total_tasks_label = ttk.Label(progress_box, text=T("Total Tasks"))
+        total_tasks_label.grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
+        self.translatable_labels.append((total_tasks_label, "Total Tasks"))
         self.total_entry = ttk.Entry(progress_box, textvariable=self.total_tasks_var, state="readonly")
         self.total_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
         tasks_frame = ttk.LabelFrame(main, text=T("Tasks"), style="Section.TLabelframe")
+        self.translatable_labels.append((tasks_frame, "Tasks"))
         tasks_frame.grid(row=4, column=0, columnspan=4, sticky="nsew", pady=(0, 8))
         tasks_frame.columnconfigure(0, weight=2)
         tasks_frame.columnconfigure(1, weight=0)
@@ -683,8 +834,12 @@ class ProgressApp(tk.Tk):
         tasks_frame.columnconfigure(4, weight=1, minsize=180)
         tasks_frame.rowconfigure(1, weight=1)
 
-        ttk.Label(tasks_frame, text=T("All Tasks"), font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w", padx=(10, 0), pady=(8, 4))
-        ttk.Label(tasks_frame, text=T("Pending Tasks"), font=("Segoe UI", 10, "bold")).grid(row=0, column=2, sticky="w", padx=(10, 0), pady=(8, 4))
+        all_tasks_label = ttk.Label(tasks_frame, text=T("All Tasks"), font=("Segoe UI", 10, "bold"))
+        all_tasks_label.grid(row=0, column=0, sticky="w", padx=(10, 0), pady=(8, 4))
+        self.translatable_labels.append((all_tasks_label, "All Tasks"))
+        pending_tasks_label = ttk.Label(tasks_frame, text=T("Pending Tasks"), font=("Segoe UI", 10, "bold"))
+        pending_tasks_label.grid(row=0, column=2, sticky="w", padx=(10, 0), pady=(8, 4))
+        self.translatable_labels.append((pending_tasks_label, "Pending Tasks"))
 
         list_area = ttk.Frame(tasks_frame)
         list_area.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=(10, 0), pady=(0, 8))
@@ -755,10 +910,13 @@ class ProgressApp(tk.Tk):
             )
             button.grid(row=row, column=column, sticky="ew", padx=(0, 4), pady=(0, 4))
             button.configure(width=max(18, len(text) + 4))
+            self.translatable_buttons.append((button, text))
 
         task_entry_row = ttk.Frame(tasks_frame)
         task_entry_row.grid(row=2, column=0, columnspan=5, sticky="ew", padx=(10, 10), pady=(0, 8))
-        ttk.Label(task_entry_row, text=T("New task")).pack(side="left", padx=(0, 8))
+        new_task_label = ttk.Label(task_entry_row, text=T("New task"))
+        new_task_label.pack(side="left", padx=(0, 8))
+        self.translatable_labels.append((new_task_label, "New task"))
         self.new_task_entry = ttk.Entry(task_entry_row, textvariable=self.new_task_var)
         self.new_task_entry.pack(side="left", fill="x", expand=True)
 
@@ -766,6 +924,46 @@ class ProgressApp(tk.Tk):
         tasks_frame.rowconfigure(1, weight=1)
 
         self.clear_client_form()
+
+    def switch_language(self, event=None):
+        selected = self.language_var.get()
+        if selected not in {"eng", "ar"}:
+            selected = "eng"
+        set_language(selected)
+        self.language_var.set(CURRENT_LANGUAGE)
+        self.refresh_lang_ui()
+
+    def refresh_lang_ui(self):
+        for widget, original_text in getattr(self, "translatable_labels", []):
+            try:
+                widget.configure(text=T(original_text))
+            except Exception:
+                pass
+
+        for widget, original_text in getattr(self, "translatable_buttons", []):
+            try:
+                widget.configure(text=T(original_text))
+            except Exception:
+                pass
+
+        self.title(T("Client Progress Manager"))
+        self.refresh_client_combo()
+        if hasattr(self, "all_tasks_box"):
+            self.refresh_display()
+
+    def update_window_texts(self):
+        if self.client_combo is not None:
+            self.client_combo.set(self.client_name_var.get() or T("<New Client>"))
+            self.refresh_client_combo()
+
+        if hasattr(self, "all_tasks_box"):
+            self.all_tasks_box.delete(0, tk.END)
+            self.pending_tasks_box.delete(0, tk.END)
+            if self.plan is None:
+                self.all_tasks_box.insert(tk.END, T("No client selected"))
+                self.pending_tasks_box.insert(tk.END, T("No pending tasks"))
+            else:
+                self.refresh_display()
 
     def refresh_client_combo(self):
         self.client_manager.load_clients()
