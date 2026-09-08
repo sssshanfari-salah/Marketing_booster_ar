@@ -1,18 +1,18 @@
 # Project name
 
-Marketing Booster AR
+Clients Manager
 
 ## Objective
 
-Provide tools and workflows to help plan, create, and improve marketing campaigns using Python.
+Manage client records, contacts, business details, and task progress in a simple Python desktop app.
 
 ## Features
 
-- Campaign planning and organization
-- Marketing content support
-- Data processing and analysis
-- Extensible Python-based workflows
-- Track each client marketing progress
+- Client registration and contact management
+- Country-aware contact formatting with dial codes
+- Client reviews and task progress tracking
+- Share-ready contact export in text and vCard format
+- Simple desktop workflow for local client management
 
 ## How to run
 

@@ -121,7 +121,7 @@ TRANSLATIONS = {
         "There is no active task plan to update.": "There is no active task plan to update.",
         "No task selected": "No task selected",
         "Select a task from the pending list first.": "Select a task from the pending list first.",
-        "Client Progress Manager": "Client Progress Manager",
+        "Client Progress Manager": "Clients Manager",
         "Client Details": "Client Details",
         "Client Name": "Client Name",
         "Country": "Country",
@@ -811,7 +811,7 @@ class ProgressApp(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("Marketing Booster")
+        self.title(T("Client Progress Manager"))
 
         if APP_ICON.exists():
             try:
