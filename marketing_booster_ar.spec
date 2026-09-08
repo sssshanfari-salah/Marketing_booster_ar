@@ -5,7 +5,7 @@ a = Analysis(
     ['C:/Users/ssssh/OneDrive/Documents/Marketing_booster_ar/python code/main.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:/Users/ssssh/OneDrive/Documents/Marketing_booster_ar/starco_icon.ico', '.')],
+    datas=[('C:/Users/ssssh/OneDrive/Documents/Marketing_booster_ar/starco_icon.ico', '.'), ('C:/Users/ssssh/OneDrive/Documents/Marketing_booster_ar/python code/country_codes.json', '.'), ('C:/Users/ssssh/OneDrive/Documents/Marketing_booster_ar/clients.json', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
