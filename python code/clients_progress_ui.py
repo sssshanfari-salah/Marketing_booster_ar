@@ -70,7 +70,7 @@ def load_country_codes():
 COUNTRY_CODES = load_country_codes()
 COUNTRY_OPTIONS = [item["country"] for item in COUNTRY_CODES]
 COUNTRY_CODE_BY_NAME = {item["country"]: item["code"] for item in COUNTRY_CODES}
-DEFAULT_COUNTRY = "Saudi Arabia"
+DEFAULT_COUNTRY = "Oman"
 
 
 def normalize_country_code(code):
@@ -97,12 +97,12 @@ def parse_contact_for_ui(contact_value):
             local_number = digits[len(country_code):]
             return local_number.lstrip("0") if local_number else "", item["country"]
 
-    if digits.startswith("966"):
+    if digits.startswith("968"):
         local_number = digits[3:]
-        return local_number.lstrip("0") if local_number else "", "Saudi Arabia"
+        return local_number.lstrip("0") if local_number else "", "Oman"
 
     if digits.startswith("0"):
-        return digits[1:], "Saudi Arabia"
+        return digits[1:], "Oman"
 
     return digits, DEFAULT_COUNTRY
 
