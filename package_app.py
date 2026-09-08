@@ -16,8 +16,8 @@ TARGET_ICON = APP_DIR / "starco_icon.ico"
 COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
 DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
-LEGACY_APP_NAMES = ["marketing_booster"]
-LEGACY_DISPLAY_NAMES = ["Marketing Booster"]
+LEGACY_APP_NAMES = ["marketing_booster", "marketing_booster_ar"]
+LEGACY_DISPLAY_NAMES = ["Marketing Booster", "Marketing Booster AR", "Clients Manager"]
 RUNTIME_DATA_FILES = [
     TARGET_ICON,
     CLIENTS_DATA_FILE,
@@ -51,24 +51,40 @@ def remove_stale_artifacts():
         stale_paths = [
             DIST_DIR / f"{legacy_name}.exe",
             DIST_DIR / legacy_name / f"{legacy_name}.exe",
+            DIST_DIR / f"{legacy_name}.app",
         ]
         for stale in stale_paths:
             if stale.exists():
                 if stale.is_dir():
-                    for child in stale.iterdir():
-                        child.unlink()
-                    stale.rmdir()
+                    try:
+                        for child in stale.iterdir():
+                            child.unlink()
+                    except OSError:
+                        pass
+                    try:
+                        stale.rmdir()
+                    except OSError:
+                        pass
                 else:
-                    stale.unlink()
+                    try:
+                        stale.unlink()
+                    except OSError:
+                        pass
 
     for legacy_name in LEGACY_DISPLAY_NAMES:
         desktop_link = DESKTOP_DIR / f"{legacy_name}.lnk"
         if desktop_link.exists():
-            desktop_link.unlink()
+            try:
+                desktop_link.unlink()
+            except OSError:
+                pass
 
     desktop_link = DESKTOP_DIR / f"{APP_DISPLAY_NAME}.lnk"
     if desktop_link.exists():
-        desktop_link.unlink()
+        try:
+            desktop_link.unlink()
+        except OSError:
+            pass
 
 
 def find_built_exe():
@@ -154,12 +170,15 @@ def ensure_runtime_files():
     if not CLIENTS_DATA_FILE.exists():
         CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
 
+    COUNTRY_CODES_DATA.parent.mkdir(parents=True, exist_ok=True)
     if not COUNTRY_CODES_DATA.exists():
-        COUNTRY_CODES_DATA.parent.mkdir(parents=True, exist_ok=True)
         COUNTRY_CODES_DATA.write_text("[]", encoding="utf-8")
 
-    if DOCUMENTS_DATA_FILE.parent.exists():
+    if not DOCUMENTS_DATA_FILE.parent.exists():
         DOCUMENTS_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    if not DOCUMENTS_DATA_FILE.exists():
+        DOCUMENTS_DATA_FILE.write_text("", encoding="utf-8")
 
 
 def build_app():
@@ -176,6 +195,9 @@ def build_app():
 
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
+
+    if SPEC_FILE.exists():
+        SPEC_FILE.unlink()
 
     cmd = [
         sys.executable,
@@ -241,6 +263,7 @@ def create_shortcut():
     shortcut.Targetpath = str(exe_path)
     shortcut.WorkingDirectory = str(exe_path.parent)
     shortcut.IconLocation = str(TARGET_ICON if TARGET_ICON.exists() else exe_path)
+    shortcut.WindowStyle = 7
     shortcut.save()
 
     print(f"Shortcut created: {desktop_link}")
@@ -252,5 +275,10 @@ if __name__ == "__main__":
         raise SystemExit("This packaging script is for Windows only.")
 
     exe = build_app()
+    if exe is None:
+        raise SystemExit("App build failed.")
+
     print(f"Built: {exe}")
-    create_shortcut()
+    shortcut = create_shortcut()
+    if shortcut is not None:
+        print(f"Desktop shortcut: {shortcut}")
