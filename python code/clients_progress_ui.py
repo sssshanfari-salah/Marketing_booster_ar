@@ -182,12 +182,15 @@ TRANSLATIONS = {
         "Send Email": "Send Email",
         "Save & Exit": "Save & Exit",
         "Cancel": "Cancel",
+        "Proceed to exit": "Proceed to exit",
         "Please enter a client name before saving.": "Please enter a client name before saving.",
         "Please enter the client contact number before saving.": "Please enter the client contact number before saving.",
         "Please enter the client business type before saving.": "Please enter the client business type before saving.",
         "This client does not have an email saved yet.": "This client does not have an email saved yet.",
         "Select or create a client before adding a review.": "Select or create a client before adding a review.",
         "No email": "No email",
+        "Exit app": "Exit app",
+        "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.": "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.",
         "Task Details - {client_name}": "Task Details - {client_name}",
         "<New Client>": "<New Client>",
         "Select an existing client first.": "Select an existing client first.",
@@ -285,12 +288,15 @@ TRANSLATIONS = {
         "Send Email": "إرسال بريد إلكتروني",
         "Save & Exit": "حفظ والخروج",
         "Cancel": "إلغاء",
+        "Proceed to exit": "متابعة الخروج",
         "Please enter a client name before saving.": "يرجى إدخال اسم العميل قبل الحفظ.",
         "Please enter the client contact number before saving.": "يرجى إدخال رقم التواصل الخاص بالعميل قبل الحفظ.",
         "Please enter the client business type before saving.": "يرجى إدخال نوع نشاط العميل قبل الحفظ.",
         "This client does not have an email saved yet.": "هذا العميل لا يحتوي على بريد إلكتروني محفوظ بعد.",
         "Select or create a client before adding a review.": "حدد عميلًا أو أنشئ عميلًا قبل إضافة ملاحظة.",
         "No email": "لا يوجد بريد إلكتروني",
+        "Exit app": "الخروج من التطبيق",
+        "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.": "أنت تخرج من التطبيق. تأكد من حفظ جميع البيانات المدخلة، وإلا استمر في الخروج.",
         "Task Details - {client_name}": "تفاصيل المهام - {client_name}",
         "<New Client>": "<عميل جديد>",
         "Select an existing client first.": "حدد عميلًا موجودًا أولاً.",
@@ -911,6 +917,7 @@ class ProgressApp(tk.Tk):
 
         self.plan = None
         self.client_combo = None
+        self.protocol("WM_DELETE_WINDOW", self.confirm_exit_app)
 
         self.build_ui()
 
@@ -1562,12 +1569,43 @@ class ProgressApp(tk.Tk):
         mailto_url = f"mailto:{quote(email)}"
         webbrowser.open(mailto_url)
 
+    def confirm_exit_app(self):
+        dialog = tk.Toplevel(self)
+        dialog.title(T("Exit app"))
+        dialog.geometry("420x160")
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        message = ttk.Label(
+            dialog,
+            text=T("You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit."),
+            wraplength=360,
+            justify="center",
+        )
+        message.pack(padx=20, pady=(18, 12))
+
+        actions = ttk.Frame(dialog)
+        actions.pack(pady=(0, 18))
+
+        def close_dialog():
+            dialog.destroy()
+
+        cancel_button = ttk.Button(actions, text=T("Cancel"), command=close_dialog)
+        cancel_button.pack(side="left", padx=(0, 10))
+
+        proceed_button = ttk.Button(actions, text=T("Proceed to exit"), command=lambda: (self.destroy(), dialog.destroy()))
+        proceed_button.pack(side="left")
+
+        dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        self.wait_window(dialog)
+
     def save_and_exit(self):
         self.save_current_client()
         self.destroy()
 
     def cancel_and_exit(self):
-        self.destroy()
+        self.confirm_exit_app()
 
     def add_client_review(self):
         name = self.client_name_var.get().strip()

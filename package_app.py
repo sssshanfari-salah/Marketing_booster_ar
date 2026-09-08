@@ -25,6 +25,9 @@ RUNTIME_DATA_FILES = [
     DOCUMENTS_DATA_FILE,
 ]
 
+# Keep the packaged app aligned with the current client-manager UI/data model.
+RUNTIME_DATA_FILES = [path for path in RUNTIME_DATA_FILES if path is not None and path.exists()]
+
 
 def resolve_desktop_dir():
     home = Path.home()
@@ -167,6 +170,9 @@ def remove_directory(path):
 
 
 def ensure_runtime_files():
+    APP_DIR.mkdir(parents=True, exist_ok=True)
+    SOURCE_DIR.mkdir(parents=True, exist_ok=True)
+
     if not CLIENTS_DATA_FILE.exists():
         CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
 
@@ -174,11 +180,20 @@ def ensure_runtime_files():
     if not COUNTRY_CODES_DATA.exists():
         COUNTRY_CODES_DATA.write_text("[]", encoding="utf-8")
 
-    if not DOCUMENTS_DATA_FILE.parent.exists():
-        DOCUMENTS_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-
+    DOCUMENTS_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
     if not DOCUMENTS_DATA_FILE.exists():
         DOCUMENTS_DATA_FILE.write_text("", encoding="utf-8")
+
+    if not TARGET_ICON.exists():
+        fallback_icon_dir = APP_DIR / "starco icon"
+        if fallback_icon_dir.exists():
+            for candidate in sorted(fallback_icon_dir.iterdir()):
+                if candidate.suffix.lower() in {".ico", ".png", ".jpg", ".jpeg"}:
+                    try:
+                        shutil.copy2(candidate, TARGET_ICON)
+                        break
+                    except OSError:
+                        pass
 
 
 def build_app():
@@ -217,17 +232,17 @@ def build_app():
     ]
 
     if TARGET_ICON.exists():
-        cmd.extend([
-            "--icon",
-            str(TARGET_ICON),
-        ])
+        cmd.extend(["--icon", str(TARGET_ICON)])
 
-    for data_file in RUNTIME_DATA_FILES:
+    runtime_files = [
+        TARGET_ICON,
+        CLIENTS_DATA_FILE,
+        COUNTRY_CODES_DATA,
+        DOCUMENTS_DATA_FILE,
+    ]
+    for data_file in runtime_files:
         if data_file.exists():
-            cmd.extend([
-                "--add-data",
-                f"{data_file}{os.pathsep}.",
-            ])
+            cmd.extend(["--add-data", f"{data_file}{os.pathsep}."])
 
     cmd.append(str(SOURCE_DIR / "main.py"))
 
@@ -264,6 +279,7 @@ def create_shortcut():
     shortcut.WorkingDirectory = str(exe_path.parent)
     shortcut.IconLocation = str(TARGET_ICON if TARGET_ICON.exists() else exe_path)
     shortcut.WindowStyle = 7
+    shortcut.Arguments = ""
     shortcut.save()
 
     print(f"Shortcut created: {desktop_link}")
