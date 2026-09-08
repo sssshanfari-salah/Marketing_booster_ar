@@ -233,3 +233,40 @@ class ClientManager:
         output_path = Path(r"docs/clients_data.txt")
         with output_path.open("w", encoding="utf-8") as outfile:
             outfile.write(json.dumps(data, indent=2))
+
+
+def build_clients_report_text(file_path=None):
+    resolved_path = Path(file_path) if file_path is not None else Path(__file__).resolve().parent.parent / "clients.json"
+    if not resolved_path.exists():
+        return "Clients Log\n\nNo clients found."
+
+    try:
+        data = json.loads(resolved_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, TypeError):
+        return "Clients Log\n\nNo clients found."
+
+    if not isinstance(data, list) or not data:
+        return "Clients Log\n\nNo clients found."
+
+    lines = ["Clients Log", "====================", ""]
+    for index, item in enumerate(data, start=1):
+        client = Client.from_dict(item)
+        lines.append(f"Client {index}: {client.name}")
+        lines.append(f"Contact: {client.contact}")
+        lines.append(f"Business: {client.business}")
+        lines.append(f"Email: {client.email or 'N/A'}")
+        lines.append(f"Shop Number: {client.shop_number or 'N/A'}")
+        if client.reviews:
+            lines.append("Reviews:")
+            for review in client.reviews:
+                review_text = review.get("review", "") if isinstance(review, dict) else str(review)
+                review_date = review.get("date", "") if isinstance(review, dict) else ""
+                if review_date:
+                    lines.append(f"- {review_date}: {review_text}")
+                else:
+                    lines.append(f"- {review_text}")
+        else:
+            lines.append("Reviews: None")
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"

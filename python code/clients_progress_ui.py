@@ -6,7 +6,7 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import quote
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
 try:
     import win32print
@@ -19,7 +19,7 @@ except ImportError:
     Image = None
     ImageTk = None
 
-from clients_management import Client, ClientManager, format_contact_number
+from clients_management import Client, ClientManager, build_clients_report_text, format_contact_number
 
 APP_ICON = None
 for candidate in [
@@ -202,6 +202,10 @@ TRANSLATIONS = {
         "English": "English",
         "العربية": "العربية",
         "Print": "Print",
+        "Save Log": "Save Log",
+        "Select file path": "Select file path",
+        "Browse": "Browse",
+        "Export Clients Log": "Export Clients Log",
         "No printers registered on this laptop.": "No printers registered on this laptop.",
         "Copy vCard (.vcf)": "Copy vCard (.vcf)",
         "vCard (.vcf)": "vCard (.vcf)",
@@ -301,6 +305,10 @@ TRANSLATIONS = {
         "English": "English",
         "العربية": "العربية",
         "Print": "طباعة",
+        "Save Log": "حفظ السجل",
+        "Select file path": "اختر مسار الملف",
+        "Browse": "تصفح",
+        "Export Clients Log": "تصدير سجل العملاء",
         "No printers registered on this laptop.": "لا توجد طابعات مسجلة في هذا الجهاز.",
         "Copy vCard (.vcf)": "نسخ vCard (.vcf)",
         "vCard (.vcf)": "vCard (.vcf)",
@@ -583,6 +591,56 @@ class TaskDetailsWindow(tk.Toplevel):
         self.populate_lists(all_tasks=self.plan.all_tasks, pending_tasks=self.plan.pending_tasks)
 
 
+class ExportClientsLogWindow(tk.Toplevel):
+    def __init__(self, master=None, manager=None):
+        super().__init__(master)
+        self.title(T("Export Clients Log"))
+        self.geometry("560x180")
+        self.minsize(420, 150)
+        self.manager = manager or ClientManager("clients.json")
+
+        main = ttk.Frame(self, padding=16)
+        main.pack(fill="both", expand=True)
+        main.columnconfigure(1, weight=1)
+
+        ttk.Label(main, text=T("Select file path")).grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 8))
+        self.path_var = tk.StringVar(value=str(Path.home() / "Desktop" / "clients_log.txt"))
+        self.path_entry = ttk.Entry(main, textvariable=self.path_var)
+        self.path_entry.grid(row=0, column=1, sticky="ew", pady=(0, 8))
+
+        ttk.Button(main, text=T("Browse"), command=self.choose_file_path).grid(row=0, column=2, sticky="ew", padx=(8, 0), pady=(0, 8))
+
+        action_row = ttk.Frame(main)
+        action_row.grid(row=1, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        ttk.Button(action_row, text=T("Save Log"), command=self.save_report).pack(side="left", padx=(0, 8))
+        ttk.Button(action_row, text=T("Cancel"), command=self.destroy).pack(side="left")
+
+    def choose_file_path(self):
+        initial = self.path_var.get().strip() or str(Path.home() / "Desktop" / "clients_log.txt")
+        selected = filedialog.asksaveasfilename(
+            title=T("Select file path"),
+            initialfile=Path(initial).name or "clients_log.txt",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            initialdir=str(Path(initial).parent if Path(initial).parent.exists() else Path.home()),
+        )
+        if selected:
+            self.path_var.set(selected)
+
+    def save_report(self):
+        target_path = self.path_var.get().strip()
+        if not target_path:
+            messagebox.showwarning(T("Select file path"), T("Select file path"))
+            return
+
+        destination = Path(target_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        report = build_clients_report_text(self.manager.file_path if hasattr(self.manager, "file_path") else "clients.json")
+        destination.write_text(report, encoding="utf-8")
+        messagebox.showinfo(T("Save Log"), f"Saved: {destination}")
+        self.destroy()
+
+
 class ClientReviewsLogWindow(tk.Toplevel):
     def __init__(self, master=None, manager=None):
         super().__init__(master)
@@ -681,7 +739,8 @@ class AllClientsProgressWindow(tk.Toplevel):
         ttk.Button(button_row, text=T("Edit Selected Client"), command=self.edit_selected_client).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Delete Selected Client"), command=self.delete_selected_client).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left")
+        ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Save Log"), command=self.export_log).pack(side="left")
         self.refresh_view()
 
     def print_report(self):
@@ -697,6 +756,9 @@ class AllClientsProgressWindow(tk.Toplevel):
         if not self.manager.clients:
             lines.append(T("No client selected"))
         print_report_document(title, lines)
+
+    def export_log(self):
+        ExportClientsLogWindow(self, self.manager)
 
     def edit_selected_client(self, event=None):
         selection = self.tree.selection()
@@ -1736,7 +1798,8 @@ class AllClientsProgressWindow(tk.Toplevel):
         ttk.Button(button_row, text=T("Edit Selected Client"), command=self.edit_selected_client).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Delete Selected Client"), command=self.delete_selected_client).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left")
+        ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Save Log"), command=self.export_log).pack(side="left")
         self.refresh_view()
 
     def print_report(self):
@@ -1752,6 +1815,9 @@ class AllClientsProgressWindow(tk.Toplevel):
         if not self.manager.clients:
             lines.append(T("No client selected"))
         print_report_document(title, lines)
+
+    def export_log(self):
+        ExportClientsLogWindow(self, self.manager)
 
     def edit_selected_client(self, event=None):
         selection = self.tree.selection()

@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from clients_management import Client, ClientManager
+from clients_management import Client, ClientManager, build_clients_report_text
 from clients_progress_ui import Plan, T, parse_task_items, set_language
 from sync_documents import TARGET
 
@@ -105,6 +105,25 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("FN:Nora", vcard)
         self.assertIn("TEL;TYPE=CELL:+966555123456", vcard)
         self.assertIn("EMAIL:nora@example.com", vcard)
+
+    def test_build_clients_report_text_has_all_client_details(self):
+        with open(self.file_path, "w", encoding="utf-8") as file:
+            json.dump([
+                {
+                    "name": "Ali",
+                    "contact": "+96891234567",
+                    "business": "Consulting",
+                    "email": "ali@example.com",
+                    "shop_number": "12",
+                    "reviews": [{"date": "2026-09-08", "review": "Good client"}],
+                }
+            ], file)
+
+        report = build_clients_report_text(self.file_path)
+        self.assertIn("Clients Log", report)
+        self.assertIn("Ali", report)
+        self.assertIn("+96891234567", report)
+        self.assertIn("Good client", report)
 
     def test_add_client_with_email(self):
         manager = ClientManager(self.file_path)
