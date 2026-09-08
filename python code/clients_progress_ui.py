@@ -176,6 +176,7 @@ TRANSLATIONS = {
         "Add Task": "Add Task",
         "Tasks Details": "Tasks Details",
         "Refresh Progress": "Refresh Progress",
+        "Share Client Info": "Share Client Info",
         "Open All Clients": "Open All Clients",
         "Send Email": "Send Email",
         "Save & Exit": "Save & Exit",
@@ -201,6 +202,9 @@ TRANSLATIONS = {
         "العربية": "العربية",
         "Print": "Print",
         "No printers registered on this laptop.": "No printers registered on this laptop.",
+        "Copy vCard (.vcf)": "Copy vCard (.vcf)",
+        "vCard (.vcf)": "vCard (.vcf)",
+        "Client details copied to the clipboard.": "Client details copied to the clipboard.",
     },
     "ar": {
         "Tkinter could not start in this environment.": "تعذر启动 واجهة Tkinter في هذا البيئة.",
@@ -270,6 +274,7 @@ TRANSLATIONS = {
         "Add Task": "إضافة مهمة",
         "Tasks Details": "تفاصيل المهام",
         "Refresh Progress": "تحديث التقدم",
+        "Share Client Info": "مشاركة معلومات العميل",
         "Open All Clients": "فتح جميع العملاء",
         "Send Email": "إرسال بريد إلكتروني",
         "Save & Exit": "حفظ والخروج",
@@ -295,6 +300,9 @@ TRANSLATIONS = {
         "العربية": "العربية",
         "Print": "طباعة",
         "No printers registered on this laptop.": "لا توجد طابعات مسجلة في هذا الجهاز.",
+        "Copy vCard (.vcf)": "نسخ vCard (.vcf)",
+        "vCard (.vcf)": "vCard (.vcf)",
+        "Client details copied to the clipboard.": "تم نسخ تفاصيل العميل إلى الحافظة.",
     },
 }
 
@@ -1083,7 +1091,7 @@ class ProgressApp(tk.Tk):
             (T("Add Task"), self.add_task),
             (T("Tasks Details"), self.open_task_details_window),
             (T("Refresh Progress"), self.refresh_display),
-            (T("Open Client Window"), self.open_client_window),
+            (T("Share Client Info"), self.open_client_window),
             (T("Open All Clients"), self.open_all_clients),
             (T("Send Email"), self.send_email_to_client),
             (T("Save & Exit"), self.save_and_exit),
@@ -1546,14 +1554,20 @@ class ClientDetailsWindow(tk.Toplevel):
             entry.configure(state="disabled")
             self.fields[key] = {"var": var, "entry": entry}
 
+        vcard_frame = ttk.LabelFrame(main, text=T("vCard (.vcf)"), style="Section.TLabelframe")
+        vcard_frame.grid(row=7, column=0, columnspan=2, sticky="nsew", pady=(8, 8))
+        vcard_frame.columnconfigure(0, weight=1)
+        self.vcard_text = tk.Text(vcard_frame, height=8, wrap="word", font=("Segoe UI", 9), state="disabled")
+        self.vcard_text.grid(row=0, column=0, sticky="nsew", padx=(8, 8), pady=(8, 8))
+
         footer = ttk.Frame(main)
-        footer.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        footer.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(0, 0))
         footer.columnconfigure(0, weight=1)
         footer.columnconfigure(1, weight=1)
         footer.columnconfigure(2, weight=1)
         footer.columnconfigure(3, weight=1)
 
-        ttk.Button(footer, text=T("Share"), command=self.share_client).grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ttk.Button(footer, text=T("Copy vCard (.vcf)"), command=self.share_client).grid(row=0, column=0, sticky="ew", padx=(0, 6))
         ttk.Button(footer, text=T("Edit"), command=self.toggle_edit).grid(row=0, column=1, sticky="ew", padx=(0, 6))
         ttk.Button(footer, text=T("Save"), command=self.save_client).grid(row=0, column=2, sticky="ew", padx=(0, 6))
         ttk.Button(footer, text=T("Cancel"), command=self.cancel_without_saving).grid(row=0, column=3, sticky="ew")
@@ -1582,6 +1596,7 @@ class ClientDetailsWindow(tk.Toplevel):
             self.fields["business"]["var"].set("")
             self.fields["email"]["var"].set("")
             self.fields["shop_number"]["var"].set("")
+            self._render_vcard_preview()
             return
 
         self.fields["name"]["var"].set(self.client.name)
@@ -1591,6 +1606,22 @@ class ClientDetailsWindow(tk.Toplevel):
         self.fields["business"]["var"].set(self.client.business)
         self.fields["email"]["var"].set(self.client.email)
         self.fields["shop_number"]["var"].set(self.client.shop_number)
+        self._render_vcard_preview()
+
+    def _render_vcard_preview(self):
+        try:
+            client = self._build_client_from_form()
+        except ValueError:
+            client = self.client
+        if client is None:
+            preview = ""
+        else:
+            preview = client.to_vcard()
+
+        self.vcard_text.configure(state="normal")
+        self.vcard_text.delete("1.0", tk.END)
+        self.vcard_text.insert("1.0", preview)
+        self.vcard_text.configure(state="disabled")
 
     def _build_client_from_form(self):
         name = self.fields["name"]["var"].get().strip()
@@ -1615,13 +1646,13 @@ class ClientDetailsWindow(tk.Toplevel):
             messagebox.showwarning(T("Missing information"), str(exc))
             return
 
-        payload = client.share_text()
+        payload = client.to_vcard()
         try:
             self.clipboard_clear()
             self.clipboard_append(payload)
         except Exception:
             pass
-        messagebox.showinfo(T("Share"), T("Client details copied to the clipboard."))
+        messagebox.showinfo(T("Copy vCard (.vcf)"), T("Client details copied to the clipboard."))
 
     def save_client(self):
         try:
