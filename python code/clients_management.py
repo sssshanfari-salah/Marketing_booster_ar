@@ -3,8 +3,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
+DEFAULT_CONTACT_COUNTRY_CODE = "+968"
 
-def format_contact_number(value: str, country_code: str = "+966") -> str:
+
+def format_contact_number(value: str, country_code: str = DEFAULT_CONTACT_COUNTRY_CODE) -> str:
     if value is None:
         return ""
 
@@ -12,7 +14,7 @@ def format_contact_number(value: str, country_code: str = "+966") -> str:
     if not cleaned:
         return ""
 
-    normalized_country = str(country_code or "+966").strip()
+    normalized_country = str(country_code or DEFAULT_CONTACT_COUNTRY_CODE).strip()
     if not normalized_country.startswith("+"):
         normalized_country = f"+{normalized_country}"
 
@@ -32,7 +34,7 @@ def format_contact_number(value: str, country_code: str = "+966") -> str:
 class Client:
     def __init__(self, name: str, contact: str, business: str, email: str = "", shop_number: str = "", reviews=None):
         self.name = name
-        self.contact = format_contact_number(contact)
+        self.contact = format_contact_number(contact, DEFAULT_CONTACT_COUNTRY_CODE)
         self.business = business
         self.email = email
         self.shop_number = shop_number

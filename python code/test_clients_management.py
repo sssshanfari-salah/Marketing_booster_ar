@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from clients_management import Client, ClientManager, build_clients_report_text
+from clients_management import Client, ClientManager, build_clients_report_text, format_contact_number
 from clients_progress_ui import Plan, T, parse_task_items, set_language
 from sync_documents import TARGET
 
@@ -79,31 +79,33 @@ class ClientManagerTests(unittest.TestCase):
         manager = ClientManager(self.file_path)
         self.assertEqual(len(manager.clients), 1)
         self.assertEqual(manager.clients[0].name, "Noura")
-        self.assertEqual(manager.clients[0].contact, "+9665551234")
+        self.assertEqual(manager.clients[0].contact, "+9685551234")
         self.assertEqual(manager.clients[0].business, "Boutique")
         self.assertEqual(manager.clients[0].email, "noura@example.com")
         self.assertEqual(manager.clients[0].shop_number, "12")
         self.assertEqual(manager.clients[0].reviews[0]["review"], "Great service")
 
-    def test_contact_numbers_are_prefixed_with_saudi_country_code(self):
+    def test_contact_numbers_default_to_oman_country_code(self):
+        self.assertEqual(format_contact_number("5551234"), "+9685551234")
+
         manager = ClientManager(self.file_path)
         manager.add_client("Nora", "5551234", "Consulting", "nora@example.com")
 
-        self.assertEqual(manager.clients[0].contact, "+9665551234")
-        self.assertEqual(manager.clients[0].to_dict()["contact"], "+9665551234")
+        self.assertEqual(manager.clients[0].contact, "+9685551234")
+        self.assertEqual(manager.clients[0].to_dict()["contact"], "+9685551234")
 
     def test_client_export_formats_are_share_ready(self):
         client = Client("Nora", "0555123456", "Consulting", "nora@example.com", "12")
 
         text = client.share_text()
         self.assertIn("Nora", text)
-        self.assertIn("+966555123456", text)
+        self.assertIn("+968555123456", text)
         self.assertIn("nora@example.com", text)
 
         vcard = client.to_vcard()
         self.assertIn("BEGIN:VCARD", vcard)
         self.assertIn("FN:Nora", vcard)
-        self.assertIn("TEL;TYPE=CELL:+966555123456", vcard)
+        self.assertIn("TEL;TYPE=CELL:+968555123456", vcard)
         self.assertIn("EMAIL:nora@example.com", vcard)
 
     def test_build_clients_report_text_has_all_client_details(self):

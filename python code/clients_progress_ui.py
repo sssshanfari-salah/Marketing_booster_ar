@@ -41,12 +41,12 @@ COUNTRY_CODES_PATH = Path(__file__).resolve().parent / "country_codes.json"
 
 def load_country_codes():
     fallback = [
+        {"country": "Oman", "code": "+968"},
         {"country": "Saudi Arabia", "code": "+966"},
         {"country": "United Arab Emirates", "code": "+971"},
         {"country": "Qatar", "code": "+974"},
         {"country": "Kuwait", "code": "+965"},
         {"country": "Bahrain", "code": "+973"},
-        {"country": "Oman", "code": "+968"},
         {"country": "Jordan", "code": "+962"},
         {"country": "Egypt", "code": "+20"},
         {"country": "United States", "code": "+1"},
@@ -71,14 +71,15 @@ COUNTRY_CODES = load_country_codes()
 COUNTRY_OPTIONS = [item["country"] for item in COUNTRY_CODES]
 COUNTRY_CODE_BY_NAME = {item["country"]: item["code"] for item in COUNTRY_CODES}
 DEFAULT_COUNTRY = "Oman"
+DEFAULT_COUNTRY_CODE = "+968"
 
 
 def normalize_country_code(code):
     if code is None:
-        return "+966"
+        return DEFAULT_COUNTRY_CODE
     cleaned = str(code).strip()
     if not cleaned:
-        return "+966"
+        return DEFAULT_COUNTRY_CODE
     return cleaned if cleaned.startswith("+") else f"+{cleaned}"
 
 
@@ -1353,7 +1354,7 @@ class ProgressApp(tk.Tk):
 
         contact = self.contact_var.get().strip()
         country_name = self.country_name_var.get().strip() or DEFAULT_COUNTRY
-        country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, "+966"))
+        country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, DEFAULT_COUNTRY_CODE))
         business = self.business_var.get().strip()
         if not contact:
             messagebox.showwarning(T("Missing contact"), T("Please enter the client contact number."))
@@ -1510,7 +1511,7 @@ class ProgressApp(tk.Tk):
 
         contact = self.contact_var.get().strip()
         country_name = self.country_name_var.get().strip() or DEFAULT_COUNTRY
-        country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, "+966"))
+        country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, DEFAULT_COUNTRY_CODE))
         business = self.business_var.get().strip()
         if not contact:
             messagebox.showwarning(T("Missing contact"), T("Please enter the client contact number before saving."))
@@ -1746,7 +1747,7 @@ class ClientDetailsWindow(tk.Toplevel):
         email = self.fields["email"]["var"].get().strip()
         shop_number = self.fields["shop_number"]["var"].get().strip()
         country_name = self.fields["country"]["var"].get().strip() or DEFAULT_COUNTRY
-        country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, "+966"))
+        country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, DEFAULT_COUNTRY_CODE))
         if not name:
             raise ValueError(T("Please enter a client name before saving."))
         if not contact:
