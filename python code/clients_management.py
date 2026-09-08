@@ -4,10 +4,35 @@ from pathlib import Path
 from typing import List
 
 
+def format_contact_number(value: str, country_code: str = "+966") -> str:
+    if value is None:
+        return ""
+
+    cleaned = str(value).strip()
+    if not cleaned:
+        return ""
+
+    normalized_country = str(country_code or "+966").strip()
+    if not normalized_country.startswith("+"):
+        normalized_country = f"+{normalized_country}"
+
+    digits_only = "".join(ch for ch in cleaned if ch.isdigit())
+    if not digits_only:
+        return cleaned
+
+    if digits_only.startswith(normalized_country.lstrip("+")):
+        return f"{normalized_country}{digits_only[len(normalized_country.lstrip('+')):]}" if digits_only != normalized_country.lstrip("+") else normalized_country
+
+    if digits_only.startswith("0"):
+        return f"{normalized_country}{digits_only[1:]}"
+
+    return f"{normalized_country}{digits_only}"
+
+
 class Client:
     def __init__(self, name: str, contact: str, business: str, email: str = "", shop_number: str = "", reviews=None):
         self.name = name
-        self.contact = contact
+        self.contact = format_contact_number(contact)
         self.business = business
         self.email = email
         self.shop_number = shop_number
@@ -35,15 +60,36 @@ class Client:
 
     @classmethod
     def from_dict(cls, data):
-        reviews = data.get("reviews", [])
+        if not isinstance(data, dict):
+            return cls("", "", "")
+
+        normalized = {}
+        for key, value in data.items():
+            if isinstance(key, str):
+                normalized[key.strip().lower()] = value
+
+        def pick(*keys, default=""):
+            for key in keys:
+                if key in normalized:
+                    value = normalized[key]
+                    return value if value is not None else default
+            return default
+
+        name = pick("name", "client name", "client_name", "Client Name", default="")
+        contact = format_contact_number(pick("contact", "contact number", "contact_number", "Contact", default=""))
+        business = pick("business", "business type", "business_type", "Business", default="")
+        email = pick("email", "Email", default="")
+        shop_number = pick("shop_number", "shop number", "shop_number", "Shop Number", default="")
+        reviews = pick("reviews", default=[])
         if not isinstance(reviews, list):
             reviews = []
+
         return cls(
-            data.get("name", ""),
-            data.get("contact", ""),
-            data.get("business", ""),
-            data.get("email", ""),
-            shop_number=str(data.get("shop_number", "")),
+            str(name),
+            str(contact),
+            str(business),
+            str(email),
+            shop_number=str(shop_number),
             reviews=reviews,
         )
 

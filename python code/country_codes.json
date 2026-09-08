@@ -1,0 +1,14 @@
+[
+  {"country": "Saudi Arabia", "code": "+966"},
+  {"country": "United Arab Emirates", "code": "+971"},
+  {"country": "Qatar", "code": "+974"},
+  {"country": "Kuwait", "code": "+965"},
+  {"country": "Bahrain", "code": "+973"},
+  {"country": "Oman", "code": "+968"},
+  {"country": "Jordan", "code": "+962"},
+  {"country": "Egypt", "code": "+20"},
+  {"country": "United States", "code": "+1"},
+  {"country": "United Kingdom", "code": "+44"},
+  {"country": "Germany", "code": "+49"},
+  {"country": "France", "code": "+33"}
+]

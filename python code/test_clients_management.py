@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import tempfile
@@ -61,6 +62,35 @@ class ClientManagerTests(unittest.TestCase):
         manager.add_client("Sarah", "777", "Design")
         self.assertEqual(len(manager.clients), 1)
         self.assertEqual(manager.clients[0].name, "Sarah")
+
+    def test_load_client_data_with_ui_like_field_names(self):
+        with open(self.file_path, "w", encoding="utf-8") as file:
+            json.dump([
+                {
+                    "Client Name": "Noura",
+                    "Contact": "5551234",
+                    "Business": "Boutique",
+                    "Email": "noura@example.com",
+                    "Shop Number": "12",
+                    "reviews": [{"date": "2026-09-08", "review": "Great service"}]
+                }
+            ], file)
+
+        manager = ClientManager(self.file_path)
+        self.assertEqual(len(manager.clients), 1)
+        self.assertEqual(manager.clients[0].name, "Noura")
+        self.assertEqual(manager.clients[0].contact, "+9665551234")
+        self.assertEqual(manager.clients[0].business, "Boutique")
+        self.assertEqual(manager.clients[0].email, "noura@example.com")
+        self.assertEqual(manager.clients[0].shop_number, "12")
+        self.assertEqual(manager.clients[0].reviews[0]["review"], "Great service")
+
+    def test_contact_numbers_are_prefixed_with_saudi_country_code(self):
+        manager = ClientManager(self.file_path)
+        manager.add_client("Nora", "5551234", "Consulting", "nora@example.com")
+
+        self.assertEqual(manager.clients[0].contact, "+9665551234")
+        self.assertEqual(manager.clients[0].to_dict()["contact"], "+9665551234")
 
     def test_add_client_with_email(self):
         manager = ClientManager(self.file_path)

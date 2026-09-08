@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import tempfile
@@ -18,7 +19,7 @@ except ImportError:
     Image = None
     ImageTk = None
 
-from clients_management import Client, ClientManager
+from clients_management import Client, ClientManager, format_contact_number
 
 APP_ICON = None
 for candidate in [
@@ -34,6 +35,77 @@ if APP_ICON is None:
     APP_ICON = Path(__file__).resolve().parent.parent / "starco_icon.ico"
 
 CURRENT_LANGUAGE = "eng"
+
+COUNTRY_CODES_PATH = Path(__file__).resolve().parent / "country_codes.json"
+
+
+def load_country_codes():
+    fallback = [
+        {"country": "Saudi Arabia", "code": "+966"},
+        {"country": "United Arab Emirates", "code": "+971"},
+        {"country": "Qatar", "code": "+974"},
+        {"country": "Kuwait", "code": "+965"},
+        {"country": "Bahrain", "code": "+973"},
+        {"country": "Oman", "code": "+968"},
+        {"country": "Jordan", "code": "+962"},
+        {"country": "Egypt", "code": "+20"},
+        {"country": "United States", "code": "+1"},
+        {"country": "United Kingdom", "code": "+44"},
+        {"country": "Germany", "code": "+49"},
+        {"country": "France", "code": "+33"},
+    ]
+
+    if COUNTRY_CODES_PATH.exists():
+        try:
+            with COUNTRY_CODES_PATH.open("r", encoding="utf-8") as infile:
+                data = json.load(infile)
+            if isinstance(data, list) and data:
+                return data
+        except (json.JSONDecodeError, OSError, TypeError):
+            pass
+
+    return fallback
+
+
+COUNTRY_CODES = load_country_codes()
+COUNTRY_OPTIONS = [item["country"] for item in COUNTRY_CODES]
+COUNTRY_CODE_BY_NAME = {item["country"]: item["code"] for item in COUNTRY_CODES}
+DEFAULT_COUNTRY = "Saudi Arabia"
+
+
+def normalize_country_code(code):
+    if code is None:
+        return "+966"
+    cleaned = str(code).strip()
+    if not cleaned:
+        return "+966"
+    return cleaned if cleaned.startswith("+") else f"+{cleaned}"
+
+
+def parse_contact_for_ui(contact_value):
+    raw = str(contact_value or "").strip()
+    if not raw:
+        return "", DEFAULT_COUNTRY
+
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        return "", DEFAULT_COUNTRY
+
+    for item in COUNTRY_CODES:
+        country_code = item["code"].lstrip("+")
+        if digits.startswith(country_code):
+            local_number = digits[len(country_code):]
+            return local_number.lstrip("0") if local_number else "", item["country"]
+
+    if digits.startswith("966"):
+        local_number = digits[3:]
+        return local_number.lstrip("0") if local_number else "", "Saudi Arabia"
+
+    if digits.startswith("0"):
+        return digits[1:], "Saudi Arabia"
+
+    return digits, DEFAULT_COUNTRY
+
 
 TRANSLATIONS = {
     "eng": {
@@ -52,7 +124,8 @@ TRANSLATIONS = {
         "Client Progress Manager": "Client Progress Manager",
         "Client Details": "Client Details",
         "Client Name": "Client Name",
-        "Contact": "Contact",
+        "Country": "Country",
+        "Contact": "Contact Number",
         "Business": "Business",
         "Shop Number": "Shop Number",
         "Email": "Email",
@@ -145,6 +218,7 @@ TRANSLATIONS = {
         "Client Progress Manager": "مدير العملاء",
         "Client Details": "تفاصيل العميل",
         "Client Name": "اسم العميل",
+        "Country": "الدولة",
         "Contact": "رقم التواصل",
         "Business": "نوع النشاط",
         "Shop Number": "رقم المحل",
@@ -754,6 +828,7 @@ class ProgressApp(tk.Tk):
         self.client_manager = ClientManager(self.client_file)
 
         self.client_name_var = tk.StringVar(value="")
+        self.country_name_var = tk.StringVar(value=DEFAULT_COUNTRY)
         self.contact_var = tk.StringVar(value="")
         self.business_var = tk.StringVar(value="")
         self.shop_number_var = tk.StringVar(value="")
@@ -852,29 +927,36 @@ class ProgressApp(tk.Tk):
         self.client_combo.bind("<<ComboboxSelected>>", self.on_client_name_selected)
         self.refresh_client_combo()
 
+        country_label = ttk.Label(details_frame, text=T("Country"))
+        country_label.grid(row=1, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        self.translatable_labels.append((country_label, "Country"))
+        self.country_combo = ttk.Combobox(details_frame, textvariable=self.country_name_var, values=COUNTRY_OPTIONS, state="readonly")
+        self.country_combo.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
+        self.country_combo.current(COUNTRY_OPTIONS.index(DEFAULT_COUNTRY) if DEFAULT_COUNTRY in COUNTRY_OPTIONS else 0)
+
         contact_label = ttk.Label(details_frame, text=T("Contact"))
-        contact_label.grid(row=1, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        contact_label.grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((contact_label, "Contact"))
         self.contact_entry = ttk.Entry(details_frame, textvariable=self.contact_var)
-        self.contact_entry.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
+        self.contact_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
         business_label = ttk.Label(details_frame, text=T("Business"))
-        business_label.grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        business_label.grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((business_label, "Business"))
         self.business_entry = ttk.Entry(details_frame, textvariable=self.business_var)
-        self.business_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
+        self.business_entry.grid(row=3, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
         shop_label = ttk.Label(details_frame, text=T("Shop Number"))
-        shop_label.grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        shop_label.grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((shop_label, "Shop Number"))
         self.shop_number_entry = ttk.Entry(details_frame, textvariable=self.shop_number_var)
-        self.shop_number_entry.grid(row=3, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
+        self.shop_number_entry.grid(row=4, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
         email_label = ttk.Label(details_frame, text=T("Email"))
-        email_label.grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
+        email_label.grid(row=5, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
         self.translatable_labels.append((email_label, "Email"))
         self.email_entry = ttk.Entry(details_frame, textvariable=self.email_var)
-        self.email_entry.grid(row=4, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
+        self.email_entry.grid(row=5, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
         review_frame = ttk.LabelFrame(main, text=T("Client Review"), style="Section.TLabelframe")
         self.translatable_labels.append((review_frame, "Client Review"))
@@ -1087,6 +1169,7 @@ class ProgressApp(tk.Tk):
     def clear_client_form(self):
         self.plan = None
         self.client_name_var.set("")
+        self.country_name_var.set(DEFAULT_COUNTRY)
         self.contact_var.set("")
         self.business_var.set("")
         self.shop_number_var.set("")
@@ -1124,7 +1207,9 @@ class ProgressApp(tk.Tk):
             return
 
         self.load_client_progress(matching_client.name, matching_client.business)
-        self.contact_var.set(matching_client.contact)
+        local_number, country_name = parse_contact_for_ui(matching_client.contact)
+        self.contact_var.set(local_number)
+        self.country_name_var.set(country_name if country_name in COUNTRY_OPTIONS else DEFAULT_COUNTRY)
         self.business_var.set(matching_client.business)
         self.shop_number_var.set(matching_client.shop_number)
         self.email_var.set(matching_client.email)
@@ -1173,6 +1258,8 @@ class ProgressApp(tk.Tk):
             return
 
         contact = self.contact_var.get().strip()
+        country_name = self.country_name_var.get().strip() or DEFAULT_COUNTRY
+        country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, "+966"))
         business = self.business_var.get().strip()
         if not contact:
             messagebox.showwarning(T("Missing contact"), T("Please enter the client contact number."))
@@ -1190,11 +1277,13 @@ class ProgressApp(tk.Tk):
 
         self.client_manager.load_clients()
         existing = next((client for client in self.client_manager.clients if client.name.lower() == name.lower()), None)
+        formatted_contact = format_contact_number(contact, country_code)
+
         if existing is None:
-            client = Client(name, contact, business, email)
+            client = Client(name, formatted_contact, business, email)
             self.client_manager.clients.append(client)
         else:
-            existing.contact = contact
+            existing.contact = formatted_contact
             existing.business = business
             existing.email = email or existing.email
             client = existing
@@ -1291,7 +1380,9 @@ class ProgressApp(tk.Tk):
         if matching_client is not None:
             client = matching_client
             business = matching_client.business
-            self.contact_var.set(matching_client.contact)
+            local_number, country_name = parse_contact_for_ui(matching_client.contact)
+            self.contact_var.set(local_number)
+            self.country_name_var.set(country_name if country_name in COUNTRY_OPTIONS else DEFAULT_COUNTRY)
             self.business_var.set(matching_client.business)
             self.shop_number_var.set(matching_client.shop_number)
             self.email_var.set(matching_client.email)
@@ -1324,6 +1415,8 @@ class ProgressApp(tk.Tk):
             return
 
         contact = self.contact_var.get().strip()
+        country_name = self.country_name_var.get().strip() or DEFAULT_COUNTRY
+        country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, "+966"))
         business = self.business_var.get().strip()
         if not contact:
             messagebox.showwarning(T("Missing contact"), T("Please enter the client contact number before saving."))
@@ -1339,17 +1432,19 @@ class ProgressApp(tk.Tk):
 
         shop_number = self.shop_number_var.get().strip()
 
+        formatted_contact = format_contact_number(contact, country_code)
+
         if existing is None:
             client = Client(
                 name,
-                contact,
+                formatted_contact,
                 business,
                 self.email_var.get().strip(),
                 shop_number=shop_number,
             )
             self.client_manager.clients.append(client)
         else:
-            existing.contact = contact
+            existing.contact = formatted_contact
             existing.business = business
             existing.shop_number = shop_number
             existing.email = self.email_var.get().strip() or existing.email

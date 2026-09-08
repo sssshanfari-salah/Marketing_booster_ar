@@ -13,6 +13,8 @@ APP_NAME = "marketing_booster_ar"
 APP_DISPLAY_NAME = "Marketing Booster AR"
 SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
 TARGET_ICON = APP_DIR / "starco_icon.ico"
+COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
+CLIENTS_DATA_FILE = APP_DIR / "clients.json"
 LEGACY_APP_NAMES = ["marketing_booster"]
 LEGACY_DISPLAY_NAMES = ["Marketing Booster"]
 
@@ -176,9 +178,14 @@ def build_app():
         cmd.extend([
             "--icon",
             str(TARGET_ICON),
-            "--add-data",
-            f"{TARGET_ICON};.",
         ])
+
+    for data_file in [TARGET_ICON, COUNTRY_CODES_DATA, CLIENTS_DATA_FILE]:
+        if data_file.exists():
+            cmd.extend([
+                "--add-data",
+                f"{data_file};.",
+            ])
 
     cmd.append(str(SOURCE_DIR / "main.py"))
 
