@@ -58,6 +58,29 @@ class Client:
             "reviews": list(self.reviews),
         }
 
+    def share_text(self):
+        lines = [
+            f"Name: {self.name}",
+            f"Phone: {self.contact}",
+            f"Email: {self.email}",
+            f"Business: {self.business}",
+            f"Shop Number: {self.shop_number}",
+        ]
+        return "\n".join(line for line in lines if line and not line.endswith(": "))
+
+    def to_vcard(self):
+        lines = [
+            "BEGIN:VCARD",
+            "VERSION:3.0",
+            f"FN:{self.name}",
+            f"ORG:{self.business}",
+            f"TEL;TYPE=CELL:{self.contact}",
+            f"EMAIL:{self.email}",
+            f"NOTE:Shop Number: {self.shop_number}",
+            "END:VCARD",
+        ]
+        return "\n".join(lines)
+
     @classmethod
     def from_dict(cls, data):
         if not isinstance(data, dict):

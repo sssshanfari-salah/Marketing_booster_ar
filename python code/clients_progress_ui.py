@@ -940,23 +940,23 @@ class ProgressApp(tk.Tk):
         self.contact_entry = ttk.Entry(details_frame, textvariable=self.contact_var)
         self.contact_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        business_label = ttk.Label(details_frame, text=T("Business"))
-        business_label.grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
-        self.translatable_labels.append((business_label, "Business"))
-        self.business_entry = ttk.Entry(details_frame, textvariable=self.business_var)
-        self.business_entry.grid(row=3, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
-
-        shop_label = ttk.Label(details_frame, text=T("Shop Number"))
-        shop_label.grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
-        self.translatable_labels.append((shop_label, "Shop Number"))
-        self.shop_number_entry = ttk.Entry(details_frame, textvariable=self.shop_number_var)
-        self.shop_number_entry.grid(row=4, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
-
         email_label = ttk.Label(details_frame, text=T("Email"))
-        email_label.grid(row=5, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
+        email_label.grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((email_label, "Email"))
         self.email_entry = ttk.Entry(details_frame, textvariable=self.email_var)
-        self.email_entry.grid(row=5, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
+        self.email_entry.grid(row=3, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
+
+        business_label = ttk.Label(details_frame, text=T("Business"))
+        business_label.grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        self.translatable_labels.append((business_label, "Business"))
+        self.business_entry = ttk.Entry(details_frame, textvariable=self.business_var)
+        self.business_entry.grid(row=4, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
+
+        shop_label = ttk.Label(details_frame, text=T("Shop Number"))
+        shop_label.grid(row=5, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
+        self.translatable_labels.append((shop_label, "Shop Number"))
+        self.shop_number_entry = ttk.Entry(details_frame, textvariable=self.shop_number_var)
+        self.shop_number_entry.grid(row=5, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
         review_frame = ttk.LabelFrame(main, text=T("Client Review"), style="Section.TLabelframe")
         self.translatable_labels.append((review_frame, "Client Review"))
@@ -1083,6 +1083,7 @@ class ProgressApp(tk.Tk):
             (T("Add Task"), self.add_task),
             (T("Tasks Details"), self.open_task_details_window),
             (T("Refresh Progress"), self.refresh_display),
+            (T("Open Client Window"), self.open_client_window),
             (T("Open All Clients"), self.open_all_clients),
             (T("Send Email"), self.send_email_to_client),
             (T("Save & Exit"), self.save_and_exit),
@@ -1504,8 +1505,297 @@ class ProgressApp(tk.Tk):
         self.client_manager.load_clients()
         ClientReviewsLogWindow(self, self.client_manager)
 
+    def open_client_window(self, client_name=None):
+        ClientDetailsWindow(self, client_name=client_name or self.client_name_var.get().strip(), master_manager=self.client_manager)
+
     def open_all_clients(self):
         AllClientsProgressWindow(self)
+
+
+class ClientDetailsWindow(tk.Toplevel):
+    def __init__(self, master=None, client_name=None, master_manager=None):
+        super().__init__(master)
+        self.title(T("Client Details"))
+        self.geometry("540x420")
+        self.minsize(500, 360)
+        self.master_app = master
+        self.manager = master_manager or getattr(master, "client_manager", ClientManager("clients.json"))
+        self.client_name = client_name.strip() if client_name else ""
+        self.client = self._find_client(self.client_name)
+        self.edit_mode = False
+
+        main = ttk.Frame(self, padding=14)
+        main.pack(fill="both", expand=True)
+        main.columnconfigure(1, weight=1)
+
+        self.fields = {}
+        labels = [
+            (T("Client Name"), "name"),
+            (T("Country"), "country"),
+            (T("Contact"), "contact"),
+            (T("Business"), "business"),
+            (T("Email"), "email"),
+            (T("Shop Number"), "shop_number"),
+        ]
+
+        for index, (label_text, key) in enumerate(labels):
+            ttk.Label(main, text=label_text).grid(row=index, column=0, sticky="w", padx=(0, 10), pady=(4, 6))
+            var = tk.StringVar(value="")
+            entry = ttk.Entry(main, textvariable=var)
+            entry.grid(row=index, column=1, sticky="ew", pady=(4, 6))
+            entry.configure(state="disabled")
+            self.fields[key] = {"var": var, "entry": entry}
+
+        footer = ttk.Frame(main)
+        footer.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        footer.columnconfigure(0, weight=1)
+        footer.columnconfigure(1, weight=1)
+        footer.columnconfigure(2, weight=1)
+        footer.columnconfigure(3, weight=1)
+
+        ttk.Button(footer, text=T("Share"), command=self.share_client).grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        ttk.Button(footer, text=T("Edit"), command=self.toggle_edit).grid(row=0, column=1, sticky="ew", padx=(0, 6))
+        ttk.Button(footer, text=T("Save"), command=self.save_client).grid(row=0, column=2, sticky="ew", padx=(0, 6))
+        ttk.Button(footer, text=T("Cancel"), command=self.cancel_without_saving).grid(row=0, column=3, sticky="ew")
+
+        self.populate_client()
+
+    def _find_client(self, client_name):
+        if not client_name:
+            return None
+        self.manager.load_clients()
+        return next((client for client in self.manager.clients if client.name.lower() == client_name.lower()), None)
+
+    def _set_editable(self, editable):
+        self.edit_mode = editable
+        for info in self.fields.values():
+            info["entry"].configure(state="normal" if editable else "disabled")
+
+    def toggle_edit(self):
+        self._set_editable(not self.edit_mode)
+
+    def populate_client(self):
+        if self.client is None:
+            self.fields["name"]["var"].set(self.client_name)
+            self.fields["country"]["var"].set(DEFAULT_COUNTRY)
+            self.fields["contact"]["var"].set("")
+            self.fields["business"]["var"].set("")
+            self.fields["email"]["var"].set("")
+            self.fields["shop_number"]["var"].set("")
+            return
+
+        self.fields["name"]["var"].set(self.client.name)
+        country_name = parse_contact_for_ui(self.client.contact)[1]
+        self.fields["country"]["var"].set(country_name if country_name in COUNTRY_OPTIONS else DEFAULT_COUNTRY)
+        self.fields["contact"]["var"].set(parse_contact_for_ui(self.client.contact)[0])
+        self.fields["business"]["var"].set(self.client.business)
+        self.fields["email"]["var"].set(self.client.email)
+        self.fields["shop_number"]["var"].set(self.client.shop_number)
+
+    def _build_client_from_form(self):
+        name = self.fields["name"]["var"].get().strip()
+        contact = self.fields["contact"]["var"].get().strip()
+        business = self.fields["business"]["var"].get().strip()
+        email = self.fields["email"]["var"].get().strip()
+        shop_number = self.fields["shop_number"]["var"].get().strip()
+        country_name = self.fields["country"]["var"].get().strip() or DEFAULT_COUNTRY
+        country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, "+966"))
+        if not name:
+            raise ValueError(T("Please enter a client name before saving."))
+        if not contact:
+            raise ValueError(T("Please enter the client contact number before saving."))
+        if not business:
+            raise ValueError(T("Please enter the client business type before saving."))
+        return Client(name, format_contact_number(contact, country_code), business, email, shop_number=shop_number)
+
+    def share_client(self):
+        try:
+            client = self._build_client_from_form()
+        except ValueError as exc:
+            messagebox.showwarning(T("Missing information"), str(exc))
+            return
+
+        payload = client.share_text()
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(payload)
+        except Exception:
+            pass
+        messagebox.showinfo(T("Share"), T("Client details copied to the clipboard."))
+
+    def save_client(self):
+        try:
+            client = self._build_client_from_form()
+        except ValueError as exc:
+            messagebox.showwarning(T("Missing information"), str(exc))
+            return
+
+        self.manager.load_clients()
+        existing = next((item for item in self.manager.clients if item.name.lower() == client.name.lower()), None)
+        if existing is None:
+            self.manager.clients.append(client)
+        else:
+            existing.name = client.name
+            existing.contact = client.contact
+            existing.business = client.business
+            existing.email = client.email
+            existing.shop_number = client.shop_number
+            client = existing
+
+        self.manager.save_clients()
+
+        if self.master_app is not None:
+            if hasattr(self.master_app, "refresh_client_combo"):
+                self.master_app.refresh_client_combo()
+            if hasattr(self.master_app, "client_name_var"):
+                self.master_app.client_name_var.set(client.name)
+            if hasattr(self.master_app, "load_client_progress"):
+                self.master_app.load_client_progress(client.name, client.business)
+
+        messagebox.showinfo(T("Client saved"), T("'{name}' was saved successfully.", name=client.name))
+        self.destroy()
+
+    def cancel_without_saving(self):
+        self.destroy()
+
+
+class AllClientsProgressWindow(tk.Toplevel):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.title(T("All Clients Progress"))
+        self.geometry("720x440")
+        self.minsize(620, 360)
+
+        self.manager = ClientManager("clients.json")
+        self.tree = ttk.Treeview(
+            self,
+            columns=("client", "business", "progress", "tasks"),
+            show="headings",
+        )
+        self.tree.heading("client", text=T("Client"))
+        self.tree.heading("business", text=T("Business"))
+        self.tree.heading("progress", text=T("Progress"))
+        self.tree.heading("tasks", text="المتبقي / الإجمالي")
+        self.tree.column("client", width=190, anchor="w")
+        self.tree.column("business", width=220, anchor="w")
+        self.tree.column("progress", width=110, anchor="center")
+        self.tree.column("tasks", width=150, anchor="center")
+        self.tree.pack(fill="both", expand=True, padx=12, pady=(12, 8))
+
+        self.tree.bind("<Double-1>", self.edit_selected_client)
+
+        button_row = ttk.Frame(self)
+        button_row.pack(pady=(0, 12))
+        ttk.Button(button_row, text=T("Edit Selected Client"), command=self.edit_selected_client).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Delete Selected Client"), command=self.delete_selected_client).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left")
+        self.refresh_view()
+
+    def print_report(self):
+        title = T("All Clients Progress")
+        lines = [title, ""]
+        self.manager.load_clients()
+        for client in self.manager.clients:
+            progress_info = Plan.Clients_progress.get(client.name, {})
+            progress = progress_info.get("progress", 0)
+            pending_tasks = progress_info.get("pending_tasks", [])
+            all_tasks = progress_info.get("all_tasks", [])
+            lines.append(f"{client.name} | {client.business} | {progress}% | {len(pending_tasks)} / {len(all_tasks)}")
+        if not self.manager.clients:
+            lines.append(T("No client selected"))
+        print_report_document(title, lines)
+
+    def edit_selected_client(self, event=None):
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning(T("No client selected"), T("Select a client row first."))
+            return
+
+        values = self.tree.item(selection[0], "values")
+        if not values:
+            return
+
+        client_name = values[0]
+        business = values[1] if len(values) > 1 else "N/A"
+
+        if self.master and hasattr(self.master, "open_client_window"):
+            self.master.open_client_window(client_name=client_name)
+        elif self.master and hasattr(self.master, "load_client_progress"):
+            self.master.load_client_progress(client_name, business)
+
+        self.destroy()
+
+    def delete_selected_client(self):
+        selection = self.tree.selection()
+        if not selection:
+            messagebox.showwarning(T("No client selected"), T("Select a client row first."))
+            return
+
+        values = self.tree.item(selection[0], "values")
+        if not values:
+            return
+
+        client_name = values[0]
+        confirm = messagebox.askyesno(
+            T("Delete client?"),
+            T("Are you sure you want to delete '{client_name}' from the client list?", client_name=client_name),
+        )
+        if not confirm:
+            return
+
+        if self.manager.delete_client(client_name):
+            Plan.Clients_progress.pop(client_name, None)
+            if self.master and hasattr(self.master, "refresh_client_combo"):
+                self.master.refresh_client_combo()
+            if self.master and hasattr(self.master, "clear_client_form"):
+                self.master.clear_client_form()
+            messagebox.showinfo(T("Client deleted"), T("'{client_name}' was removed successfully.", client_name=client_name))
+            self.refresh_view()
+            return
+
+        messagebox.showwarning(T("Client not found"), T("'{client_name}' was not found in the saved client list.", client_name=client_name))
+
+    def refresh_view(self):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        self.manager.load_clients()
+        all_progress = Plan.Clients_progress or {}
+
+        seen = set()
+        for client in self.manager.clients:
+            seen.add(client.name)
+            progress_info = all_progress.get(client.name, {})
+            progress = progress_info.get("progress", 0)
+            pending_tasks = progress_info.get("pending_tasks", [])
+            all_tasks = progress_info.get("all_tasks", [])
+            self.tree.insert(
+                "",
+                "end",
+                values=(
+                    client.name,
+                    client.business,
+                    f"{progress}%",
+                    f"{len(pending_tasks)} / {len(all_tasks)}",
+                ),
+            )
+
+        for client_name, progress_info in all_progress.items():
+            if client_name in seen:
+                continue
+            pending_tasks = progress_info.get("pending_tasks", [])
+            all_tasks = progress_info.get("all_tasks", [])
+            self.tree.insert(
+                "",
+                "end",
+                values=(
+                    client_name,
+                    "Saved progress only",
+                    f"{progress_info.get('progress', 0)}%",
+                    f"{len(pending_tasks)} / {len(all_tasks)}",
+                ),
+            )
 
 
 if __name__ == "__main__":

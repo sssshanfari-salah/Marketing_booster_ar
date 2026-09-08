@@ -92,6 +92,20 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(manager.clients[0].contact, "+9665551234")
         self.assertEqual(manager.clients[0].to_dict()["contact"], "+9665551234")
 
+    def test_client_export_formats_are_share_ready(self):
+        client = Client("Nora", "0555123456", "Consulting", "nora@example.com", "12")
+
+        text = client.share_text()
+        self.assertIn("Nora", text)
+        self.assertIn("+966555123456", text)
+        self.assertIn("nora@example.com", text)
+
+        vcard = client.to_vcard()
+        self.assertIn("BEGIN:VCARD", vcard)
+        self.assertIn("FN:Nora", vcard)
+        self.assertIn("TEL;TYPE=CELL:+966555123456", vcard)
+        self.assertIn("EMAIL:nora@example.com", vcard)
+
     def test_add_client_with_email(self):
         manager = ClientManager(self.file_path)
         manager.add_client("Nora", "555", "Consulting", "nora@example.com")

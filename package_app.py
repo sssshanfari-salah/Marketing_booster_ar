@@ -15,8 +15,15 @@ SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
 TARGET_ICON = APP_DIR / "starco_icon.ico"
 COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
+DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
 LEGACY_APP_NAMES = ["marketing_booster"]
 LEGACY_DISPLAY_NAMES = ["Marketing Booster"]
+RUNTIME_DATA_FILES = [
+    TARGET_ICON,
+    CLIENTS_DATA_FILE,
+    COUNTRY_CODES_DATA,
+    DOCUMENTS_DATA_FILE,
+]
 
 
 def resolve_desktop_dir():
@@ -143,7 +150,20 @@ def remove_directory(path):
         print(f"Warning: could not fully remove {path}. Continuing with the rebuild attempt.")
 
 
+def ensure_runtime_files():
+    if not CLIENTS_DATA_FILE.exists():
+        CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
+
+    if not COUNTRY_CODES_DATA.exists():
+        COUNTRY_CODES_DATA.parent.mkdir(parents=True, exist_ok=True)
+        COUNTRY_CODES_DATA.write_text("[]", encoding="utf-8")
+
+    if DOCUMENTS_DATA_FILE.parent.exists():
+        DOCUMENTS_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+
 def build_app():
+    ensure_runtime_files()
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     remove_stale_artifacts()
@@ -180,11 +200,11 @@ def build_app():
             str(TARGET_ICON),
         ])
 
-    for data_file in [TARGET_ICON, COUNTRY_CODES_DATA, CLIENTS_DATA_FILE]:
+    for data_file in RUNTIME_DATA_FILES:
         if data_file.exists():
             cmd.extend([
                 "--add-data",
-                f"{data_file};.",
+                f"{data_file}{os.pathsep}.",
             ])
 
     cmd.append(str(SOURCE_DIR / "main.py"))
