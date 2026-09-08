@@ -177,7 +177,7 @@ TRANSLATIONS = {
         "Tasks Details": "Tasks Details",
         "Refresh Progress": "Refresh Progress",
         "Share Client Info": "Share Client Info",
-        "Open All Clients": "Open All Clients",
+        "Open All Clients": "All Clients",
         "Send Email": "Send Email",
         "Save & Exit": "Save & Exit",
         "Cancel": "Cancel",
@@ -275,7 +275,7 @@ TRANSLATIONS = {
         "Tasks Details": "تفاصيل المهام",
         "Refresh Progress": "تحديث التقدم",
         "Share Client Info": "مشاركة معلومات العميل",
-        "Open All Clients": "فتح جميع العملاء",
+        "Open All Clients": "جميع العملاء",
         "Send Email": "إرسال بريد إلكتروني",
         "Save & Exit": "حفظ والخروج",
         "Cancel": "إلغاء",
@@ -854,7 +854,21 @@ class ProgressApp(tk.Tk):
         self.style.configure("Section.TLabelframe", padding=(10, 8), relief="groove")
         self.style.configure("Section.TLabelframe.Label", font=("Segoe UI", 8, "bold"))
         self.style.configure("Header.TLabel", font=("Segoe UI", 8, "bold"))
-        self.style.configure("Action.TButton", padding=(7, 3))
+        self.style.configure(
+            "Action.TButton",
+            padding=(10, 6),
+            font=("Segoe UI", 9, "bold"),
+            foreground="#111827",
+            background="#dbeafe",
+            borderwidth=2,
+            relief="raised",
+        )
+        self.style.map(
+            "Action.TButton",
+            background=[("active", "#93c5fd"), ("pressed", "#60a5fa")],
+            foreground=[("active", "#111827"), ("pressed", "#ffffff")],
+            relief=[("pressed", "sunken"), ("active", "raised")],
+        )
         self.style.configure("Red.Horizontal.TProgressbar", background="#d32f2f", troughcolor="#e0e0e0")
         self.style.configure("Yellow.Horizontal.TProgressbar", background="#f9a825", troughcolor="#e0e0e0")
         self.style.configure("Green.Horizontal.TProgressbar", background="#2e7d32", troughcolor="#e0e0e0")
