@@ -415,10 +415,108 @@ def T(text, **kwargs):
     return translated
 
 
+def build_startup_splash():
+    splash = tk.Tk()
+    splash.overrideredirect(True)
+    splash.configure(bg="#09111d")
+    splash.attributes("-topmost", True)
+    splash.attributes("-alpha", 0.97)
+
+    screen_width = splash.winfo_screenwidth()
+    screen_height = splash.winfo_screenheight()
+    splash.geometry(f"{screen_width}x{screen_height}+0+0")
+
+    backdrop = tk.Canvas(splash, width=screen_width, height=screen_height, highlightthickness=0, bg="#09111d")
+    backdrop.pack(fill="both", expand=True)
+
+    backdrop.create_rectangle(0, 0, screen_width, screen_height, fill="#09111d", outline="")
+    backdrop.create_rectangle(160, 120, screen_width - 160, screen_height - 120, outline="#5eead4", width=2, fill="#0f172a")
+    backdrop.create_rectangle(220, 180, screen_width - 220, screen_height - 180, outline="#93c5fd", width=1, fill="#111827")
+
+    content = tk.Frame(splash, bg="#111827")
+    content.place(relx=0.5, rely=0.5, anchor="center")
+    content.configure(highlightthickness=1, highlightbackground="#93c5fd")
+
+    glass_panel = tk.Label(
+        content,
+        bg="#1d2736",
+        padx=44,
+        pady=28,
+        text="",
+        relief="flat",
+        bd=0,
+    )
+    glass_panel.pack(fill="both", expand=True)
+
+    title_label = tk.Label(
+        glass_panel,
+        text="Starco Commercial Complex",
+        fg="#f8fafc",
+        bg="#1d2736",
+        font=("Segoe UI", 12, "bold"),
+        justify="center",
+    )
+    title_label.pack(pady=(0, 16))
+
+    logo_label = tk.Label(
+        glass_panel,
+        bg="#1d2736",
+        fg="#f5c451",
+        font=("Segoe UI", 12, "bold"),
+        text="★",
+    )
+    logo_label.pack()
+
+    def animate_title(step=0):
+        if step <= 20:
+            title_font = 16 + step * 1.8
+            title_label.configure(font=("Segoe UI", int(title_font), "bold"))
+            splash.attributes("-alpha", min(1.0, 0.2 + (step / 20) * 0.8))
+            splash.after(30, lambda: animate_title(step + 1))
+            return
+
+        splash.after(500, lambda: show_logo())
+
+    def show_logo():
+        if APP_ICON is not None and APP_ICON.exists():
+            try:
+                if Image is not None and ImageTk is not None:
+                    image = Image.open(APP_ICON)
+                    image = image.resize((180, 180), getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS)
+                    photo = ImageTk.PhotoImage(image)
+                    logo_label.configure(image=photo, compound="center", text="")
+                    logo_label.image = photo
+                else:
+                    logo_label.configure(text="★")
+            except Exception:
+                logo_label.configure(text="★")
+
+        def animate_logo(step=0):
+            if step <= 18:
+                next_size = 16 + step * 4
+                logo_label.configure(font=("Segoe UI", int(next_size), "bold"))
+                splash.after(30, lambda: animate_logo(step + 1))
+                return
+
+            splash.after(520, lambda: splash.destroy())
+
+        animate_logo()
+
+    splash.after(120, lambda: animate_title())
+    return splash
+
+
 def safe_main():
     try:
-        app = ProgressApp()
-        app.mainloop()
+        splash = build_startup_splash()
+
+        def launch_main_app():
+            splash.destroy()
+            app = ProgressApp()
+            app.mainloop()
+
+        splash.after(2300, launch_main_app)
+        splash.mainloop()
     except tk.TclError as exc:
         message = (
             T("Tkinter could not start in this environment.") + "\n\n"
