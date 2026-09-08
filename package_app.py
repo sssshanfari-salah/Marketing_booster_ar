@@ -17,6 +17,11 @@ TARGET_ICON = APP_DIR / "starco_icon.ico"
 COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
 DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
+APPLICATION_OUTPUTS_DIR = APP_DIR / "application_outputs"
+CLIENT_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "clients_logs"
+TASK_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "tasks_logs"
+OBSERVATION_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "observation_logs"
+OUTPUT_LOG_DIRS = [APPLICATION_OUTPUTS_DIR, CLIENT_LOGS_DIR, TASK_LOGS_DIR, OBSERVATION_LOGS_DIR]
 LEGACY_APP_NAMES = ["marketing_booster", "marketing_booster_ar"]
 LEGACY_DISPLAY_NAMES = ["Marketing Booster", "Marketing Booster AR", "Clients Manager"]
 RUNTIME_DATA_FILES = [
@@ -24,6 +29,7 @@ RUNTIME_DATA_FILES = [
     CLIENTS_DATA_FILE,
     COUNTRY_CODES_DATA,
     DOCUMENTS_DATA_FILE,
+    *OUTPUT_LOG_DIRS,
 ]
 
 # Keep the packaged app aligned with the current client-manager UI/data model.
@@ -173,6 +179,8 @@ def remove_directory(path):
 def ensure_runtime_files():
     APP_DIR.mkdir(parents=True, exist_ok=True)
     SOURCE_DIR.mkdir(parents=True, exist_ok=True)
+    for output_dir in OUTPUT_LOG_DIRS:
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     if not CLIENTS_DATA_FILE.exists():
         CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
@@ -240,6 +248,7 @@ def build_app():
         CLIENTS_DATA_FILE,
         COUNTRY_CODES_DATA,
         DOCUMENTS_DATA_FILE,
+        *OUTPUT_LOG_DIRS,
     ]
     for data_file in runtime_files:
         if data_file.exists():

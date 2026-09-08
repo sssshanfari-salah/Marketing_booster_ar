@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from clients_management import Client, ClientManager, build_clients_report_text, format_contact_number
-from clients_progress_ui import Plan, T, parse_task_items, set_language
+from clients_progress_ui import Plan, ProgressApp, T, parse_task_items, resolve_log_output_dir, set_language
 from sync_documents import TARGET
 
 try:
@@ -194,6 +194,18 @@ class ClientManagerTests(unittest.TestCase):
         project_root = Path(__file__).resolve().parent.parent
         expected_target = project_root / "python code" / "docs" / "documents.txt"
         self.assertEqual(TARGET.resolve(), expected_target.resolve())
+
+    def test_log_output_dir_defaults_to_application_package_folders(self):
+        for folder_name in ["clients_logs", "tasks_logs", "observation_logs"]:
+            output_dir = resolve_log_output_dir(folder_name)
+            self.assertTrue(output_dir.exists())
+            self.assertIn("application_outputs", str(output_dir))
+            self.assertTrue(output_dir.name == folder_name or output_dir.parts[-2] == "application_outputs")
+
+    def test_progress_app_exposes_separate_export_actions(self):
+        self.assertTrue(hasattr(ProgressApp, "export_client_log"))
+        self.assertTrue(hasattr(ProgressApp, "export_task_log"))
+        self.assertTrue(hasattr(ProgressApp, "export_observation_log"))
 
 
 if __name__ == "__main__":

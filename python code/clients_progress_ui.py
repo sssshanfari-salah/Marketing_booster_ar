@@ -39,6 +39,17 @@ CURRENT_LANGUAGE = "eng"
 COUNTRY_CODES_PATH = Path(__file__).resolve().parent / "country_codes.json"
 
 
+def resolve_log_output_dir(log_type="general"):
+    root_dir = Path(__file__).resolve().parent.parent
+    if getattr(sys, "_MEIPASS", None):
+        root_dir = Path(sys._MEIPASS)
+
+    output_root = root_dir / "application_outputs"
+    target_dir = output_root / str(log_type).strip().strip("/") if str(log_type).strip() else output_root
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir
+
+
 def load_country_codes():
     fallback = [
         {"country": "Oman", "code": "+968"},
@@ -209,6 +220,9 @@ TRANSLATIONS = {
         "Save Log": "Save Log",
         "Select file path": "Select file path",
         "Browse": "Browse",
+        "Export Client Log": "Export Client Log",
+        "Export Task Log": "Export Task Log",
+        "Export Observation Log": "Export Observation Log",
         "Export Clients Log": "Export Clients Log",
         "No printers registered on this laptop.": "No printers registered on this laptop.",
         "Copy vCard (.vcf)": "Copy vCard (.vcf)",
@@ -315,6 +329,9 @@ TRANSLATIONS = {
         "Save Log": "حفظ السجل",
         "Select file path": "اختر مسار الملف",
         "Browse": "تصفح",
+        "Export Client Log": "تصدير سجل العميل",
+        "Export Task Log": "تصدير سجل المهام",
+        "Export Observation Log": "تصدير سجل الملاحظات",
         "Export Clients Log": "تصدير سجل العملاء",
         "No printers registered on this laptop.": "لا توجد طابعات مسجلة في هذا الجهاز.",
         "Copy vCard (.vcf)": "نسخ vCard (.vcf)",
@@ -610,8 +627,11 @@ class ExportClientsLogWindow(tk.Toplevel):
         main.pack(fill="both", expand=True)
         main.columnconfigure(1, weight=1)
 
+        default_dir = resolve_log_output_dir("clients_logs")
+        default_path = default_dir / "clients_log.txt"
+
         ttk.Label(main, text=T("Select file path")).grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 8))
-        self.path_var = tk.StringVar(value=str(Path.home() / "Desktop" / "clients_log.txt"))
+        self.path_var = tk.StringVar(value=str(default_path))
         self.path_entry = ttk.Entry(main, textvariable=self.path_var)
         self.path_entry.grid(row=0, column=1, sticky="ew", pady=(0, 8))
 
@@ -623,13 +643,14 @@ class ExportClientsLogWindow(tk.Toplevel):
         ttk.Button(action_row, text=T("Cancel"), command=self.destroy).pack(side="left")
 
     def choose_file_path(self):
-        initial = self.path_var.get().strip() or str(Path.home() / "Desktop" / "clients_log.txt")
+        default_dir = resolve_log_output_dir("clients_logs")
+        initial = self.path_var.get().strip() or str(default_dir / "clients_log.txt")
         selected = filedialog.asksaveasfilename(
             title=T("Select file path"),
             initialfile=Path(initial).name or "clients_log.txt",
             defaultextension=".txt",
             filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
-            initialdir=str(Path(initial).parent if Path(initial).parent.exists() else Path.home()),
+            initialdir=str(Path(initial).parent if Path(initial).parent.exists() else default_dir),
         )
         if selected:
             self.path_var.set(selected)
@@ -1177,6 +1198,9 @@ class ProgressApp(tk.Tk):
             (T("Add Task"), self.add_task),
             (T("Tasks Details"), self.open_task_details_window),
             (T("Refresh Progress"), self.refresh_display),
+            (T("Export Task Log"), self.export_task_log),
+            (T("Export Observation Log"), self.export_observation_log),
+            (T("Export Client Log"), self.export_client_log),
             (T("Share Client Info"), self.open_client_window),
             (T("All Clients"), self.open_all_clients),
             (T("Send Email"), self.send_email_to_client),
@@ -1629,6 +1653,53 @@ class ProgressApp(tk.Tk):
     def open_reviews_log(self):
         self.client_manager.load_clients()
         ClientReviewsLogWindow(self, self.client_manager)
+
+    def export_client_log(self):
+        ExportClientsLogWindow(self, self.client_manager)
+
+    def export_task_log(self):
+        default_dir = resolve_log_output_dir("tasks_logs")
+        default_path = default_dir / "tasks_log.txt"
+        target = filedialog.asksaveasfilename(
+            title=T("Export Task Log"),
+            initialfile="tasks_log.txt",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            initialdir=str(default_dir),
+        )
+        if not target:
+            return
+        destination = Path(target)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        report_lines = [T("Task log"), ""]
+        if self.plan is not None:
+            report_lines.extend([f"Client: {self.plan.client_name}", f"Progress: {self.plan.progress}%", ""])
+            report_lines.extend([f"- {task}" for task in self.plan.all_tasks])
+        else:
+            report_lines.append(T("No task plan available"))
+        destination.write_text("\n".join(str(item) for item in report_lines), encoding="utf-8")
+        messagebox.showinfo(T("Export Task Log"), f"Saved: {destination}")
+
+    def export_observation_log(self):
+        default_dir = resolve_log_output_dir("observation_logs")
+        default_path = default_dir / "observation_log.txt"
+        target = filedialog.asksaveasfilename(
+            title=T("Export Observation Log"),
+            initialfile="observation_log.txt",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            initialdir=str(default_dir),
+        )
+        if not target:
+            return
+        destination = Path(target)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        lines = [T("Observation log"), ""]
+        name = self.client_name_var.get().strip() or T("No client selected")
+        review = self.review_text.get("1.0", "end").strip() or T("No observation entered")
+        lines.extend([f"Client: {name}", f"Observation: {review}"])
+        destination.write_text("\n".join(str(item) for item in lines), encoding="utf-8")
+        messagebox.showinfo(T("Export Observation Log"), f"Saved: {destination}")
 
     def open_client_window(self, client_name=None):
         ClientDetailsWindow(self, client_name=client_name or self.client_name_var.get().strip(), master_manager=self.client_manager)
