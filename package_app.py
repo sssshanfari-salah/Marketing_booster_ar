@@ -7,13 +7,29 @@ from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
 SOURCE_DIR = APP_DIR / "python code"
+ENTRY_SCRIPT = SOURCE_DIR / "main.py"
 DIST_DIR = APP_DIR / "dist"
 BUILD_DIR = APP_DIR / "build"
 APP_NAME = "marketing_booster_ar"
 APP_DISPLAY_NAME = "Clients Manager"
 DEFAULT_COUNTRY_CODE = "+968"
 SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
-TARGET_ICON = APP_DIR / "starco_icon.ico"
+
+
+def resolve_target_icon():
+    candidates = [
+        APP_DIR / "starco_icon.ico",
+        APP_DIR / "starco icon" / "starco_icon.ico",
+        APP_DIR / "starco icon" / "icon.ico",
+        APP_DIR / "starco icon" / "app_icon.ico",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return APP_DIR / "starco_icon.ico"
+
+
+TARGET_ICON = resolve_target_icon()
 COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
 DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
@@ -182,6 +198,9 @@ def ensure_runtime_files():
     for output_dir in OUTPUT_LOG_DIRS:
         output_dir.mkdir(parents=True, exist_ok=True)
 
+    if not ENTRY_SCRIPT.exists():
+        raise FileNotFoundError(f"Entry script not found: {ENTRY_SCRIPT}")
+
     if not CLIENTS_DATA_FILE.exists():
         CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
 
@@ -204,6 +223,15 @@ def ensure_runtime_files():
                     except OSError:
                         pass
 
+    if not TARGET_ICON.exists() and (APP_DIR / "starco icon").exists():
+        for candidate in sorted((APP_DIR / "starco icon").iterdir()):
+            if candidate.suffix.lower() in {".ico", ".png", ".jpg", ".jpeg"}:
+                try:
+                    shutil.copy2(candidate, TARGET_ICON)
+                    break
+                except OSError:
+                    pass
+
 
 def build_app():
     ensure_runtime_files()
@@ -222,6 +250,9 @@ def build_app():
 
     if SPEC_FILE.exists():
         SPEC_FILE.unlink()
+
+    if not ENTRY_SCRIPT.exists():
+        raise FileNotFoundError(f"Entry script missing: {ENTRY_SCRIPT}")
 
     cmd = [
         sys.executable,
@@ -254,7 +285,7 @@ def build_app():
         if data_file.exists():
             cmd.extend(["--add-data", f"{data_file}{os.pathsep}."])
 
-    cmd.append(str(SOURCE_DIR / "main.py"))
+    cmd.append(str(ENTRY_SCRIPT))
 
     print("Building app...")
     subprocess.check_call(cmd, cwd=str(APP_DIR))

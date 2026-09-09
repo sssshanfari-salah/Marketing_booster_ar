@@ -448,16 +448,6 @@ def build_startup_splash():
     )
     glass_panel.pack(fill="both", expand=True)
 
-    title_label = tk.Label(
-        glass_panel,
-        text="Starco Commercial Complex",
-        fg="#f8fafc",
-        bg="#1d2736",
-        font=("Segoe UI", 12, "bold"),
-        justify="center",
-    )
-    title_label.pack(pady=(0, 16))
-
     logo_label = tk.Label(
         glass_panel,
         bg="#1d2736",
@@ -467,22 +457,22 @@ def build_startup_splash():
     )
     logo_label.pack()
 
-    def animate_title(step=0):
-        if step <= 20:
-            title_font = 16 + step * 1.8
-            title_label.configure(font=("Segoe UI", int(title_font), "bold"))
-            splash.attributes("-alpha", min(1.0, 0.2 + (step / 20) * 0.8))
-            splash.after(30, lambda: animate_title(step + 1))
-            return
-
-        splash.after(500, lambda: show_logo())
+    app_name_label = tk.Label(
+        glass_panel,
+        bg="#1d2736",
+        fg="#f8fafc",
+        font=("Segoe UI", 18, "bold"),
+        text="",
+        justify="center",
+    )
+    app_name_label.pack_forget()
 
     def show_logo():
         if APP_ICON is not None and APP_ICON.exists():
             try:
                 if Image is not None and ImageTk is not None:
                     image = Image.open(APP_ICON)
-                    image = image.resize((180, 180), getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS)
+                    image = image.resize((220, 220), getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS)
                     photo = ImageTk.PhotoImage(image)
                     logo_label.configure(image=photo, compound="center", text="")
                     logo_label.image = photo
@@ -493,16 +483,33 @@ def build_startup_splash():
 
         def animate_logo(step=0):
             if step <= 18:
-                next_size = 16 + step * 4
+                next_size = 22 + step * 5
                 logo_label.configure(font=("Segoe UI", int(next_size), "bold"))
-                splash.after(30, lambda: animate_logo(step + 1))
+                splash.after(35, lambda: animate_logo(step + 1))
                 return
 
-            splash.after(520, lambda: splash.destroy())
+            splash.after(1000, lambda: show_app_name_sequence())
+
+        def show_app_name_sequence(step=0):
+            app_name_label.pack(pady=(18, 0))
+            splash.attributes("-alpha", 1.0)
+
+            app_name_texts = [
+                "Clients Manager",
+                "Clients Manager",
+                "Clients Manager",
+            ]
+
+            if step < len(app_name_texts):
+                app_name_label.configure(text=app_name_texts[step], font=("Segoe UI", 20, "bold"))
+                splash.after(900, lambda: show_app_name_sequence(step + 1))
+                return
+
+            splash.after(800, lambda: splash.destroy())
 
         animate_logo()
 
-    splash.after(120, lambda: animate_title())
+    splash.after(600, lambda: show_logo())
     return splash
 
 
@@ -515,7 +522,7 @@ def safe_main():
             app = ProgressApp()
             app.mainloop()
 
-        splash.after(2300, launch_main_app)
+        splash.after(4000, launch_main_app)
         splash.mainloop()
     except tk.TclError as exc:
         message = (
@@ -1127,6 +1134,21 @@ class ProgressApp(tk.Tk):
         self.language_combo.pack(side="left")
         self.language_combo.bind("<<ComboboxSelected>>", self.switch_language)
 
+        header_actions = ttk.Frame(header)
+        header_actions.grid(row=0, column=3, sticky="e", padx=(10, 0))
+        send_email_button = ttk.Button(header_actions, text=T("Send Email"), command=self.send_email_to_client, style="Action.TButton", width=14)
+        send_email_button.pack(side="left", padx=(0, 6))
+        self.translatable_buttons.append((send_email_button, "Send Email"))
+        save_exit_button = ttk.Button(header_actions, text=T("Save & Exit"), command=self.save_and_exit, style="Action.TButton", width=14)
+        save_exit_button.pack(side="left", padx=(0, 6))
+        self.translatable_buttons.append((save_exit_button, "Save & Exit"))
+        share_client_button = ttk.Button(header_actions, text=T("Share Client Info"), command=self.open_client_window, style="Action.TButton", width=16)
+        share_client_button.pack(side="left")
+        self.translatable_buttons.append((share_client_button, "Share Client Info"))
+        cancel_button = ttk.Button(header_actions, text=T("Cancel"), command=self.cancel_and_exit, style="Action.TButton", width=12)
+        cancel_button.pack(side="left", padx=(6, 0))
+        self.translatable_buttons.append((cancel_button, "Cancel"))
+
         details_frame = ttk.LabelFrame(main, text=T("Client Details"), style="Section.TLabelframe")
         self.translatable_labels.append((details_frame, "Client Details"))
         details_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=(0, 6), pady=(0, 8))
@@ -1188,8 +1210,30 @@ class ProgressApp(tk.Tk):
         open_log_button.pack(side="left")
         self.translatable_buttons.append((open_log_button, "Open Review Log"))
 
-        action_row = ttk.Frame(main)
-        action_row.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(0, 8))
+        progress_box = ttk.LabelFrame(main, text=T("Progress Overview"), style="Section.TLabelframe")
+        self.translatable_labels.append((progress_box, "Progress Overview"))
+        progress_box.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(0, 4))
+        progress_box.columnconfigure(1, weight=1)
+
+        progress_label = ttk.Label(progress_box, text=T("Progress"))
+        progress_label.grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(6, 2))
+        self.translatable_labels.append((progress_label, "Progress"))
+        self.progress_var = tk.StringVar(value="0%")
+        progress_value_label = ttk.Label(progress_box, textvariable=self.progress_var, font=("Segoe UI", 10, "bold"))
+        progress_value_label.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=(6, 2))
+
+        self.progress_bar = ttk.Progressbar(progress_box, orient="horizontal", length=440, mode="determinate")
+        self.progress_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=(10, 10), pady=(0, 6))
+        self._apply_progress_bar_color(0)
+
+        total_tasks_label = ttk.Label(progress_box, text=T("Total Tasks"))
+        total_tasks_label.grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 4))
+        self.translatable_labels.append((total_tasks_label, "Total Tasks"))
+        self.total_entry = ttk.Entry(progress_box, textvariable=self.total_tasks_var, state="readonly")
+        self.total_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 4))
+
+        action_row = ttk.Frame(progress_box)
+        action_row.grid(row=3, column=0, columnspan=2, sticky="ew", padx=(10, 10), pady=(0, 6))
         action_row.columnconfigure(0, weight=1)
         action_row.columnconfigure(1, weight=1)
 
@@ -1205,47 +1249,25 @@ class ProgressApp(tk.Tk):
         delete_client_button.pack(side="left")
         self.translatable_buttons.append((delete_client_button, "Delete Selected Client"))
 
-        progress_box = ttk.LabelFrame(main, text=T("Progress Overview"), style="Section.TLabelframe")
-        self.translatable_labels.append((progress_box, "Progress Overview"))
-        progress_box.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(0, 8))
-        progress_box.columnconfigure(1, weight=1)
-
-        progress_label = ttk.Label(progress_box, text=T("Progress"))
-        progress_label.grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 4))
-        self.translatable_labels.append((progress_label, "Progress"))
-        self.progress_var = tk.StringVar(value="0%")
-        progress_value_label = ttk.Label(progress_box, textvariable=self.progress_var, font=("Segoe UI", 10, "bold"))
-        progress_value_label.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=(8, 4))
-
-        self.progress_bar = ttk.Progressbar(progress_box, orient="horizontal", length=500, mode="determinate")
-        self.progress_bar.grid(row=1, column=0, columnspan=2, sticky="ew", padx=(10, 10), pady=(0, 10))
-        self._apply_progress_bar_color(0)
-
-        total_tasks_label = ttk.Label(progress_box, text=T("Total Tasks"))
-        total_tasks_label.grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
-        self.translatable_labels.append((total_tasks_label, "Total Tasks"))
-        self.total_entry = ttk.Entry(progress_box, textvariable=self.total_tasks_var, state="readonly")
-        self.total_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
-
         tasks_frame = ttk.LabelFrame(main, text=T("Tasks"), style="Section.TLabelframe")
         self.translatable_labels.append((tasks_frame, "Tasks"))
-        tasks_frame.grid(row=4, column=0, columnspan=4, sticky="nsew", pady=(0, 8))
+        tasks_frame.grid(row=4, column=0, columnspan=4, sticky="nsew", pady=(0, 6))
         tasks_frame.columnconfigure(0, weight=2)
         tasks_frame.columnconfigure(1, weight=0)
         tasks_frame.columnconfigure(2, weight=2)
         tasks_frame.columnconfigure(3, weight=0)
-        tasks_frame.columnconfigure(4, weight=1, minsize=180)
+        tasks_frame.columnconfigure(4, weight=1, minsize=170)
         tasks_frame.rowconfigure(1, weight=1)
 
         all_tasks_label = ttk.Label(tasks_frame, text=T("All Tasks"), font=("Segoe UI", 10, "bold"))
-        all_tasks_label.grid(row=0, column=0, sticky="w", padx=(10, 0), pady=(8, 4))
+        all_tasks_label.grid(row=0, column=0, sticky="n", padx=(10, 0), pady=(6, 2))
         self.translatable_labels.append((all_tasks_label, "All Tasks"))
         pending_tasks_label = ttk.Label(tasks_frame, text=T("Pending Tasks"), font=("Segoe UI", 10, "bold"))
-        pending_tasks_label.grid(row=0, column=2, sticky="w", padx=(10, 0), pady=(8, 4))
+        pending_tasks_label.grid(row=0, column=2, sticky="n", padx=(10, 0), pady=(6, 2))
         self.translatable_labels.append((pending_tasks_label, "Pending Tasks"))
 
         list_area = ttk.Frame(tasks_frame)
-        list_area.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=(10, 0), pady=(0, 8))
+        list_area.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=(8, 0), pady=(0, 6))
         list_area.columnconfigure(0, weight=2)
         list_area.columnconfigure(1, weight=0)
         list_area.columnconfigure(2, weight=2)
@@ -1288,7 +1310,7 @@ class ProgressApp(tk.Tk):
         pending_scroll.grid(row=0, column=3, sticky="ns", padx=(0, 0), pady=(0, 0))
 
         button_row = ttk.Frame(tasks_frame)
-        button_row.grid(row=1, column=4, sticky="nse", padx=(8, 10), pady=(0, 8))
+        button_row.grid(row=1, column=4, sticky="nse", padx=(6, 8), pady=(0, 6))
         button_row.columnconfigure(0, weight=1)
         button_row.columnconfigure(1, weight=1)
 
@@ -1299,11 +1321,7 @@ class ProgressApp(tk.Tk):
             (T("Export Task Log"), self.export_task_log),
             (T("Export Observation Log"), self.export_observation_log),
             (T("Export Client Log"), self.export_client_log),
-            (T("Share Client Info"), self.open_client_window),
             (T("All Clients"), self.open_all_clients),
-            (T("Send Email"), self.send_email_to_client),
-            (T("Save & Exit"), self.save_and_exit),
-            (T("Cancel"), self.cancel_and_exit),
         ]
 
         for idx, (text, command) in enumerate(action_buttons):
@@ -1320,9 +1338,9 @@ class ProgressApp(tk.Tk):
             self.translatable_buttons.append((button, text))
 
         task_entry_row = ttk.Frame(tasks_frame)
-        task_entry_row.grid(row=2, column=0, columnspan=5, sticky="ew", padx=(10, 10), pady=(0, 8))
+        task_entry_row.grid(row=2, column=0, columnspan=5, sticky="ew", padx=(8, 8), pady=(0, 6))
         new_task_label = ttk.Label(task_entry_row, text=T("New task"))
-        new_task_label.pack(side="left", padx=(0, 8))
+        new_task_label.pack(side="left", padx=(0, 6))
         self.translatable_labels.append((new_task_label, "New task"))
         self.new_task_entry = ttk.Entry(task_entry_row, textvariable=self.new_task_var)
         self.new_task_entry.pack(side="left", fill="x", expand=True)
