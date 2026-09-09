@@ -176,6 +176,7 @@ TRANSLATIONS = {
         "All Clients Progress": "All Clients Progress",
         "Edit Selected Client": "Edit Selected Client",
         "Refresh": "Refresh",
+        "Home": "Home",
         "Delete client?": "Delete client?",
         "Are you sure you want to delete '{client_name}' from the client list?": "Are you sure you want to delete '{client_name}' from the client list?",
         "Client deleted": "Client deleted",
@@ -285,6 +286,7 @@ TRANSLATIONS = {
         "All Clients Progress": "تقدم جميع العملاء",
         "Edit Selected Client": "تعديل العميل المحدد",
         "Refresh": "تحديث",
+        "Home": "الرئيسية",
         "Delete client?": "حذف العميل؟",
         "Are you sure you want to delete '{client_name}' from the client list?": "هل أنت متأكد أنك تريد حذف '{client_name}' من قائمة العملاء؟",
         "Client deleted": "تم حذف العميل",
@@ -513,16 +515,89 @@ def build_startup_splash():
     return splash
 
 
+def open_welcome_home():
+    welcome = WelcomeWindow()
+    welcome.protocol("WM_DELETE_WINDOW", welcome.destroy)
+    welcome.mainloop()
+
+
+class WelcomeWindow(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Starco Commercial Complex")
+        self.geometry("760x420")
+        self.minsize(620, 320)
+        self.configure(bg="#eef2ff")
+
+        header = ttk.Frame(self, padding=(28, 22, 28, 12))
+        header.pack(fill="x")
+
+        logo_label = tk.Label(header, bg="#eef2ff", fg="#f5c451", font=("Segoe UI", 18, "bold"))
+        logo_label.pack(anchor="center")
+        if APP_ICON is not None and APP_ICON.exists():
+            try:
+                if Image is not None and ImageTk is not None:
+                    image = Image.open(APP_ICON)
+                    image = image.resize((88, 88), getattr(Image, "Resampling", Image).LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS)
+                    photo = ImageTk.PhotoImage(image)
+                    logo_label.configure(image=photo, compound="center", text="")
+                    logo_label.image = photo
+                else:
+                    logo_label.configure(text="★")
+            except Exception:
+                logo_label.configure(text="★")
+        else:
+            logo_label.configure(text="★")
+
+        title = ttk.Label(
+            header,
+            text="Welcome to Starco Commercial Complex",
+            font=("Segoe UI", 18, "bold"),
+            foreground="#111827",
+        )
+        title.pack(anchor="center", pady=(8, 0))
+
+        main_frame = ttk.Frame(self, padding=(24, 8, 24, 18))
+        main_frame.pack(fill="both", expand=True)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(0, weight=1)
+
+        buttons = [
+            ("Overview", self._open_progress_panel),
+        ]
+
+        for index, (label_text, command) in enumerate(buttons):
+            button = ttk.Button(
+                main_frame,
+                text=label_text,
+                command=command,
+                style="Action.TButton",
+                width=22,
+            )
+            button.grid(row=0, column=0, padx=12, pady=20, sticky="nsew")
+
+        footer = ttk.Frame(self, padding=(0, 0, 24, 18))
+        footer.pack(fill="x")
+        exit_button = ttk.Button(footer, text="Exit", command=self.destroy, style="Action.TButton", width=14)
+        exit_button.pack(anchor="center")
+
+    def _open_progress_panel(self):
+        self.destroy()
+        app = ProgressApp()
+        app.focus_section("progress")
+        app.mainloop()
+
+
 def safe_main():
     try:
         splash = build_startup_splash()
 
-        def launch_main_app():
+        def launch_welcome_window():
             splash.destroy()
-            app = ProgressApp()
-            app.mainloop()
+            welcome = WelcomeWindow()
+            welcome.mainloop()
 
-        splash.after(4000, launch_main_app)
+        splash.after(4000, launch_welcome_window)
         splash.mainloop()
     except tk.TclError as exc:
         message = (
@@ -663,7 +738,12 @@ class TaskDetailsWindow(tk.Toplevel):
         button_row.pack(fill="x", pady=(0, 8))
         ttk.Button(button_row, text=T("Mark Done"), command=self.mark_selected_done).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Close"), command=self.close_window).pack(side="left")
+
+    def go_home(self):
+        self.destroy()
+        open_welcome_home()
 
     def print_report(self):
         client_name = self.plan.client_name if self.plan else self.master_app.client_name_var.get().strip() if self.master_app else "Client"
@@ -745,7 +825,12 @@ class ExportClientsLogWindow(tk.Toplevel):
         action_row = ttk.Frame(main)
         action_row.grid(row=1, column=0, columnspan=3, sticky="e", pady=(12, 0))
         ttk.Button(action_row, text=T("Save Log"), command=self.save_report).pack(side="left", padx=(0, 8))
+        ttk.Button(action_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
         ttk.Button(action_row, text=T("Cancel"), command=self.destroy).pack(side="left")
+
+    def go_home(self):
+        self.destroy()
+        open_welcome_home()
 
     def choose_file_path(self):
         default_dir = resolve_log_output_dir("clients_logs")
@@ -805,7 +890,12 @@ class ClientReviewsLogWindow(tk.Toplevel):
         button_row = ttk.Frame(self)
         button_row.pack(pady=(0, 12))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Close"), command=self.destroy).pack(side="left")
+
+    def go_home(self):
+        self.destroy()
+        open_welcome_home()
 
     def print_report(self):
         reviews = self.manager.get_all_reviews()
@@ -1145,14 +1235,18 @@ class ProgressApp(tk.Tk):
         share_client_button = ttk.Button(header_actions, text=T("Share Client Info"), command=self.open_client_window, style="Action.TButton", width=16)
         share_client_button.pack(side="left")
         self.translatable_buttons.append((share_client_button, "Share Client Info"))
+        home_button = ttk.Button(header_actions, text=T("Home"), command=self.go_home, style="Action.TButton", width=10)
+        home_button.pack(side="left", padx=(6, 0))
+        self.translatable_buttons.append((home_button, "Home"))
         cancel_button = ttk.Button(header_actions, text=T("Cancel"), command=self.cancel_and_exit, style="Action.TButton", width=12)
         cancel_button.pack(side="left", padx=(6, 0))
         self.translatable_buttons.append((cancel_button, "Cancel"))
 
-        details_frame = ttk.LabelFrame(main, text=T("Client Details"), style="Section.TLabelframe")
-        self.translatable_labels.append((details_frame, "Client Details"))
-        details_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=(0, 6), pady=(0, 8))
-        details_frame.columnconfigure(1, weight=1)
+        self.details_frame = ttk.LabelFrame(main, text=T("Client Details"), style="Section.TLabelframe")
+        self.translatable_labels.append((self.details_frame, "Client Details"))
+        self.details_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=(0, 6), pady=(0, 8))
+        self.details_frame.columnconfigure(1, weight=1)
+        details_frame = self.details_frame
 
         client_name_label = ttk.Label(details_frame, text=f"👤 {T('Client Name')}", font=("Segoe UI", 10, "bold"))
         client_name_label.grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 6))
@@ -1193,10 +1287,11 @@ class ProgressApp(tk.Tk):
         self.shop_number_entry = ttk.Entry(details_frame, textvariable=self.shop_number_var)
         self.shop_number_entry.grid(row=5, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
-        review_frame = ttk.LabelFrame(main, text=f"📝 {T('Client Review')}", style="Section.TLabelframe")
-        self.translatable_labels.append((review_frame, "Client Review"))
-        review_frame.grid(row=1, column=2, columnspan=2, sticky="nsew", padx=(6, 0), pady=(0, 8))
-        review_frame.columnconfigure(0, weight=1)
+        self.review_frame = ttk.LabelFrame(main, text=f"📝 {T('Client Review')}", style="Section.TLabelframe")
+        self.translatable_labels.append((self.review_frame, "Client Review"))
+        self.review_frame.grid(row=1, column=2, columnspan=2, sticky="nsew", padx=(6, 0), pady=(0, 8))
+        self.review_frame.columnconfigure(0, weight=1)
+        review_frame = self.review_frame
 
         self.review_text = tk.Text(review_frame, width=30, height=4, wrap="word", font=("Segoe UI", 9))
         self.review_text.grid(row=0, column=0, sticky="nsew", padx=(10, 10), pady=(8, 6))
@@ -1210,10 +1305,11 @@ class ProgressApp(tk.Tk):
         open_log_button.pack(side="left")
         self.translatable_buttons.append((open_log_button, "Open Review Log"))
 
-        progress_box = ttk.LabelFrame(main, text=T("Progress Overview"), style="Section.TLabelframe")
-        self.translatable_labels.append((progress_box, "Progress Overview"))
-        progress_box.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(0, 4))
-        progress_box.columnconfigure(1, weight=1)
+        self.progress_box = ttk.LabelFrame(main, text=T("Progress Overview"), style="Section.TLabelframe")
+        self.translatable_labels.append((self.progress_box, "Progress Overview"))
+        self.progress_box.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(0, 4))
+        self.progress_box.columnconfigure(1, weight=1)
+        progress_box = self.progress_box
 
         progress_label = ttk.Label(progress_box, text=T("Progress"))
         progress_label.grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(6, 2))
@@ -1249,15 +1345,16 @@ class ProgressApp(tk.Tk):
         delete_client_button.pack(side="left")
         self.translatable_buttons.append((delete_client_button, "Delete Selected Client"))
 
-        tasks_frame = ttk.LabelFrame(main, text=T("Tasks"), style="Section.TLabelframe")
-        self.translatable_labels.append((tasks_frame, "Tasks"))
-        tasks_frame.grid(row=4, column=0, columnspan=4, sticky="nsew", pady=(0, 6))
-        tasks_frame.columnconfigure(0, weight=2)
-        tasks_frame.columnconfigure(1, weight=0)
-        tasks_frame.columnconfigure(2, weight=2)
-        tasks_frame.columnconfigure(3, weight=0)
-        tasks_frame.columnconfigure(4, weight=1, minsize=170)
-        tasks_frame.rowconfigure(1, weight=1)
+        self.tasks_frame = ttk.LabelFrame(main, text=T("Tasks"), style="Section.TLabelframe")
+        self.translatable_labels.append((self.tasks_frame, "Tasks"))
+        self.tasks_frame.grid(row=4, column=0, columnspan=4, sticky="nsew", pady=(0, 6))
+        self.tasks_frame.columnconfigure(0, weight=2)
+        self.tasks_frame.columnconfigure(1, weight=0)
+        self.tasks_frame.columnconfigure(2, weight=2)
+        self.tasks_frame.columnconfigure(3, weight=0)
+        self.tasks_frame.columnconfigure(4, weight=1, minsize=170)
+        self.tasks_frame.rowconfigure(1, weight=1)
+        tasks_frame = self.tasks_frame
 
         all_tasks_label = ttk.Label(tasks_frame, text=T("All Tasks"), font=("Segoe UI", 10, "bold"))
         all_tasks_label.grid(row=0, column=0, sticky="n", padx=(10, 0), pady=(6, 2))
@@ -1418,6 +1515,34 @@ class ProgressApp(tk.Tk):
         self.pending_tasks_box.delete(0, tk.END)
         self.all_tasks_box.insert(tk.END, T("No client selected"))
         self.pending_tasks_box.insert(tk.END, T("No pending tasks"))
+
+    def go_home(self):
+        self.destroy()
+        open_welcome_home()
+
+    def focus_section(self, section_name):
+        section_name = (section_name or "details").lower()
+        targets = {
+            "details": self.details_frame,
+            "clients": self.details_frame,
+            "review": self.review_frame,
+            "reviews": self.review_frame,
+            "tasks": self.tasks_frame,
+            "progress": self.progress_box,
+            "overview": self.progress_box,
+        }
+        target = targets.get(section_name, self.details_frame)
+        if target is not None:
+            self.update_idletasks()
+            self.focus_set()
+            try:
+                target.focus_set()
+            except Exception:
+                pass
+            try:
+                target.tkraise()
+            except Exception:
+                pass
 
     def on_client_name_selected(self, event=None):
         name = self.client_name_var.get().strip()
@@ -2025,8 +2150,13 @@ class AllClientsProgressWindow(tk.Toplevel):
         ttk.Button(button_row, text=T("Delete Selected Client"), command=self.delete_selected_client).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Save Log"), command=self.export_log).pack(side="left")
+        ttk.Button(button_row, text=T("Save Log"), command=self.export_log).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Home"), command=self.go_home).pack(side="left")
         self.refresh_view()
+
+    def go_home(self):
+        self.destroy()
+        open_welcome_home()
 
     def print_report(self):
         title = T("All Clients Progress")

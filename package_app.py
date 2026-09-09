@@ -11,7 +11,7 @@ ENTRY_SCRIPT = SOURCE_DIR / "main.py"
 DIST_DIR = APP_DIR / "dist"
 BUILD_DIR = APP_DIR / "build"
 APP_NAME = "marketing_booster_ar"
-APP_DISPLAY_NAME = "Clients Manager"
+APP_DISPLAY_NAME = "Starco Commercial Complex"
 DEFAULT_COUNTRY_CODE = "+968"
 SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
 
@@ -33,18 +33,21 @@ TARGET_ICON = resolve_target_icon()
 COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
 DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
+SUPPORTING_DOCUMENTS_DIR = APP_DIR / "supporting_documents"
+STARCO_RENT_CONTRACT = SUPPORTING_DOCUMENTS_DIR / "starco_rent_contract_1.pdf"
 APPLICATION_OUTPUTS_DIR = APP_DIR / "application_outputs"
 CLIENT_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "clients_logs"
 TASK_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "tasks_logs"
 OBSERVATION_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "observation_logs"
 OUTPUT_LOG_DIRS = [APPLICATION_OUTPUTS_DIR, CLIENT_LOGS_DIR, TASK_LOGS_DIR, OBSERVATION_LOGS_DIR]
 LEGACY_APP_NAMES = ["marketing_booster", "marketing_booster_ar"]
-LEGACY_DISPLAY_NAMES = ["Marketing Booster", "Marketing Booster AR", "Clients Manager"]
+LEGACY_DISPLAY_NAMES = ["Marketing Booster", "Marketing Booster AR", "Clients Manager", "Starco Commercial Complex"]
 RUNTIME_DATA_FILES = [
     TARGET_ICON,
     CLIENTS_DATA_FILE,
     COUNTRY_CODES_DATA,
     DOCUMENTS_DATA_FILE,
+    STARCO_RENT_CONTRACT,
     *OUTPUT_LOG_DIRS,
 ]
 
@@ -212,6 +215,10 @@ def ensure_runtime_files():
     if not DOCUMENTS_DATA_FILE.exists():
         DOCUMENTS_DATA_FILE.write_text("", encoding="utf-8")
 
+    SUPPORTING_DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    if STARCO_RENT_CONTRACT.exists() and not STARCO_RENT_CONTRACT.is_file():
+        raise ValueError(f"Expected a file at: {STARCO_RENT_CONTRACT}")
+
     if not TARGET_ICON.exists():
         fallback_icon_dir = APP_DIR / "starco icon"
         if fallback_icon_dir.exists():
@@ -279,6 +286,7 @@ def build_app():
         CLIENTS_DATA_FILE,
         COUNTRY_CODES_DATA,
         DOCUMENTS_DATA_FILE,
+        STARCO_RENT_CONTRACT,
         *OUTPUT_LOG_DIRS,
     ]
     for data_file in runtime_files:
