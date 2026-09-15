@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 import sys
@@ -181,6 +182,15 @@ class ClientManagerTests(unittest.TestCase):
 
         tasks = parse_task_items("", fallback_total=3)
         self.assertEqual(tasks, ["1", "2", "3"])
+
+    def test_progress_tracking_module_is_import_safe(self):
+        module_path = Path(__file__).resolve().parent / "progress_tracking.py"
+        spec = importlib.util.spec_from_file_location("progress_tracking_temp", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        self.assertTrue(hasattr(module, "plan"))
+        self.assertEqual(module.plan.Clients_progress, {})
 
     def test_language_switch_supports_english_and_arabic(self):
         self.assertEqual(T("Client Details"), "Client Details")

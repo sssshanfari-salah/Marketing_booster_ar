@@ -7,9 +7,10 @@ class plan:
     def __init__(self, client: Client, all_tasks=None):
         self.client = client
         self.Client_name = client.name
-        self.all_tasks = all_tasks if all_tasks is not None else []
+        self.all_tasks = list(all_tasks) if all_tasks is not None else []
         self.pending_tasks = list(self.all_tasks)
         self.progress = 0
+        self.refresh_progress()
 
     def refresh_progress(self):
         if not self.all_tasks:
@@ -37,8 +38,8 @@ class plan:
         return {
             "client_name": self.Client_name,
             "progress": self.progress,
-            "pending_tasks": self.pending_tasks,
-            "all_tasks": self.all_tasks,
+            "pending_tasks": list(self.pending_tasks),
+            "all_tasks": list(self.all_tasks),
         }
 
     def update_clients_progress(self):
@@ -49,14 +50,4 @@ class plan:
         width = 30
         filled = int((self.progress / 100) * width)
         bar = "█" * filled + " " * (width - filled)
-        print(f"|{bar}| {self.progress}%")
-        print(f"Pending tasks: {len(self.pending_tasks)}")
-
-
-client1 = Client("Ali", "123456", "Marketing")
-plan1 = plan(client1, all_tasks=["task1", "task2", "task3", "task4", "task5"])
-plan1.pending_tasks = ["task1", "task2", "task3"]
-plan1.refresh_progress()
-plan1.update_clients_progress()
-print(plan.Clients_progress)
-plan1.progress_color()
+        return f"|{bar}| {self.progress}%\nPending tasks: {len(self.pending_tasks)}"

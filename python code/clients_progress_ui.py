@@ -994,147 +994,6 @@ class ClientReviewsLogWindow(tk.Toplevel):
             )
 
 
-class AllClientsProgressWindow(tk.Toplevel):
-    def __init__(self, master=None):
-        super().__init__(master)
-        self.title(T("All Clients Progress"))
-        self.geometry("720x440")
-        self.minsize(620, 360)
-
-        self.manager = ClientManager("clients.json")
-        self.tree = ttk.Treeview(
-            self,
-            columns=("client", "business", "progress", "tasks"),
-            show="headings",
-        )
-        self.tree.heading("client", text=T("Client"))
-        self.tree.heading("business", text=T("Business"))
-        self.tree.heading("progress", text=T("Progress"))
-        self.tree.heading("tasks", text="المتبقي / الإجمالي")
-        self.tree.column("client", width=190, anchor="w")
-        self.tree.column("business", width=220, anchor="w")
-        self.tree.column("progress", width=110, anchor="center")
-        self.tree.column("tasks", width=150, anchor="center")
-        self.tree.pack(fill="both", expand=True, padx=12, pady=(12, 8))
-
-        self.tree.bind("<Double-1>", self.edit_selected_client)
-
-        button_row = ttk.Frame(self)
-        button_row.pack(pady=(0, 12))
-        ttk.Button(button_row, text=T("Edit Selected Client"), command=self.edit_selected_client).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Delete Selected Client"), command=self.delete_selected_client).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Save Log"), command=self.export_log).pack(side="left")
-        self.refresh_view()
-
-    def print_report(self):
-        title = T("All Clients Progress")
-        lines = [title, ""]
-        self.manager.load_clients()
-        for client in self.manager.clients:
-            progress_info = Plan.Clients_progress.get(client.name, {})
-            progress = progress_info.get("progress", 0)
-            pending_tasks = progress_info.get("pending_tasks", [])
-            all_tasks = progress_info.get("all_tasks", [])
-            lines.append(f"{client.name} | {client.business} | {progress}% | {len(pending_tasks)} / {len(all_tasks)}")
-        if not self.manager.clients:
-            lines.append(T("No client selected"))
-        print_report_document(title, lines)
-
-    def export_log(self):
-        ExportClientsLogWindow(self, self.manager)
-
-    def edit_selected_client(self, event=None):
-        selection = self.tree.selection()
-        if not selection:
-            messagebox.showwarning(T("No client selected"), T("Select a client row first."))
-            return
-
-        values = self.tree.item(selection[0], "values")
-        if not values:
-            return
-
-        client_name = values[0]
-        business = values[1] if len(values) > 1 else "N/A"
-
-        if self.master and hasattr(self.master, "load_client_progress"):
-            self.master.load_client_progress(client_name, business)
-
-        self.destroy()
-
-    def delete_selected_client(self):
-        selection = self.tree.selection()
-        if not selection:
-            messagebox.showwarning(T("No client selected"), T("Select a client row first."))
-            return
-
-        values = self.tree.item(selection[0], "values")
-        if not values:
-            return
-
-        client_name = values[0]
-        confirm = messagebox.askyesno(
-            T("Delete client?"),
-            T("Are you sure you want to delete '{client_name}' from the client list?", client_name=client_name),
-        )
-        if not confirm:
-            return
-
-        if self.manager.delete_client(client_name):
-            Plan.Clients_progress.pop(client_name, None)
-            if self.master and hasattr(self.master, "refresh_client_combo"):
-                self.master.refresh_client_combo()
-            if self.master and hasattr(self.master, "clear_client_form"):
-                self.master.clear_client_form()
-            messagebox.showinfo(T("Client deleted"), T("'{client_name}' was removed successfully.", client_name=client_name))
-            self.refresh_view()
-            return
-
-        messagebox.showwarning(T("Client not found"), T("'{client_name}' was not found in the saved client list.", client_name=client_name))
-
-    def refresh_view(self):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
-        self.manager.load_clients()
-        all_progress = Plan.Clients_progress or {}
-
-        seen = set()
-        for client in self.manager.clients:
-            seen.add(client.name)
-            progress_info = all_progress.get(client.name, {})
-            progress = progress_info.get("progress", 0)
-            pending_tasks = progress_info.get("pending_tasks", [])
-            all_tasks = progress_info.get("all_tasks", [])
-            self.tree.insert(
-                "",
-                "end",
-                values=(
-                    client.name,
-                    client.business,
-                    f"{progress}%",
-                    f"{len(pending_tasks)} / {len(all_tasks)}",
-                ),
-            )
-
-        for client_name, progress_info in all_progress.items():
-            if client_name in seen:
-                continue
-            pending_tasks = progress_info.get("pending_tasks", [])
-            all_tasks = progress_info.get("all_tasks", [])
-            self.tree.insert(
-                "",
-                "end",
-                values=(
-                    client_name,
-                    "Saved progress only",
-                    f"{progress_info.get('progress', 0)}%",
-                    f"{len(pending_tasks)} / {len(all_tasks)}",
-                ),
-            )
-
-
 class ProgressApp(tk.Tk):
     @staticmethod
     def resolve_client_file():
@@ -1402,15 +1261,12 @@ class ProgressApp(tk.Tk):
 
         action_center = ttk.Frame(action_row)
         action_center.grid(row=0, column=0, columnspan=2, sticky="n")
-        create_plan_button = ttk.Button(action_center, text=T("Create Client Plan"), command=self.create_plan, style="Action.TButton", width=18)
-        create_plan_button.pack(side="left", padx=(0, 8))
-        self.translatable_buttons.append((create_plan_button, "Create Client Plan"))
         save_client_button = ttk.Button(action_center, text=T("Save Client"), command=self.save_current_client, style="Action.TButton", width=18)
         save_client_button.pack(side="left", padx=(0, 8))
         self.translatable_buttons.append((save_client_button, "Save Client"))
-        delete_client_button = ttk.Button(action_center, text=T("Delete Selected Client"), command=self.delete_selected_client, style="Action.TButton", width=18)
-        delete_client_button.pack(side="left")
-        self.translatable_buttons.append((delete_client_button, "Delete Selected Client"))
+        all_clients_button = ttk.Button(action_center, text=T("All Clients"), command=self.open_all_clients, style="Action.TButton", width=18)
+        all_clients_button.pack(side="left")
+        self.translatable_buttons.append((all_clients_button, "All Clients"))
 
         self.tasks_frame = ttk.LabelFrame(main, text=T("Tasks"), style="Section.TLabelframe")
         self.translatable_labels.append((self.tasks_frame, "Tasks"))
@@ -1493,7 +1349,6 @@ class ProgressApp(tk.Tk):
             (T("Export Task Log"), self.export_task_log),
             (T("Export Observation Log"), self.export_observation_log),
             (T("Export Client Log"), self.export_client_log),
-            (T("All Clients"), self.open_all_clients),
         ]
 
         for idx, (text, command) in enumerate(action_buttons):
