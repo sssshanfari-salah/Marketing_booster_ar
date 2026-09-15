@@ -207,6 +207,14 @@ class ClientManagerTests(unittest.TestCase):
         self.assertTrue(hasattr(ProgressApp, "export_task_log"))
         self.assertTrue(hasattr(ProgressApp, "export_observation_log"))
 
+    def test_task_listboxes_include_horizontal_scrollbars(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertGreaterEqual(source.count("xscrollcommand="), 2)
+        self.assertGreaterEqual(source.count("orient=\"horizontal\""), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

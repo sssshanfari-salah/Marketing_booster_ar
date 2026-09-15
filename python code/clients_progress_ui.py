@@ -720,17 +720,24 @@ class TaskDetailsWindow(tk.Toplevel):
 
         all_scroll = ttk.Scrollbar(task_columns, orient="vertical")
         pending_scroll = ttk.Scrollbar(task_columns, orient="vertical")
+        all_h_scroll = ttk.Scrollbar(task_columns, orient="horizontal")
+        pending_h_scroll = ttk.Scrollbar(task_columns, orient="horizontal")
 
-        self.all_box = tk.Listbox(task_columns, height=14, exportselection=False, font=("Segoe UI", 11), yscrollcommand=all_scroll.set)
-        self.pending_box = tk.Listbox(task_columns, height=14, exportselection=False, bg="#fffef5", font=("Segoe UI", 11), yscrollcommand=pending_scroll.set)
+        self.all_box = tk.Listbox(task_columns, height=14, exportselection=False, font=("Segoe UI", 11), yscrollcommand=all_scroll.set, xscrollcommand=all_h_scroll.set)
+        self.pending_box = tk.Listbox(task_columns, height=14, exportselection=False, bg="#fffef5", font=("Segoe UI", 11), yscrollcommand=pending_scroll.set, xscrollcommand=pending_h_scroll.set)
 
-        self.all_box.grid(row=1, column=0, sticky="nsew", padx=(0, 6), pady=(0, 10))
-        all_scroll.grid(row=1, column=0, sticky="ns", padx=(0, 0), pady=(0, 10))
-        self.pending_box.grid(row=1, column=1, sticky="nsew", padx=(6, 0), pady=(0, 10))
-        pending_scroll.grid(row=1, column=1, sticky="ns", padx=(0, 0), pady=(0, 10))
+        self.all_box.grid(row=1, column=0, sticky="nsew", padx=(0, 6), pady=(0, 0))
+        all_scroll.grid(row=1, column=0, sticky="ns", padx=(0, 0), pady=(0, 0))
+        all_h_scroll.grid(row=2, column=0, sticky="ew", padx=(0, 6), pady=(0, 10))
+
+        self.pending_box.grid(row=1, column=1, sticky="nsew", padx=(6, 0), pady=(0, 0))
+        pending_scroll.grid(row=1, column=1, sticky="ns", padx=(0, 0), pady=(0, 0))
+        pending_h_scroll.grid(row=2, column=1, sticky="ew", padx=(6, 0), pady=(0, 10))
 
         all_scroll.config(command=self.all_box.yview)
         pending_scroll.config(command=self.pending_box.yview)
+        all_h_scroll.config(command=self.all_box.xview)
+        pending_h_scroll.config(command=self.pending_box.xview)
 
         self.populate_lists(all_tasks=all_tasks, pending_tasks=pending_tasks)
 
