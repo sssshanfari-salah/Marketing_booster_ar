@@ -6,7 +6,7 @@ import webbrowser
 from pathlib import Path
 from urllib.parse import quote
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 
 try:
     import win32print
@@ -92,6 +92,28 @@ def normalize_country_code(code):
     if not cleaned:
         return DEFAULT_COUNTRY_CODE
     return cleaned if cleaned.startswith("+") else f"+{cleaned}"
+
+
+def format_task_entry(task, number=None):
+    text = str(task).strip()
+    if number is not None:
+        return f"{number}. {text}" if text else f"{number}."
+    return text if text else ""
+
+
+def strip_task_number_prefix(task):
+    text = str(task or "").strip()
+    if not text:
+        return ""
+    if "." in text:
+        prefix, remainder = text.split(".", 1)
+        if prefix.isdigit():
+            return remainder.strip()
+    return text
+
+
+def validate_contact_number(new_value):
+    return new_value == "" or new_value.isdigit()
 
 
 def parse_contact_for_ui(contact_value):
@@ -614,7 +636,7 @@ def parse_task_items(raw_value, fallback_total=0):
     if not text:
         if fallback_total <= 0:
             return []
-        return [T("Task {i}", i=i) for i in range(1, fallback_total + 1)]
+        return [str(i) for i in range(1, fallback_total + 1)]
 
     items = []
     for chunk in text.replace("\n", ",").split(","):
@@ -743,6 +765,7 @@ class TaskDetailsWindow(tk.Toplevel):
 
         button_row = ttk.Frame(main)
         button_row.pack(fill="x", pady=(0, 8))
+        ttk.Button(button_row, text=T("Edit"), command=self.edit_selected_task).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Mark Done"), command=self.mark_selected_done).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
@@ -769,14 +792,14 @@ class TaskDetailsWindow(tk.Toplevel):
         pending = list(pending_tasks) if pending_tasks is not None else []
 
         if tasks:
-            for task in tasks:
-                self.all_box.insert(tk.END, task)
+            for index, task in enumerate(tasks, start=1):
+                self.all_box.insert(tk.END, format_task_entry(task, number=index))
         else:
             self.all_box.insert(tk.END, T("No tasks yet"))
 
         if pending:
-            for task in pending:
-                self.pending_box.insert(tk.END, task)
+            for index, task in enumerate(pending, start=1):
+                self.pending_box.insert(tk.END, format_task_entry(task, number=index))
         else:
             self.pending_box.insert(tk.END, T("No pending tasks"))
 
@@ -788,6 +811,38 @@ class TaskDetailsWindow(tk.Toplevel):
             except Exception:
                 pass
 
+    def edit_selected_task(self):
+        if self.plan is None:
+            messagebox.showwarning(T("No task plan"), T("There is no active task plan to edit."))
+            return
+
+        selected = self.pending_box.curselection() or self.all_box.curselection()
+        if not selected:
+            messagebox.showwarning(T("No task selected"), T("Select a task first."))
+            return
+
+        source = self.pending_box if self.pending_box.curselection() else self.all_box
+        raw_task = strip_task_number_prefix(source.get(selected[0]))
+        new_text = simpledialog.askstring(T("Edit task"), T("Enter the updated task text:"), initialvalue=raw_task)
+        if new_text is None:
+            return
+
+        updated_task = new_text.strip()
+        if not updated_task:
+            messagebox.showwarning(T("Invalid task"), T("Task text cannot be empty."))
+            return
+
+        if raw_task in self.plan.all_tasks:
+            self.plan.all_tasks[self.plan.all_tasks.index(raw_task)] = updated_task
+        if raw_task in self.plan.pending_tasks:
+            self.plan.pending_tasks[self.plan.pending_tasks.index(raw_task)] = updated_task
+
+        if self.master_app and hasattr(self.master_app, "refresh_display"):
+            self.master_app.refresh_display()
+
+        self.plan.sync_task_lists(all_tasks=self.plan.all_tasks, pending_tasks=self.plan.pending_tasks)
+        self.populate_lists(all_tasks=self.plan.all_tasks, pending_tasks=self.plan.pending_tasks)
+
     def mark_selected_done(self):
         if self.plan is None:
             messagebox.showwarning(T("No task plan"), T("There is no active task plan to update."))
@@ -798,7 +853,7 @@ class TaskDetailsWindow(tk.Toplevel):
             messagebox.showwarning(T("No task selected"), T("Select a task from the pending list first."))
             return
 
-        task = self.pending_box.get(selected[0])
+        task = strip_task_number_prefix(self.pending_box.get(selected[0]))
         self.plan.complete_task(task)
 
         if self.master_app and hasattr(self.master_app, "refresh_display"):
@@ -1273,7 +1328,12 @@ class ProgressApp(tk.Tk):
         contact_label = ttk.Label(details_frame, text=f"📞 {T('Contact')}", font=("Segoe UI", 10, "bold"))
         contact_label.grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((contact_label, "Contact"))
-        self.contact_entry = ttk.Entry(details_frame, textvariable=self.contact_var)
+        self.contact_entry = ttk.Entry(
+            details_frame,
+            textvariable=self.contact_var,
+            validate="key",
+            validatecommand=(self.register(validate_contact_number), "%P"),
+        )
         self.contact_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
         email_label = ttk.Label(details_frame, text=f"✉️ {T('Email')}", font=("Segoe UI", 10, "bold"))
@@ -1455,6 +1515,7 @@ class ProgressApp(tk.Tk):
         new_task_label.pack(side="left", padx=(0, 6))
         self.translatable_labels.append((new_task_label, "New task"))
         self.new_task_entry = ttk.Entry(task_entry_row, textvariable=self.new_task_var)
+        self.new_task_entry.bind("<Return>", lambda event: self.add_task())
         self.new_task_entry.pack(side="left", fill="x", expand=True)
 
         main.rowconfigure(4, weight=2)
@@ -1706,7 +1767,7 @@ class ProgressApp(tk.Tk):
             messagebox.showwarning(T("No task selected"), T("Select a task from the pending list."))
             return
 
-        task = self.pending_tasks_box.get(selected[0])
+        task = strip_task_number_prefix(self.pending_tasks_box.get(selected[0]))
         self.plan.complete_task(task)
         self.refresh_display()
 
@@ -1734,14 +1795,14 @@ class ProgressApp(tk.Tk):
         self.total_tasks_var.set(str(len(self.plan.all_tasks)))
 
         if self.plan.all_tasks:
-            for task in self.plan.all_tasks:
-                self.all_tasks_box.insert(tk.END, task)
+            for index, task in enumerate(self.plan.all_tasks, start=1):
+                self.all_tasks_box.insert(tk.END, format_task_entry(task, number=index))
         else:
             self.all_tasks_box.insert(tk.END, T("No tasks yet"))
 
         if self.plan.pending_tasks:
-            for task in self.plan.pending_tasks:
-                self.pending_tasks_box.insert(tk.END, task)
+            for index, task in enumerate(self.plan.pending_tasks, start=1):
+                self.pending_tasks_box.insert(tk.END, format_task_entry(task, number=index))
         else:
             self.pending_tasks_box.insert(tk.END, T("No pending tasks"))
 

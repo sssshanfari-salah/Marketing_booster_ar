@@ -173,7 +173,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(tasks, ["Research", "Design", "Launch", "Review"])
 
         tasks = parse_task_items("", fallback_total=3)
-        self.assertEqual(tasks, ["Task 1", "Task 2", "Task 3"])
+        self.assertEqual(tasks, ["1", "2", "3"])
 
     def test_language_switch_supports_english_and_arabic(self):
         self.assertEqual(T("Client Details"), "Client Details")
