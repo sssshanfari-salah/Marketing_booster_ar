@@ -49,10 +49,25 @@ RUNTIME_DATA_FILES = [
     DOCUMENTS_DATA_FILE,
     STARCO_RENT_CONTRACT,
     *OUTPUT_LOG_DIRS,
+    APP_DIR / "supporting_documents",
+    APP_DIR / "starco icon",
+    SOURCE_DIR / "docs",
 ]
 
 # Keep the packaged app aligned with the current client-manager UI/data model.
 RUNTIME_DATA_FILES = [path for path in RUNTIME_DATA_FILES if path is not None and path.exists()]
+
+
+def collect_runtime_assets():
+    assets = []
+    seen = set()
+    for path in RUNTIME_DATA_FILES:
+        key = str(path.resolve())
+        if key in seen:
+            continue
+        seen.add(key)
+        assets.append(path)
+    return assets
 
 
 def resolve_desktop_dir():
@@ -281,15 +296,7 @@ def build_app():
     if TARGET_ICON.exists():
         cmd.extend(["--icon", str(TARGET_ICON)])
 
-    runtime_files = [
-        TARGET_ICON,
-        CLIENTS_DATA_FILE,
-        COUNTRY_CODES_DATA,
-        DOCUMENTS_DATA_FILE,
-        STARCO_RENT_CONTRACT,
-        *OUTPUT_LOG_DIRS,
-    ]
-    for data_file in runtime_files:
+    for data_file in collect_runtime_assets():
         if data_file.exists():
             cmd.extend(["--add-data", f"{data_file}{os.pathsep}."])
 
