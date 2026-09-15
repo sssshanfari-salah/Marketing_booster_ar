@@ -134,6 +134,13 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(manager.clients[0].email, "nora@example.com")
         self.assertEqual(manager.clients[0].to_dict()["email"], "nora@example.com")
 
+    def test_duplicate_contact_number_is_rejected(self):
+        manager = ClientManager(self.file_path)
+        self.assertTrue(manager.add_client("Ali", "5551234", "Stationery"))
+        self.assertFalse(manager.add_client("Sara", "5551234", "Electronics"))
+        self.assertEqual(len(manager.clients), 1)
+        self.assertEqual(manager.clients[0].name, "Ali")
+
     def test_delete_client_removes_selected_client(self):
         manager = ClientManager(self.file_path)
         manager.add_client("Ali", "123", "Stationery")

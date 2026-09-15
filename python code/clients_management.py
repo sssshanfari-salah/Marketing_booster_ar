@@ -133,10 +133,26 @@ class ClientManager:
         self.clients = []
         self.load_clients()
 
+    def find_client_by_contact(self, contact: str, exclude_name: str = ""):
+        normalized_contact = format_contact_number(contact, DEFAULT_CONTACT_COUNTRY_CODE)
+        for client in self.clients:
+            if client.contact == normalized_contact and client.name.lower() != (exclude_name or "").lower():
+                return client
+        return None
+
     def add_client(self, name: str, contact: str, business: str, email: str = ""):
+        name = (name or "").strip()
+        if not name:
+            return False
+
+        existing = self.find_client_by_contact(contact, exclude_name=name)
+        if existing is not None:
+            return False
+
         client = Client(name, contact, business, email)
         self.clients.append(client)
         self.save_clients()
+        return True
 
     def delete_client(self, name: str):
         if not name or not isinstance(name, str):

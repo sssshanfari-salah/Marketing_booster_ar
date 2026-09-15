@@ -1714,6 +1714,14 @@ class ProgressApp(tk.Tk):
         self.client_manager.load_clients()
         existing = next((client for client in self.client_manager.clients if client.name.lower() == name.lower()), None)
         formatted_contact = format_contact_number(contact, country_code)
+        duplicate_contact = next(
+            (client for client in self.client_manager.clients if client.contact == formatted_contact and client.name.lower() != name.lower()),
+            None,
+        )
+
+        if duplicate_contact is not None:
+            messagebox.showwarning(T("Duplicate contact"), T("A client with this contact number already exists."))
+            return
 
         if existing is None:
             client = Client(name, formatted_contact, business, email)
@@ -1869,6 +1877,14 @@ class ProgressApp(tk.Tk):
         shop_number = self.shop_number_var.get().strip()
 
         formatted_contact = format_contact_number(contact, country_code)
+        duplicate_contact = next(
+            (client for client in self.client_manager.clients if client.contact == formatted_contact and client.name.lower() != name.lower()),
+            None,
+        )
+
+        if duplicate_contact is not None:
+            messagebox.showwarning(T("Duplicate contact"), T("A client with this contact number already exists."))
+            return
 
         if existing is None:
             client = Client(

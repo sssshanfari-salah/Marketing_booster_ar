@@ -67,5 +67,13 @@
     "email": "",
     "shop_number": "6",
     "reviews": []
+  },
+  {
+    "name": "Salim Salah",
+    "contact": "+96896181143",
+    "business": "sport shop",
+    "email": "",
+    "shop_number": "",
+    "reviews": []
   }
 ]
