@@ -1364,14 +1364,14 @@ class ProgressApp(tk.Tk):
         tasks_frame = self.tasks_frame
 
         all_tasks_label = ttk.Label(tasks_frame, text=T("All Tasks"), font=("Segoe UI", 10, "bold"))
-        all_tasks_label.grid(row=0, column=0, sticky="n", padx=(10, 0), pady=(6, 2))
+        all_tasks_label.grid(row=0, column=0, sticky="n", padx=(10, 0), pady=(0, 2))
         self.translatable_labels.append((all_tasks_label, "All Tasks"))
         pending_tasks_label = ttk.Label(tasks_frame, text=T("Pending Tasks"), font=("Segoe UI", 10, "bold"))
-        pending_tasks_label.grid(row=0, column=2, sticky="n", padx=(10, 0), pady=(6, 2))
+        pending_tasks_label.grid(row=0, column=2, sticky="n", padx=(10, 0), pady=(0, 2))
         self.translatable_labels.append((pending_tasks_label, "Pending Tasks"))
 
         list_area = ttk.Frame(tasks_frame)
-        list_area.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=(8, 0), pady=(0, 6))
+        list_area.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=(8, 0), pady=(0, 0))
         list_area.columnconfigure(0, weight=2)
         list_area.columnconfigure(1, weight=0)
         list_area.columnconfigure(2, weight=2)
@@ -1379,6 +1379,8 @@ class ProgressApp(tk.Tk):
 
         all_scroll = ttk.Scrollbar(list_area, orient="vertical")
         pending_scroll = ttk.Scrollbar(list_area, orient="vertical")
+        all_h_scroll = ttk.Scrollbar(list_area, orient="horizontal")
+        pending_h_scroll = ttk.Scrollbar(list_area, orient="horizontal")
 
         self.all_tasks_box = tk.Listbox(
             list_area,
@@ -1389,6 +1391,7 @@ class ProgressApp(tk.Tk):
             selectmode="browse",
             font=("Segoe UI", 10),
             yscrollcommand=all_scroll.set,
+            xscrollcommand=all_h_scroll.set,
             relief="solid",
             borderwidth=1,
         )
@@ -1401,17 +1404,22 @@ class ProgressApp(tk.Tk):
             selectmode="browse",
             font=("Segoe UI", 10),
             yscrollcommand=pending_scroll.set,
+            xscrollcommand=pending_h_scroll.set,
             relief="solid",
             borderwidth=1,
         )
 
         all_scroll.config(command=self.all_tasks_box.yview)
         pending_scroll.config(command=self.pending_tasks_box.yview)
+        all_h_scroll.config(command=self.all_tasks_box.xview)
+        pending_h_scroll.config(command=self.pending_tasks_box.xview)
 
         self.all_tasks_box.grid(row=0, column=0, sticky="nsew", padx=(0, 4), pady=(0, 0))
         all_scroll.grid(row=0, column=1, sticky="ns", padx=(0, 6), pady=(0, 0))
+        all_h_scroll.grid(row=1, column=0, columnspan=2, sticky="ew", padx=(0, 6), pady=(0, 0))
         self.pending_tasks_box.grid(row=0, column=2, sticky="nsew", padx=(0, 4), pady=(0, 0))
         pending_scroll.grid(row=0, column=3, sticky="ns", padx=(0, 0), pady=(0, 0))
+        pending_h_scroll.grid(row=1, column=2, columnspan=2, sticky="ew", padx=(0, 0), pady=(0, 0))
 
         button_row = ttk.Frame(tasks_frame)
         button_row.grid(row=1, column=4, sticky="nse", padx=(6, 8), pady=(0, 6))
