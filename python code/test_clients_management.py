@@ -176,12 +176,33 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(len(all_reviews), 1)
         self.assertEqual(all_reviews[0]["client_name"], "Ali")
 
+    def test_update_review_comment_matches_numbered_display_text(self):
+        manager = ClientManager(self.file_path)
+        manager.add_client("Ali", "123456", "Stationery")
+        manager.add_review("Ali", "Good follow-up and quick response.")
+
+        updated = manager.update_review_comment("Ali", "1. Good follow-up and quick response.", "Follow-up completed")
+
+        self.assertTrue(updated)
+        self.assertEqual(manager.clients[0].reviews[0]["comment"], "Follow-up completed")
+
     def test_parse_task_items_reads_comma_and_newline_lists(self):
         tasks = parse_task_items("Research, Design, Launch\nReview")
         self.assertEqual(tasks, ["Research", "Design", "Launch", "Review"])
 
         tasks = parse_task_items("", fallback_total=3)
         self.assertEqual(tasks, ["1", "2", "3"])
+
+    def test_parse_task_items_handles_numbered_bullet_entries(self):
+        tasks = parse_task_items("1. Research\n2. Design\n3) Launch")
+        self.assertEqual(tasks, ["Research", "Design", "Launch"])
+
+        self.assertEqual(parse_task_items("1) Review, 2) Final")[0], "Review")
+
+    def test_strip_task_number_prefix_handles_numbered_entries(self):
+        self.assertEqual(strip_task_number_prefix("1. Research"), "Research")
+        self.assertEqual(strip_task_number_prefix("2) Design"), "Design")
+        self.assertEqual(strip_task_number_prefix("3 - Launch"), "Launch")
 
     def test_progress_tracking_module_is_import_safe(self):
         module_path = Path(__file__).resolve().parent / "progress_tracking.py"

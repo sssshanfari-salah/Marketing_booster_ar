@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 import tempfile
 import webbrowser
@@ -136,11 +137,9 @@ def strip_task_number_prefix(task):
     text = str(task or "").strip()
     if not text:
         return ""
-    if "." in text:
-        prefix, remainder = text.split(".", 1)
-        if prefix.isdigit():
-            return remainder.strip()
-    return text
+
+    cleaned = re.sub(r"^\s*\d+\s*(?:[\.)\-:\]|]|\-\s*)\s*", "", text)
+    return cleaned.strip()
 
 
 def validate_contact_number(new_value):
@@ -698,8 +697,8 @@ def parse_task_items(raw_value, fallback_total=0):
         return [str(i) for i in range(1, fallback_total + 1)]
 
     items = []
-    for chunk in text.replace("\n", ",").split(","):
-        task = chunk.strip()
+    for chunk in re.split(r"[\n,;]+", text):
+        task = strip_task_number_prefix(chunk)
         if task:
             items.append(task)
 
@@ -1010,32 +1009,42 @@ class ClientReviewsLogWindow(tk.Toplevel):
     def __init__(self, master=None, manager=None):
         super().__init__(master)
         self.title(T("Client Reviews Log"))
-        self.geometry("900x500")
-        self.minsize(760, 360)
+        self.geometry("1100x560")
+        self.minsize(900, 420)
 
         self.manager = manager or ClientManager("clients.json")
         self.manager.load_clients()
 
         self.tree = ttk.Treeview(
             self,
-            columns=("client", "business", "date", "review"),
+            columns=("client", "business", "date", "review", "comment"),
             show="headings",
-            height=18,
+            height=16,
         )
         self.tree.heading("client", text=T("Client"))
         self.tree.heading("business", text=T("Business"))
         self.tree.heading("date", text=T("Date"))
         self.tree.heading("review", text=T("Review"))
-        self.tree.column("client", width=170, anchor="w")
+        self.tree.heading("comment", text=T("Comment"))
+        self.tree.column("client", width=150, anchor="w")
         self.tree.column("business", width=170, anchor="w")
-        self.tree.column("date", width=160, anchor="center")
-        self.tree.column("review", width=360, anchor="w")
+        self.tree.column("date", width=150, anchor="center")
+        self.tree.column("review", width=300, anchor="w")
+        self.tree.column("comment", width=280, anchor="w")
         self.tree.pack(fill="both", expand=True, padx=12, pady=(12, 8))
+        self.tree.bind("<<TreeviewSelect>>", self.on_review_selected)
+
+        comment_frame = ttk.Frame(self)
+        comment_frame.pack(fill="x", padx=12, pady=(0, 8))
+        ttk.Label(comment_frame, text=T("Comment")).pack(anchor="w")
+        self.comment_text = tk.Text(comment_frame, height=3, wrap="word", font=("Segoe UI", 10))
+        self.comment_text.pack(fill="x", pady=(4, 8))
 
         self.refresh_view()
 
         button_row = ttk.Frame(self)
         button_row.pack(pady=(0, 12))
+        ttk.Button(button_row, text=T("Save Comments"), command=self.save_selected_comment).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Close"), command=self.destroy).pack(side="left")
@@ -1054,8 +1063,49 @@ class ClientReviewsLogWindow(tk.Toplevel):
             for index, review in enumerate(reviews, start=1):
                 lines.append(f"{index}. {review.get('client_name', '')} | {review.get('business', '')} | {review.get('date', '')}")
                 lines.append(f"   {review.get('review', '')}")
+                comment = str(review.get('comment', '')).strip()
+                if comment:
+                    lines.append(f"   Comment: {comment}")
                 lines.append("")
         print_report_document(title, lines)
+
+    def on_review_selected(self, event=None):
+        selected = self.tree.selection()
+        if not selected:
+            self.comment_text.delete("1.0", tk.END)
+            return
+
+        values = self.tree.item(selected[0], "values")
+        if len(values) >= 5:
+            self.comment_text.delete("1.0", tk.END)
+            self.comment_text.insert("1.0", values[4])
+
+    def save_selected_comment(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning(T("No review selected"), T("Select a review row first."))
+            return
+
+        values = self.tree.item(selected[0], "values")
+        if len(values) < 5:
+            messagebox.showwarning(T("No review selected"), T("Select a review row first."))
+            return
+
+        client_name = values[0]
+        review_text = strip_task_number_prefix(values[3])
+        comment_text = self.comment_text.get("1.0", tk.END).strip()
+
+        if not client_name or not review_text:
+            messagebox.showwarning(T("No review selected"), T("Select a valid review row first."))
+            return
+
+        updated = self.manager.update_review_comment(client_name, review_text, comment_text)
+        if not updated:
+            messagebox.showwarning(T("Comment not saved"), T("The selected review could not be updated."))
+            return
+
+        self.refresh_view()
+        messagebox.showinfo(T("Comment saved"), T("Comment saved successfully."))
 
     def refresh_view(self):
         for item in self.tree.get_children():
@@ -1063,12 +1113,14 @@ class ClientReviewsLogWindow(tk.Toplevel):
 
         reviews = self.manager.get_all_reviews()
         if not reviews:
-            self.tree.insert("", tk.END, values=(T("No reviews yet"), "", "", ""))
+            self.tree.insert("", tk.END, values=(T("No reviews yet"), "", "", "", ""))
+            self.comment_text.delete("1.0", tk.END)
             return
 
         for index, review in enumerate(reviews, start=1):
             review_text = str(review.get("review", "")).strip()
             listed_review = f"{index}. {review_text}" if review_text else f"{index}."
+            comment_text = str(review.get("comment", "")).strip()
             self.tree.insert(
                 "",
                 tk.END,
@@ -1077,8 +1129,11 @@ class ClientReviewsLogWindow(tk.Toplevel):
                     review.get("business", ""),
                     review.get("date", ""),
                     listed_review,
+                    comment_text,
                 ),
             )
+
+        self.comment_text.delete("1.0", tk.END)
 
 
 class ProgressApp(tk.Tk):

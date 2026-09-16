@@ -8,7 +8,8 @@
     "reviews": [
       {
         "date": "2026-09-16 14:20:04",
-        "review": "hjkhkjh"
+        "review": "hjkhkjh",
+        "comment": ""
       }
     ]
   },
@@ -53,7 +54,18 @@
     "reviews": [
       {
         "date": "2026-09-03 11:35:02",
-        "review": "please make sure prayer room ac on all time during day time"
+        "review": "please make sure prayer room ac on all time during day time",
+        "comment": "care taker boy has been informed to keep ac on all day"
+      },
+      {
+        "date": "2026-09-16 15:49:35",
+        "review": "1.the shops are located in prime area\n2",
+        "comment": ""
+      },
+      {
+        "date": "2026-09-16 16:00:00",
+        "review": "provide extra car park shade for the shops",
+        "comment": "no car park shade planned for this project"
       }
     ]
   },

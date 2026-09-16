@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -46,9 +47,10 @@ class Client:
                     self.reviews.append({
                         "date": review.get("date", ""),
                         "review": review.get("review", ""),
+                        "comment": review.get("comment", ""),
                     })
                 elif isinstance(review, str):
-                    self.reviews.append({"date": "", "review": review})
+                    self.reviews.append({"date": "", "review": review, "comment": ""})
 
     def to_dict(self):
         return {
@@ -187,9 +189,39 @@ class ClientManager:
         client.reviews.append({
             "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "review": review,
+            "comment": "",
         })
         self.save_clients()
         return True
+
+    def update_review_comment(self, client_name: str, review_text: str, comment: str, date: str = ""):
+        if not client_name or not isinstance(client_name, str):
+            return False
+
+        review = re.sub(r"^\s*\d+\s*(?:[\.)\-:\]|]|\-\s*)\s*", "", str(review_text or "").strip())
+        if not review:
+            return False
+
+        target_client = next((item for item in self.clients if item.name.lower() == client_name.strip().lower()), None)
+        if target_client is None:
+            return False
+
+        comment_text = str(comment or "").strip()
+        for item in target_client.reviews:
+            existing_review = re.sub(r"^\s*\d+\s*(?:[\.)\-:\]|]|\-\s*)\s*", "", str(item.get("review", "")).strip())
+            same_date = not date or str(item.get("date", "")).strip() == str(date).strip()
+            if existing_review == review and same_date:
+                item["comment"] = comment_text
+                self.save_clients()
+                return True
+
+        for item in target_client.reviews:
+            if re.sub(r"^\s*\d+\s*(?:[\.)\-:\]|]|\-\s*)\s*", "", str(item.get("review", "")).strip()) == review:
+                item["comment"] = comment_text
+                self.save_clients()
+                return True
+
+        return False
 
     def get_all_reviews(self):
         reviews = []
@@ -202,6 +234,7 @@ class ClientManager:
                     "email": client.email,
                     "date": review.get("date", ""),
                     "review": review.get("review", ""),
+                    "comment": review.get("comment", ""),
                 })
 
         reviews.sort(key=lambda item: (item.get("date", "") or "", item.get("client_name", "").lower()))
