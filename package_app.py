@@ -11,7 +11,7 @@ ENTRY_SCRIPT = SOURCE_DIR / "main.py"
 DIST_DIR = APP_DIR / "dist"
 BUILD_DIR = APP_DIR / "build"
 APP_NAME = "marketing_booster_ar"
-APP_DISPLAY_NAME = "Starco Commercial Complex"
+APP_DISPLAY_NAME = "Clients Manager"
 DEFAULT_COUNTRY_CODE = "+968"
 SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
 

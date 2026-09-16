@@ -232,6 +232,17 @@ class ClientManagerTests(unittest.TestCase):
         self.assertGreaterEqual(source.count("xscrollcommand="), 2)
         self.assertGreaterEqual(source.count("orient=\"horizontal\""), 2)
 
+    def test_package_metadata_matches_current_clients_manager_app(self):
+        try:
+            from package_app import APP_DISPLAY_NAME, resolve_target_icon
+        except ImportError:
+            self.fail("package_app is not importable from the project root")
+
+        self.assertEqual(APP_DISPLAY_NAME, "Clients Manager")
+        icon_path = resolve_target_icon()
+        self.assertTrue(icon_path.exists())
+        self.assertIn("starco_icon.ico", icon_path.name)
+
 
 if __name__ == "__main__":
     unittest.main()
