@@ -5,7 +5,12 @@
     "business": "machineries suppliers 'Hilti'",
     "email": "",
     "shop_number": "",
-    "reviews": []
+    "reviews": [
+      {
+        "date": "2026-09-16 14:20:04",
+        "review": "hjkhkjh"
+      }
+    ]
   },
   {
     "name": "Bin Salim",

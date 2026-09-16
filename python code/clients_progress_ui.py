@@ -156,6 +156,10 @@ TRANSLATIONS = {
         "No task selected": "No task selected",
         "Select a task from the pending list first.": "Select a task from the pending list first.",
         "Client Progress Manager": "Clients Manager",
+        "Welcome to Starco Commercial Complex": "Welcome to Starco Commercial Complex",
+        "Welcome to Starco Commercial Complex Arabic": "مرحبًا بكم في مجمع ستاركو التجاري",
+        "Overview": "Overview",
+        "Exit": "Exit",
         "Client Details": "Client Details",
         "Client Name": "Client Name",
         "Country": "Country",
@@ -228,11 +232,16 @@ TRANSLATIONS = {
         "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.": "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.",
         "Task Details - {client_name}": "Task Details - {client_name}",
         "<New Client>": "<New Client>",
-        "Select an existing client first.": "Select an existing client first.",
+        "Select an existing client first.": "Select client first.",
         "Client saved": "Client saved",
         "'{name}' was saved successfully.": "'{name}' was saved successfully.",
         "No client plan": "No client plan",
         "Select a task from the pending list.": "Select a task from the pending list.",
+        "Save Review": "Save Review",
+        "Save Task": "Save Task",
+        "Delete Tasks": "Delete Tasks",
+        "Clients name missing": "Clients name missing",
+        "Please fill the client name field first.": "Please fill the client name field first.",
         "No review": "No review",
         "Please type a review before saving it.": "Please type a review before saving it.",
         "Task {i}": "Task {i}",
@@ -245,7 +254,8 @@ TRANSLATIONS = {
         "Browse": "Browse",
         "Export Client Log": "Export Client Log",
         "Export Task Log": "Export Task Log",
-        "Export Observation Log": "Export Observation Log",
+        "Export Review Log": "Export Review Log",
+        "Export Observation Log": "Export Review Log",
         "Export Clients Log": "Export Clients Log",
         "No printers registered on this laptop.": "No printers registered on this laptop.",
         "Copy vCard (.vcf)": "Copy vCard (.vcf)",
@@ -266,6 +276,10 @@ TRANSLATIONS = {
         "No task selected": "لم يتم تحديد أي مهمة",
         "Select a task from the pending list first.": "حدد مهمة من القائمة المعلقة أولاً.",
         "Client Progress Manager": "مدير العملاء",
+        "Welcome to Starco Commercial Complex": "Welcome to Starco Commercial Complex",
+        "Welcome to Starco Commercial Complex Arabic": "مرحبًا بكم في مجمع ستاركو التجاري",
+        "Overview": "نظرة عامة",
+        "Exit": "خروج",
         "Client Details": "تفاصيل العميل",
         "Client Name": "اسم العميل",
         "Country": "الدولة",
@@ -338,11 +352,16 @@ TRANSLATIONS = {
         "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.": "أنت تخرج من التطبيق. تأكد من حفظ جميع البيانات المدخلة، وإلا استمر في الخروج.",
         "Task Details - {client_name}": "تفاصيل المهام - {client_name}",
         "<New Client>": "<عميل جديد>",
-        "Select an existing client first.": "حدد عميلًا موجودًا أولاً.",
+        "Select an existing client first.": "حدد العميل أولاً.",
         "Client saved": "تم حفظ العميل",
         "'{name}' was saved successfully.": "تم حفظ '{name}' بنجاح.",
         "No client plan": "لا توجد خطة عميل",
         "Select a task from the pending list.": "حدد مهمة من القائمة المعلقة.",
+        "Save Review": "حفظ الملاحظة",
+        "Save Task": "حفظ المهمة",
+        "Delete Tasks": "حذف المهام",
+        "Clients name missing": "اسم العميل مفقود",
+        "Please fill the client name field first.": "يرجى ملء حقل اسم العميل أولاً.",
         "No review": "لا توجد مراجعة",
         "Please type a review before saving it.": "يرجى كتابة ملاحظة قبل حفظها.",
         "Task {i}": "المهمة {i}",
@@ -355,7 +374,8 @@ TRANSLATIONS = {
         "Browse": "تصفح",
         "Export Client Log": "تصدير سجل العميل",
         "Export Task Log": "تصدير سجل المهام",
-        "Export Observation Log": "تصدير سجل الملاحظات",
+        "Export Review Log": "تصدير سجل المراجعات",
+        "Export Observation Log": "تصدير سجل المراجعات",
         "Export Clients Log": "تصدير سجل العملاء",
         "No printers registered on this laptop.": "لا توجد طابعات مسجلة في هذا الجهاز.",
         "Copy vCard (.vcf)": "نسخ vCard (.vcf)",
@@ -573,11 +593,19 @@ class WelcomeWindow(tk.Tk):
 
         title = ttk.Label(
             header,
-            text="Welcome to Starco Commercial Complex",
+            text=T("Welcome to Starco Commercial Complex"),
             font=("Segoe UI", 18, "bold"),
             foreground="#111827",
         )
         title.pack(anchor="center", pady=(8, 0))
+
+        subtitle = ttk.Label(
+            header,
+            text=T("Welcome to Starco Commercial Complex Arabic"),
+            font=("Segoe UI", 12),
+            foreground="#374151",
+        )
+        subtitle.pack(anchor="center", pady=(0, 4))
 
         main_frame = ttk.Frame(self, padding=(24, 8, 24, 18))
         main_frame.pack(fill="both", expand=True)
@@ -585,7 +613,7 @@ class WelcomeWindow(tk.Tk):
         main_frame.rowconfigure(0, weight=1)
 
         buttons = [
-            ("Overview", self._open_progress_panel),
+            (T("Overview"), self._open_progress_panel),
         ]
 
         for index, (label_text, command) in enumerate(buttons):
@@ -600,7 +628,7 @@ class WelcomeWindow(tk.Tk):
 
         footer = ttk.Frame(self, padding=(0, 0, 24, 18))
         footer.pack(fill="x")
-        exit_button = ttk.Button(footer, text="Exit", command=self.destroy, style="Action.TButton", width=14)
+        exit_button = ttk.Button(footer, text=T("Exit"), command=self.destroy, style="Action.TButton", width=14)
         exit_button.pack(anchor="center")
 
     def _open_progress_panel(self):
@@ -767,6 +795,7 @@ class TaskDetailsWindow(tk.Toplevel):
         button_row.pack(fill="x", pady=(0, 8))
         ttk.Button(button_row, text=T("Edit"), command=self.edit_selected_task).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Mark Done"), command=self.mark_selected_done).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Delete Tasks"), command=self.delete_selected_task).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Close"), command=self.close_window).pack(side="left")
@@ -855,6 +884,31 @@ class TaskDetailsWindow(tk.Toplevel):
 
         task = strip_task_number_prefix(self.pending_box.get(selected[0]))
         self.plan.complete_task(task)
+
+        if self.master_app and hasattr(self.master_app, "refresh_display"):
+            self.master_app.refresh_display()
+
+        self.populate_lists(all_tasks=self.plan.all_tasks, pending_tasks=self.plan.pending_tasks)
+
+    def delete_selected_task(self):
+        if self.plan is None:
+            messagebox.showwarning(T("No task plan"), T("There is no active task plan to update."))
+            return
+
+        selected = self.pending_box.curselection() or self.all_box.curselection()
+        if not selected:
+            messagebox.showwarning(T("No task selected"), T("Select a task first."))
+            return
+
+        source = self.pending_box if self.pending_box.curselection() else self.all_box
+        task = strip_task_number_prefix(source.get(selected[0]))
+
+        if task in self.plan.pending_tasks:
+            self.plan.pending_tasks.remove(task)
+        if task in self.plan.all_tasks:
+            self.plan.all_tasks.remove(task)
+
+        self.plan.sync_task_lists(all_tasks=self.plan.all_tasks, pending_tasks=self.plan.pending_tasks)
 
         if self.master_app and hasattr(self.master_app, "refresh_display"):
             self.master_app.refresh_display()
@@ -1166,8 +1220,8 @@ class ProgressApp(tk.Tk):
         self.details_frame = ttk.LabelFrame(main, text=T("Client Details"), style="Section.TLabelframe")
         self.translatable_labels.append((self.details_frame, "Client Details"))
         self.details_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=(0, 6), pady=(0, 8))
-        self.details_frame.columnconfigure(1, weight=1)
         details_frame = self.details_frame
+        details_frame.columnconfigure(1, weight=1)
 
         client_name_label = ttk.Label(details_frame, text=f"👤 {T('Client Name')}", font=("Segoe UI", 10, "bold"))
         client_name_label.grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 6))
@@ -1219,17 +1273,57 @@ class ProgressApp(tk.Tk):
         self.review_frame.columnconfigure(0, weight=1)
         review_frame = self.review_frame
 
+        review_frame.columnconfigure(0, weight=0)
+        review_frame.columnconfigure(1, weight=1)
+
+        client_actions_frame = tk.Frame(review_frame, bg="#edf6ff", bd=1, highlightthickness=1, highlightbackground="#c9d8ea")
+        client_actions_frame.grid(row=0, column=0, rowspan=2, sticky="ns", padx=(10, 6), pady=(8, 8))
+        client_actions_frame.grid_columnconfigure(0, weight=1)
+
+        client_action_specs = [
+            (T("Save Client"), self.save_current_client, 18),
+            (T("All Clients"), self.open_all_clients, 18),
+            (T("Export Client Log"), self.export_client_log, None),
+        ]
+
+        for idx, (text, command, width) in enumerate(client_action_specs):
+            button = ttk.Button(
+                client_actions_frame,
+                text=text,
+                command=command,
+                style="Action.TButton",
+                width=width if width is not None else 20,
+            )
+            button.grid(row=idx, column=0, sticky="ew", padx=(8, 8), pady=(6, 0))
+            self.translatable_buttons.append((button, text))
+
         self.review_text = tk.Text(review_frame, width=30, height=4, wrap="word", font=("Segoe UI", 9))
-        self.review_text.grid(row=0, column=0, sticky="nsew", padx=(10, 10), pady=(8, 6))
+        self.review_text.grid(row=0, column=1, sticky="nsew", padx=(0, 10), pady=(8, 6))
 
         review_buttons = ttk.Frame(review_frame)
-        review_buttons.grid(row=1, column=0, sticky="w", padx=(10, 10), pady=(0, 8))
-        add_review_button = ttk.Button(review_buttons, text=T("Add Review"), command=self.add_client_review, style="Action.TButton")
-        add_review_button.pack(side="left", padx=(0, 8))
-        self.translatable_buttons.append((add_review_button, "Add Review"))
-        open_log_button = ttk.Button(review_buttons, text=T("Open Review Log"), command=self.open_reviews_log, style="Action.TButton")
-        open_log_button.pack(side="left")
-        self.translatable_buttons.append((open_log_button, "Open Review Log"))
+        review_buttons.grid(row=1, column=1, sticky="nsew", padx=(0, 10), pady=(0, 8))
+        for col_index in range(2):
+            review_buttons.columnconfigure(col_index, weight=1)
+
+        review_action_specs = [
+            (T("Add Review"), self.add_client_review, None),
+            (T("Save Review"), self.save_client_review, None),
+            (T("Export Review Log"), self.export_observation_log, None),
+            (T("Open Review Log"), self.open_reviews_log, None),
+        ]
+
+        for idx, (text, command, width) in enumerate(review_action_specs):
+            row = idx // 2
+            col = idx % 2
+            button = ttk.Button(
+                review_buttons,
+                text=text,
+                command=command,
+                style="Action.TButton",
+                width=width if width is not None else 20,
+            )
+            button.grid(row=row, column=col, sticky="ew", padx=(0, 8), pady=(0, 6))
+            self.translatable_buttons.append((button, text))
 
         self.progress_box = ttk.LabelFrame(main, text=T("Progress Overview"), style="Section.TLabelframe")
         self.translatable_labels.append((self.progress_box, "Progress Overview"))
@@ -1253,20 +1347,6 @@ class ProgressApp(tk.Tk):
         self.translatable_labels.append((total_tasks_label, "Total Tasks"))
         self.total_entry = ttk.Entry(progress_box, textvariable=self.total_tasks_var, state="readonly")
         self.total_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 4))
-
-        action_row = ttk.Frame(progress_box)
-        action_row.grid(row=3, column=0, columnspan=2, sticky="ew", padx=(10, 10), pady=(0, 6))
-        action_row.columnconfigure(0, weight=1)
-        action_row.columnconfigure(1, weight=1)
-
-        action_center = ttk.Frame(action_row)
-        action_center.grid(row=0, column=0, columnspan=2, sticky="n")
-        save_client_button = ttk.Button(action_center, text=T("Save Client"), command=self.save_current_client, style="Action.TButton", width=18)
-        save_client_button.pack(side="left", padx=(0, 8))
-        self.translatable_buttons.append((save_client_button, "Save Client"))
-        all_clients_button = ttk.Button(action_center, text=T("All Clients"), command=self.open_all_clients, style="Action.TButton", width=18)
-        all_clients_button.pack(side="left")
-        self.translatable_buttons.append((all_clients_button, "All Clients"))
 
         self.tasks_frame = ttk.LabelFrame(main, text=T("Tasks"), style="Section.TLabelframe")
         self.translatable_labels.append((self.tasks_frame, "Tasks"))
@@ -1347,8 +1427,6 @@ class ProgressApp(tk.Tk):
             (T("Tasks Details"), self.open_task_details_window),
             (T("Refresh Progress"), self.refresh_display),
             (T("Export Task Log"), self.export_task_log),
-            (T("Export Observation Log"), self.export_observation_log),
-            (T("Export Client Log"), self.export_client_log),
         ]
 
         for idx, (text, command) in enumerate(action_buttons):
@@ -1370,8 +1448,11 @@ class ProgressApp(tk.Tk):
         new_task_label.pack(side="left", padx=(0, 6))
         self.translatable_labels.append((new_task_label, "New task"))
         self.new_task_entry = ttk.Entry(task_entry_row, textvariable=self.new_task_var)
-        self.new_task_entry.bind("<Return>", lambda event: self.add_task())
+        self.new_task_entry.bind("<Return>", lambda event: self.save_task())
         self.new_task_entry.pack(side="left", fill="x", expand=True)
+        save_task_button = ttk.Button(task_entry_row, text=T("Save Task"), command=self.save_task, style="Action.TButton", width=14)
+        save_task_button.pack(side="left", padx=(6, 0))
+        self.translatable_buttons.append((save_task_button, "Save Task"))
 
         main.rowconfigure(4, weight=2)
         tasks_frame.rowconfigure(1, weight=1)
@@ -1608,18 +1689,54 @@ class ProgressApp(tk.Tk):
             pending_tasks=list(self.plan.pending_tasks),
         )
 
+    def focus_client_name_field(self):
+        if hasattr(self, "client_combo") and self.client_combo.winfo_exists():
+            self.client_combo.focus_set()
+            try:
+                self.client_combo.icursor(len(self.client_combo.get()))
+            except Exception:
+                pass
+            return True
+        return False
+
     def add_task(self):
+        name = self.client_name_var.get().strip()
+        if not name or name == T("<New Client>"):
+            self.focus_client_name_field()
+            messagebox.showwarning(T("Clients name missing"), T("Clients name missing"))
+            return
+
         if self.plan is None:
+            self.focus_client_name_field()
+            messagebox.showwarning(T("No client plan"), T("Create a client plan first."))
+            return
+
+        self.new_task_entry.focus_set()
+        self.new_task_entry.icursor(len(self.new_task_entry.get()))
+
+    def save_task(self):
+        name = self.client_name_var.get().strip()
+        if not name or name == T("<New Client>"):
+            self.focus_client_name_field()
+            messagebox.showwarning(T("Clients name missing"), T("Clients name missing"))
+            return
+
+        if self.plan is None:
+            self.focus_client_name_field()
             messagebox.showwarning(T("No client plan"), T("Create a client plan first."))
             return
 
         task = self.new_task_var.get().strip()
         if not task:
+            self.new_task_entry.focus_set()
+            self.new_task_entry.icursor(len(self.new_task_entry.get()))
             return
 
         self.plan.add_pending_task(task)
         self.refresh_display()
         self.new_task_var.set("")
+        self.new_task_entry.focus_set()
+        self.new_task_entry.icursor(0)
 
     def complete_selected_task(self):
         if self.plan is None:
@@ -1823,12 +1940,25 @@ class ProgressApp(tk.Tk):
     def add_client_review(self):
         name = self.client_name_var.get().strip()
         if not name or name == T("<New Client>"):
-            messagebox.showwarning(T("No client selected"), T("Select or create a client before adding a review."))
+            self.focus_client_name_field()
+            messagebox.showwarning(T("Clients name missing"), T("Please fill the client name field first."))
+            return
+
+        self.review_text.focus_set()
+        self.review_text.mark_set("insert", "1.0")
+
+    def save_client_review(self):
+        name = self.client_name_var.get().strip()
+        if not name or name == T("<New Client>"):
+            self.focus_client_name_field()
+            messagebox.showwarning(T("No client selected"), T("Select client first."))
             return
 
         review = self.review_text.get("1.0", "end").strip()
         if not review:
             messagebox.showwarning(T("No review"), T("Please type a review before saving it."))
+            self.review_text.focus_set()
+            self.review_text.mark_set("insert", "1.0")
             return
 
         if not self.client_manager.add_review(name, review):
@@ -1836,6 +1966,8 @@ class ProgressApp(tk.Tk):
             return
 
         self.review_text.delete("1.0", tk.END)
+        self.review_text.focus_set()
+        self.review_text.mark_set("insert", "1.0")
         messagebox.showinfo(T("Review saved"), T("Review saved for '{name}'.", name=name))
 
     def open_reviews_log(self):
@@ -1868,12 +2000,12 @@ class ProgressApp(tk.Tk):
         destination.write_text("\n".join(str(item) for item in report_lines), encoding="utf-8")
         messagebox.showinfo(T("Export Task Log"), f"Saved: {destination}")
 
-    def export_observation_log(self):
+    def export_review_log(self):
         default_dir = resolve_log_output_dir("observation_logs")
-        default_path = default_dir / "observation_log.txt"
+        default_path = default_dir / "review_log.txt"
         target = filedialog.asksaveasfilename(
-            title=T("Export Observation Log"),
-            initialfile="observation_log.txt",
+            title=T("Export Review Log"),
+            initialfile="review_log.txt",
             defaultextension=".txt",
             filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
             initialdir=str(default_dir),
@@ -1882,12 +2014,15 @@ class ProgressApp(tk.Tk):
             return
         destination = Path(target)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        lines = [T("Observation log"), ""]
+        lines = [T("Review log"), ""]
         name = self.client_name_var.get().strip() or T("No client selected")
-        review = self.review_text.get("1.0", "end").strip() or T("No observation entered")
-        lines.extend([f"Client: {name}", f"Observation: {review}"])
+        review = self.review_text.get("1.0", "end").strip() or T("No review")
+        lines.extend([f"Client: {name}", f"Review: {review}"])
         destination.write_text("\n".join(str(item) for item in lines), encoding="utf-8")
-        messagebox.showinfo(T("Export Observation Log"), f"Saved: {destination}")
+        messagebox.showinfo(T("Export Review Log"), f"Saved: {destination}")
+
+    def export_observation_log(self):
+        self.export_review_log()
 
     def open_client_window(self, client_name=None):
         ClientDetailsWindow(self, client_name=client_name or self.client_name_var.get().strip(), master_manager=self.client_manager)
