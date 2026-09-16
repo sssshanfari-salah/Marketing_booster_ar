@@ -53,6 +53,7 @@ def get_emoji_font_families():
 
 def configure_emoji_label(widget, text, *, size=10, bold=False):
     widget.configure(text=text)
+    widget._emoji_prefix = getattr(widget, "_emoji_prefix", "")
     weight = "bold" if bold else "normal"
     for family in get_emoji_font_families():
         try:
@@ -61,6 +62,12 @@ def configure_emoji_label(widget, text, *, size=10, bold=False):
         except tk.TclError:
             continue
     return False
+
+
+def set_emoji_translated_label(widget, original_text, emoji_prefix=""):
+    widget._emoji_prefix = emoji_prefix
+    widget.configure(text=f"{emoji_prefix}{T(original_text)}")
+    configure_emoji_label(widget, f"{emoji_prefix}{T(original_text)}")
 
 
 def resolve_log_output_dir(log_type="general"):
@@ -1044,9 +1051,9 @@ class ClientReviewsLogWindow(tk.Toplevel):
         if not reviews:
             lines.append(T("No reviews yet"))
         else:
-            for review in reviews:
-                lines.append(f"{review.get('client_name', '')} | {review.get('business', '')} | {review.get('date', '')}")
-                lines.append(f"{review.get('review', '')}")
+            for index, review in enumerate(reviews, start=1):
+                lines.append(f"{index}. {review.get('client_name', '')} | {review.get('business', '')} | {review.get('date', '')}")
+                lines.append(f"   {review.get('review', '')}")
                 lines.append("")
         print_report_document(title, lines)
 
@@ -1059,7 +1066,9 @@ class ClientReviewsLogWindow(tk.Toplevel):
             self.tree.insert("", tk.END, values=(T("No reviews yet"), "", "", ""))
             return
 
-        for review in reviews:
+        for index, review in enumerate(reviews, start=1):
+            review_text = str(review.get("review", "")).strip()
+            listed_review = f"{index}. {review_text}" if review_text else f"{index}."
             self.tree.insert(
                 "",
                 tk.END,
@@ -1067,7 +1076,7 @@ class ClientReviewsLogWindow(tk.Toplevel):
                     review.get("client_name", ""),
                     review.get("business", ""),
                     review.get("date", ""),
-                    review.get("review", ""),
+                    listed_review,
                 ),
             )
 
@@ -1248,7 +1257,7 @@ class ProgressApp(tk.Tk):
         details_frame.columnconfigure(1, weight=1)
 
         client_name_label = ttk.Label(details_frame, text=f"👤 {T('Client Name')}")
-        configure_emoji_label(client_name_label, f"👤 {T('Client Name')}", size=10, bold=True)
+        set_emoji_translated_label(client_name_label, "Client Name", "👤 ")
         client_name_label.grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 6))
         self.translatable_labels.append((client_name_label, "Client Name"))
         self.client_combo = ttk.Combobox(details_frame, textvariable=self.client_name_var, state="normal")
@@ -1257,7 +1266,7 @@ class ProgressApp(tk.Tk):
         self.refresh_client_combo()
 
         country_label = ttk.Label(details_frame, text=f"🌍 {T('Country')}")
-        configure_emoji_label(country_label, f"🌍 {T('Country')}", size=10, bold=True)
+        set_emoji_translated_label(country_label, "Country", "🌍 ")
         country_label.grid(row=1, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((country_label, "Country"))
         self.country_combo = ttk.Combobox(details_frame, textvariable=self.country_name_var, values=COUNTRY_OPTIONS, state="readonly")
@@ -1265,7 +1274,7 @@ class ProgressApp(tk.Tk):
         self.country_combo.current(COUNTRY_OPTIONS.index(DEFAULT_COUNTRY) if DEFAULT_COUNTRY in COUNTRY_OPTIONS else 0)
 
         contact_label = ttk.Label(details_frame, text=f"📞 {T('Contact')}")
-        configure_emoji_label(contact_label, f"📞 {T('Contact')}", size=10, bold=True)
+        set_emoji_translated_label(contact_label, "Contact", "📞 ")
         contact_label.grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((contact_label, "Contact"))
         self.contact_entry = ttk.Entry(
@@ -1277,28 +1286,28 @@ class ProgressApp(tk.Tk):
         self.contact_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
         email_label = ttk.Label(details_frame, text=f"✉️ {T('Email')}")
-        configure_emoji_label(email_label, f"✉️ {T('Email')}", size=10, bold=True)
+        set_emoji_translated_label(email_label, "Email", "✉️ ")
         email_label.grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((email_label, "Email"))
         self.email_entry = ttk.Entry(details_frame, textvariable=self.email_var)
         self.email_entry.grid(row=3, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
         business_label = ttk.Label(details_frame, text=f"🏢 {T('Business')}")
-        configure_emoji_label(business_label, f"🏢 {T('Business')}", size=10, bold=True)
+        set_emoji_translated_label(business_label, "Business", "🏢 ")
         business_label.grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((business_label, "Business"))
         self.business_entry = ttk.Entry(details_frame, textvariable=self.business_var)
         self.business_entry.grid(row=4, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
         shop_label = ttk.Label(details_frame, text=f"🏪 {T('Shop Number')}")
-        configure_emoji_label(shop_label, f"🏪 {T('Shop Number')}", size=10, bold=True)
+        set_emoji_translated_label(shop_label, "Shop Number", "🏪 ")
         shop_label.grid(row=5, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
         self.translatable_labels.append((shop_label, "Shop Number"))
         self.shop_number_entry = ttk.Entry(details_frame, textvariable=self.shop_number_var)
         self.shop_number_entry.grid(row=5, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
         self.review_frame = ttk.LabelFrame(main, text=f"📝 {T('Client Review')}", style="Section.TLabelframe")
-        configure_emoji_label(self.review_frame, f"📝 {T('Client Review')}", size=10, bold=True)
+        set_emoji_translated_label(self.review_frame, "Client Review", "📝 ")
         self.translatable_labels.append((self.review_frame, "Client Review"))
         self.review_frame.grid(row=1, column=2, columnspan=2, sticky="nsew", padx=(6, 0), pady=(0, 8))
         self.review_frame.columnconfigure(0, weight=1)
@@ -1501,7 +1510,13 @@ class ProgressApp(tk.Tk):
     def refresh_lang_ui(self):
         for widget, original_text in getattr(self, "translatable_labels", []):
             try:
-                widget.configure(text=T(original_text))
+                emoji_prefix = getattr(widget, "_emoji_prefix", "")
+                if emoji_prefix:
+                    updated_text = f"{emoji_prefix}{T(original_text)}"
+                    widget.configure(text=updated_text)
+                    configure_emoji_label(widget, updated_text, size=10, bold=True)
+                else:
+                    widget.configure(text=T(original_text))
             except Exception:
                 pass
 
