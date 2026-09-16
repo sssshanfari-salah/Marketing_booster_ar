@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from clients_management import Client, ClientManager, build_clients_report_text, format_contact_number
-from clients_progress_ui import Plan, ProgressApp, T, parse_task_items, resolve_log_output_dir, set_language
+from clients_progress_ui import Plan, ProgressApp, T, get_emoji_font_families, parse_task_items, resolve_log_output_dir, set_language
 from sync_documents import TARGET
 
 try:
@@ -231,6 +231,11 @@ class ClientManagerTests(unittest.TestCase):
 
         self.assertGreaterEqual(source.count("xscrollcommand="), 2)
         self.assertGreaterEqual(source.count("orient=\"horizontal\""), 2)
+
+    def test_emoji_font_families_include_windows_emoji_support(self):
+        families = get_emoji_font_families()
+        self.assertIn("Segoe UI Emoji", families)
+        self.assertIn("Segoe UI Symbol", families)
 
     def test_package_metadata_matches_current_clients_manager_app(self):
         try:

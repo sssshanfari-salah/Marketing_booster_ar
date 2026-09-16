@@ -39,6 +39,30 @@ CURRENT_LANGUAGE = "eng"
 COUNTRY_CODES_PATH = Path(__file__).resolve().parent / "country_codes.json"
 
 
+def get_emoji_font_families():
+    return [
+        "Segoe UI Emoji",
+        "Segoe UI Symbol",
+        "Apple Color Emoji",
+        "Noto Color Emoji",
+        "Twemoji",
+        "Segoe UI",
+        "Arial Unicode MS",
+    ]
+
+
+def configure_emoji_label(widget, text, *, size=10, bold=False):
+    widget.configure(text=text)
+    weight = "bold" if bold else "normal"
+    for family in get_emoji_font_families():
+        try:
+            widget.configure(font=(family, size, weight))
+            return True
+        except tk.TclError:
+            continue
+    return False
+
+
 def resolve_log_output_dir(log_type="general"):
     root_dir = Path(__file__).resolve().parent.parent
     if getattr(sys, "_MEIPASS", None):
@@ -1223,7 +1247,8 @@ class ProgressApp(tk.Tk):
         details_frame = self.details_frame
         details_frame.columnconfigure(1, weight=1)
 
-        client_name_label = ttk.Label(details_frame, text=f"👤 {T('Client Name')}", font=("Segoe UI", 10, "bold"))
+        client_name_label = ttk.Label(details_frame, text=f"👤 {T('Client Name')}")
+        configure_emoji_label(client_name_label, f"👤 {T('Client Name')}", size=10, bold=True)
         client_name_label.grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 6))
         self.translatable_labels.append((client_name_label, "Client Name"))
         self.client_combo = ttk.Combobox(details_frame, textvariable=self.client_name_var, state="normal")
@@ -1231,14 +1256,16 @@ class ProgressApp(tk.Tk):
         self.client_combo.bind("<<ComboboxSelected>>", self.on_client_name_selected)
         self.refresh_client_combo()
 
-        country_label = ttk.Label(details_frame, text=f"🌍 {T('Country')}", font=("Segoe UI", 10, "bold"))
+        country_label = ttk.Label(details_frame, text=f"🌍 {T('Country')}")
+        configure_emoji_label(country_label, f"🌍 {T('Country')}", size=10, bold=True)
         country_label.grid(row=1, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((country_label, "Country"))
         self.country_combo = ttk.Combobox(details_frame, textvariable=self.country_name_var, values=COUNTRY_OPTIONS, state="readonly")
         self.country_combo.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
         self.country_combo.current(COUNTRY_OPTIONS.index(DEFAULT_COUNTRY) if DEFAULT_COUNTRY in COUNTRY_OPTIONS else 0)
 
-        contact_label = ttk.Label(details_frame, text=f"📞 {T('Contact')}", font=("Segoe UI", 10, "bold"))
+        contact_label = ttk.Label(details_frame, text=f"📞 {T('Contact')}")
+        configure_emoji_label(contact_label, f"📞 {T('Contact')}", size=10, bold=True)
         contact_label.grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((contact_label, "Contact"))
         self.contact_entry = ttk.Entry(
@@ -1249,25 +1276,29 @@ class ProgressApp(tk.Tk):
         )
         self.contact_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        email_label = ttk.Label(details_frame, text=f"✉️ {T('Email')}", font=("Segoe UI", 10, "bold"))
+        email_label = ttk.Label(details_frame, text=f"✉️ {T('Email')}")
+        configure_emoji_label(email_label, f"✉️ {T('Email')}", size=10, bold=True)
         email_label.grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((email_label, "Email"))
         self.email_entry = ttk.Entry(details_frame, textvariable=self.email_var)
         self.email_entry.grid(row=3, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        business_label = ttk.Label(details_frame, text=f"🏢 {T('Business')}", font=("Segoe UI", 10, "bold"))
+        business_label = ttk.Label(details_frame, text=f"🏢 {T('Business')}")
+        configure_emoji_label(business_label, f"🏢 {T('Business')}", size=10, bold=True)
         business_label.grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((business_label, "Business"))
         self.business_entry = ttk.Entry(details_frame, textvariable=self.business_var)
         self.business_entry.grid(row=4, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        shop_label = ttk.Label(details_frame, text=f"🏪 {T('Shop Number')}", font=("Segoe UI", 10, "bold"))
+        shop_label = ttk.Label(details_frame, text=f"🏪 {T('Shop Number')}")
+        configure_emoji_label(shop_label, f"🏪 {T('Shop Number')}", size=10, bold=True)
         shop_label.grid(row=5, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
         self.translatable_labels.append((shop_label, "Shop Number"))
         self.shop_number_entry = ttk.Entry(details_frame, textvariable=self.shop_number_var)
         self.shop_number_entry.grid(row=5, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
         self.review_frame = ttk.LabelFrame(main, text=f"📝 {T('Client Review')}", style="Section.TLabelframe")
+        configure_emoji_label(self.review_frame, f"📝 {T('Client Review')}", size=10, bold=True)
         self.translatable_labels.append((self.review_frame, "Client Review"))
         self.review_frame.grid(row=1, column=2, columnspan=2, sticky="nsew", padx=(6, 0), pady=(0, 8))
         self.review_frame.columnconfigure(0, weight=1)
