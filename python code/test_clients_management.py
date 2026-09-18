@@ -118,6 +118,23 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("TEL;TYPE=CELL:+968555123456", vcard)
         self.assertIn("EMAIL:nora@example.com", vcard)
 
+    def test_client_progress_persists_with_client_record(self):
+        manager = ClientManager(self.file_path)
+        manager.add_client("Ali", "123456", "Retail")
+
+        manager.clients[0].progress = {
+            "client_name": "Ali",
+            "progress": 50,
+            "pending_tasks": ["Follow up"],
+            "all_tasks": ["Follow up", "Send invoice"],
+        }
+        manager.save_clients()
+
+        reloaded = ClientManager(self.file_path)
+        self.assertEqual(reloaded.clients[0].progress["progress"], 50)
+        self.assertEqual(reloaded.clients[0].progress["pending_tasks"], ["Follow up"])
+        self.assertIn("Send invoice", reloaded.clients[0].progress["all_tasks"])
+
     def test_build_clients_report_text_has_all_client_details(self):
         with open(self.file_path, "w", encoding="utf-8") as file:
             json.dump([
@@ -261,6 +278,66 @@ class ClientManagerTests(unittest.TestCase):
 
         self.assertGreaterEqual(source.count("xscrollcommand="), 2)
         self.assertGreaterEqual(source.count("orient=\"horizontal\""), 2)
+
+    def test_contract_details_task_button_and_window_fields_are_present(self):
+        self.assertTrue(hasattr(ProgressApp, "open_contract_details_window"))
+
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("Contract Details", source)
+        self.assertIn("Contract Number", source)
+        self.assertIn("Commercial Registration Number", source)
+        self.assertIn("Authorized Signature Name", source)
+        self.assertIn("Open Issues Requiring Attention", source)
+
+    def test_contract_details_are_saved_with_client_record(self):
+        manager = ClientManager(self.file_path)
+        manager.add_client("Ali", "123456", "Retail")
+
+        saved = manager.clients[0].contract_details = {
+            "contract_number": "CN-001",
+            "starting_date": "2026-01-01",
+            "ending_date": "2027-01-01",
+            "commercial_registration_number": "CR-123",
+            "authorized_signature_name": "Samir",
+            "rent_value": "1500",
+            "currency_type": "OMR",
+            "open_issues": "Need legal review",
+        }
+        manager.save_clients()
+
+        reloaded = ClientManager(self.file_path)
+        self.assertEqual(reloaded.clients[0].contract_details["contract_number"], "CN-001")
+        self.assertEqual(reloaded.clients[0].contract_details["authorized_signature_name"], "Samir")
+        self.assertEqual(reloaded.clients[0].contract_details["currency_type"], "OMR")
+        self.assertIn("Need legal review", reloaded.clients[0].contract_details["open_issues"])
+
+    def test_contract_details_include_default_oman_currency_selection(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("currency_type", source)
+        self.assertIn("OMR", source)
+        self.assertIn("Currency Type", source)
+
+    def test_package_app_backfills_missing_currency_type_from_legacy_client_records(self):
+        import package_app
+
+        legacy_records = [{
+            "name": "Legacy Client",
+            "contact": "+96890000000",
+            "business": "Retail",
+            "contract_details": {
+                "contract_number": "CN-100",
+                "rent_value": "250",
+            },
+        }]
+
+        migrated = package_app.normalize_legacy_client_data(legacy_records)
+        self.assertEqual(migrated[0]["contract_details"]["currency_type"], "OMR")
 
     def test_emoji_font_families_include_windows_emoji_support(self):
         families = get_emoji_font_families()

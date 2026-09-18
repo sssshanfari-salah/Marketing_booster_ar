@@ -75,6 +75,32 @@ def collect_runtime_assets():
     return assets
 
 
+def normalize_legacy_client_data(entries):
+    normalized = []
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+
+        normalized_entry = dict(entry)
+
+        contract_details = normalized_entry.get("contract_details")
+        if not isinstance(contract_details, dict):
+            contract_details = {}
+        else:
+            contract_details = dict(contract_details)
+        contract_details.setdefault("currency_type", "OMR")
+        normalized_entry["contract_details"] = contract_details
+
+        progress_data = normalized_entry.get("progress")
+        if not isinstance(progress_data, dict):
+            progress_data = {}
+        normalized_entry["progress"] = dict(progress_data)
+
+        normalized.append(normalized_entry)
+
+    return normalized
+
+
 def migrate_legacy_client_data():
     if CLIENTS_DATA_FILE.exists() and not LEGACY_CLIENTS_DATA_FILE.exists():
         return
@@ -82,6 +108,14 @@ def migrate_legacy_client_data():
     if not LEGACY_CLIENTS_DATA_FILE.exists():
         if not CLIENTS_DATA_FILE.exists():
             CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
+        else:
+            try:
+                canonical_data = json.loads(CLIENTS_DATA_FILE.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError, TypeError):
+                canonical_data = []
+            if not isinstance(canonical_data, list):
+                canonical_data = []
+            CLIENTS_DATA_FILE.write_text(json.dumps(normalize_legacy_client_data(canonical_data), indent=2), encoding="utf-8")
         return
 
     try:
@@ -105,7 +139,7 @@ def migrate_legacy_client_data():
 
     seen = set()
     merged = []
-    for entry in canonical_data + legacy_data:
+    for entry in normalize_legacy_client_data(canonical_data + legacy_data):
         if not isinstance(entry, dict):
             continue
         name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()

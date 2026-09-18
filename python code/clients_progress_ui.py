@@ -245,8 +245,17 @@ TRANSLATIONS = {
         "Select a client from the list first.": "Select a client from the list first.",
         "Add Task": "Add Task",
         "Tasks Details": "Tasks Details",
+        "Contract Details": "Contract Details",
         "Refresh Progress": "Refresh Progress",
         "Share Client Info": "Share Client Info",
+        "Contract Number": "Contract Number",
+        "Starting Date": "Starting Date",
+        "Ending Date": "Ending Date",
+        "Commercial Registration Number": "Commercial Registration Number",
+        "Authorized Signature Name": "Authorized Signature Name",
+        "Rent Value": "Rent Value",
+        "Currency Type": "Currency Type",
+        "Open Issues Requiring Attention": "Open Issues Requiring Attention",
         "All Clients": "All Clients",
         "Open All Clients": "All Clients",
         "Send Email": "Send Email",
@@ -366,8 +375,17 @@ TRANSLATIONS = {
         "Select a client from the list first.": "حدد عميلًا من القائمة أولاً.",
         "Add Task": "إضافة مهمة",
         "Tasks Details": "تفاصيل المهام",
+        "Contract Details": "تفاصيل العقد",
         "Refresh Progress": "تحديث التقدم",
         "Share Client Info": "مشاركة معلومات العميل",
+        "Contract Number": "رقم العقد",
+        "Starting Date": "تاريخ البداية",
+        "Ending Date": "تاريخ النهاية",
+        "Commercial Registration Number": "رقم السجل التجاري",
+        "Authorized Signature Name": "اسم الممضي المفوض",
+        "Rent Value": "قيمة الإيجار",
+        "Currency Type": "نوع العملة",
+        "Open Issues Requiring Attention": "المشكلات المفتوحة التي تحتاج إلى عناية",
         "All Clients": "جميع العملاء",
         "Open All Clients": "جميع العملاء",
         "Send Email": "إرسال بريد إلكتروني",
@@ -783,12 +801,15 @@ class Plan:
 
     def update_clients_progress(self):
         self.refresh_progress()
-        Plan.Clients_progress[self.client.name] = {
+        progress_data = {
             "client_name": self.client.name,
             "progress": self.progress,
             "pending_tasks": list(self.pending_tasks),
             "all_tasks": list(self.all_tasks),
         }
+        Plan.Clients_progress[self.client.name] = progress_data
+        if hasattr(self.client, "progress"):
+            self.client.progress = dict(progress_data)
 
     def to_dict(self):
         return {
@@ -968,6 +989,118 @@ class TaskDetailsWindow(tk.Toplevel):
             self.master_app.refresh_display()
 
         self.populate_lists(all_tasks=self.plan.all_tasks, pending_tasks=self.plan.pending_tasks)
+
+
+class ContractDetailsWindow(tk.Toplevel):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.title(T("Contract Details"))
+        self.geometry("680x520")
+        self.minsize(500, 420)
+        self.master_app = master
+        self.manager = getattr(master, "client_manager", ClientManager("clients.json")) if master is not None else ClientManager("clients.json")
+
+        self.client_name = ""
+        if self.master_app is not None and hasattr(self.master_app, "client_name_var"):
+            self.client_name = str(self.master_app.client_name_var.get() or "").strip()
+        self.client = self._find_client(self.client_name)
+
+        main = ttk.Frame(self, padding=16)
+        main.pack(fill="both", expand=True)
+        main.columnconfigure(1, weight=1)
+
+        fields = [
+            (T("Contract Number"), "contract_number"),
+            (T("Starting Date"), "starting_date"),
+            (T("Ending Date"), "ending_date"),
+            (T("Commercial Registration Number"), "commercial_registration_number"),
+            (T("Authorized Signature Name"), "authorized_signature_name"),
+            (T("Rent Value"), "rent_value"),
+        ]
+
+        self.values = {}
+        row_index = 0
+        for label_text, key in fields:
+            ttk.Label(main, text=label_text, font=("Segoe UI", 10, "bold")).grid(row=row_index, column=0, sticky="w", padx=(0, 12), pady=(0, 8))
+            var = tk.StringVar()
+            self.values[key] = var
+            ttk.Entry(main, textvariable=var, width=38).grid(row=row_index, column=1, sticky="ew", pady=(0, 8))
+            row_index += 1
+
+        ttk.Label(main, text=T("Currency Type"), font=("Segoe UI", 10, "bold")).grid(row=row_index, column=0, sticky="w", padx=(0, 12), pady=(0, 8))
+        currency_options = ["OMR", "USD", "AED", "SAR", "QAR", "BHD", "KWD", "EUR", "GBP", "JPY"]
+        self.currency_var = tk.StringVar(value="OMR")
+        self.currency_combo = ttk.Combobox(main, textvariable=self.currency_var, values=currency_options, state="readonly", width=35)
+        self.currency_combo.grid(row=row_index, column=1, sticky="ew", pady=(0, 8))
+        row_index += 1
+
+        ttk.Label(main, text=T("Open Issues Requiring Attention"), font=("Segoe UI", 10, "bold")).grid(
+            row=row_index, column=0, columnspan=2, sticky="w", pady=(10, 6)
+        )
+        self.open_issues_text = tk.Text(main, height=8, wrap="word", font=("Segoe UI", 10))
+        self.open_issues_text.grid(row=row_index + 1, column=0, columnspan=2, sticky="nsew", pady=(0, 12))
+
+        button_row = ttk.Frame(main)
+        button_row.grid(row=row_index + 2, column=0, columnspan=2, sticky="e")
+        ttk.Button(button_row, text=T("Save"), command=self.save_contract).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Close"), command=self.destroy).pack(side="left")
+
+        self.bind("<Escape>", lambda event: self.destroy())
+        self.load_existing_contract()
+
+    def _find_client(self, client_name):
+        if not client_name:
+            return None
+        self.manager.load_clients()
+        return next((client for client in self.manager.clients if client.name.lower() == client_name.lower()), None)
+
+    def _collect_contract_details(self):
+        details = {}
+        for key, var in self.values.items():
+            details[key] = var.get().strip()
+        details["currency_type"] = (self.currency_var.get() or "OMR").strip() or "OMR"
+        details["open_issues"] = self.open_issues_text.get("1.0", "end").strip()
+        return details
+
+    def load_existing_contract(self):
+        if self.client is None or not isinstance(self.client.contract_details, dict):
+            return
+
+        for key, var in self.values.items():
+            var.set(self.client.contract_details.get(key, ""))
+        existing_currency = str(self.client.contract_details.get("currency_type") or "OMR").strip() or "OMR"
+        if existing_currency not in self.currency_combo["values"]:
+            existing_currency = "OMR"
+        self.currency_var.set(existing_currency)
+        self.open_issues_text.delete("1.0", tk.END)
+        self.open_issues_text.insert("1.0", self.client.contract_details.get("open_issues", ""))
+
+    def save_contract(self):
+        if self.master_app is not None and hasattr(self.master_app, "client_name_var"):
+            client_name = str(self.master_app.client_name_var.get() or "").strip()
+            if not client_name or client_name == T("<New Client>"):
+                messagebox.showwarning(T("No client selected"), T("Select a client from the list first."))
+                return
+        elif not self.client_name:
+            messagebox.showwarning(T("No client selected"), T("Select a client from the list first."))
+            return
+        else:
+            client_name = self.client_name
+
+        self.manager.load_clients()
+        client = next((item for item in self.manager.clients if item.name.lower() == client_name.lower()), None)
+        if client is None:
+            messagebox.showwarning(T("Client not found"), T("'{client_name}' was not found in the saved client list.", client_name=client_name))
+            return
+
+        client.contract_details = self._collect_contract_details()
+        self.manager.save_clients()
+
+        if self.master_app is not None and hasattr(self.master_app, "refresh_client_combo"):
+            self.master_app.refresh_client_combo()
+
+        messagebox.showinfo(T("Client saved"), T("'{name}' was saved successfully.", name=client.name))
+        self.destroy()
 
 
 class ExportClientsLogWindow(tk.Toplevel):
@@ -1193,6 +1326,10 @@ class ProgressApp(tk.Tk):
             self.client_file.parent.mkdir(parents=True, exist_ok=True)
             self.client_file.write_text("[]", encoding="utf-8")
         self.client_manager = ClientManager(self.client_file)
+        Plan.Clients_progress = {}
+        for client in self.client_manager.clients:
+            if isinstance(getattr(client, "progress", None), dict) and client.progress:
+                Plan.Clients_progress[client.name] = dict(client.progress)
 
         self.client_name_var = tk.StringVar(value="")
         self.country_name_var = tk.StringVar(value=DEFAULT_COUNTRY)
@@ -1536,6 +1673,7 @@ class ProgressApp(tk.Tk):
         action_buttons = [
             (T("Add Task"), self.add_task),
             (T("Tasks Details"), self.open_task_details_window),
+            (T("Contract Details"), self.open_contract_details_window),
             (T("Refresh Progress"), self.refresh_display),
             (T("Export Task Log"), self.export_task_log),
         ]
@@ -1806,6 +1944,9 @@ class ProgressApp(tk.Tk):
             pending_tasks=list(self.plan.pending_tasks),
         )
 
+    def open_contract_details_window(self):
+        ContractDetailsWindow(self)
+
     def focus_client_name_field(self):
         if hasattr(self, "client_combo") and self.client_combo.winfo_exists():
             self.client_combo.focus_set()
@@ -1954,6 +2095,9 @@ class ProgressApp(tk.Tk):
             messagebox.showwarning(T("Missing client"), T("Please enter a client name before saving."))
             return
 
+        if self.plan is not None and self.plan.client.name.lower() == name.lower():
+            self.plan.update_clients_progress()
+
         contact = self.contact_var.get().strip()
         country_name = self.country_name_var.get().strip() or DEFAULT_COUNTRY
         country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, DEFAULT_COUNTRY_CODE))
@@ -2007,6 +2151,8 @@ class ProgressApp(tk.Tk):
         self.plan.client = client
         self.plan.client_name = client.name
         self.plan.update_clients_progress()
+        client.progress = dict(Plan.Clients_progress.get(client.name, {}))
+        self.client_manager.save_clients()
         self.refresh_display()
         messagebox.showinfo(T("Client saved"), T("'{name}' was saved successfully.", name=name))
 
@@ -2056,6 +2202,8 @@ class ProgressApp(tk.Tk):
 
     def save_and_exit(self):
         self.save_current_client()
+        self.client_manager.load_clients()
+        self.client_manager.save_clients()
         self.destroy()
 
     def cancel_and_exit(self):

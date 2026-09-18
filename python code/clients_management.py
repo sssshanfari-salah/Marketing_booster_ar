@@ -8,6 +8,60 @@ from typing import List
 DEFAULT_CONTACT_COUNTRY_CODE = "+968"
 
 
+def normalize_contract_details(value):
+    contract_fields = {
+        "contract_number": "",
+        "starting_date": "",
+        "ending_date": "",
+        "commercial_registration_number": "",
+        "authorized_signature_name": "",
+        "rent_value": "",
+        "currency_type": "OMR",
+        "open_issues": "",
+    }
+
+    if not isinstance(value, dict):
+        return dict(contract_fields)
+
+    normalized = {}
+    for key, default in contract_fields.items():
+        raw_value = value.get(key, default)
+        if raw_value is None:
+            raw_value = default
+        normalized[key] = str(raw_value)
+    return normalized
+
+
+def normalize_client_progress(value):
+    default_progress = {
+        "client_name": "",
+        "progress": 0,
+        "pending_tasks": [],
+        "all_tasks": [],
+    }
+
+    if not isinstance(value, dict):
+        return dict(default_progress)
+
+    normalized = dict(default_progress)
+    normalized["client_name"] = str(value.get("client_name") or "")
+    try:
+        normalized["progress"] = int(value.get("progress", 0))
+    except (TypeError, ValueError):
+        normalized["progress"] = 0
+
+    for key in ("pending_tasks", "all_tasks"):
+        items = value.get(key, [])
+        if isinstance(items, list):
+            normalized[key] = list(items)
+        elif isinstance(items, tuple):
+            normalized[key] = list(items)
+        else:
+            normalized[key] = []
+
+    return normalized
+
+
 def resolve_clients_data_path(project_root=None):
     if project_root is None:
         project_root = Path(__file__).resolve().parent.parent
@@ -125,13 +179,15 @@ def format_contact_number(value: str, country_code: str = DEFAULT_CONTACT_COUNTR
 
 
 class Client:
-    def __init__(self, name: str, contact: str, business: str, email: str = "", shop_number: str = "", reviews=None):
+    def __init__(self, name: str, contact: str, business: str, email: str = "", shop_number: str = "", reviews=None, contract_details=None, progress=None):
         self.name = name
         self.contact = format_contact_number(contact, DEFAULT_CONTACT_COUNTRY_CODE)
         self.business = business
         self.email = email
         self.shop_number = shop_number
         self.reviews = []
+        self.contract_details = normalize_contract_details(contract_details)
+        self.progress = normalize_client_progress(progress)
 
         if reviews is not None:
             for review in reviews:
@@ -152,6 +208,8 @@ class Client:
             "email": self.email,
             "shop_number": self.shop_number,
             "reviews": list(self.reviews),
+            "contract_details": dict(self.contract_details),
+            "progress": dict(self.progress),
         }
 
     def share_text(self):
@@ -202,6 +260,12 @@ class Client:
         reviews = pick("reviews", default=[])
         if not isinstance(reviews, list):
             reviews = []
+        contract_details = pick("contract_details", "contractDetails", "Contract Details", default={})
+        if not isinstance(contract_details, dict):
+            contract_details = {}
+        progress = pick("progress", default={})
+        if not isinstance(progress, dict):
+            progress = {}
 
         return cls(
             str(name),
@@ -210,6 +274,8 @@ class Client:
             str(email),
             shop_number=str(shop_number),
             reviews=reviews,
+            contract_details=contract_details,
+            progress=progress,
         )
 
     def __repr__(self):

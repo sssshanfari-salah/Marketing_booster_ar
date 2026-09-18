@@ -5,6 +5,36 @@
     "business": "Resturant",
     "email": "",
     "shop_number": "4",
-    "reviews": []
+    "reviews": [],
+    "contract_details": {
+      "contract_number": "12345",
+      "starting_date": "1/10/2026",
+      "ending_date": "29/9/2027",
+      "commercial_registration_number": "8678686",
+      "authorized_signature_name": "jfdj kldjfkldj",
+      "rent_value": "500",
+      "open_issues": "nothing to report",
+      "currency_type": "OMR"
+    },
+    "progress": {}
+  },
+  {
+    "name": "Salah",
+    "contact": "+96896181142",
+    "business": "realaadljkl",
+    "email": "",
+    "shop_number": "6",
+    "reviews": [],
+    "contract_details": {
+      "contract_number": "989878787",
+      "starting_date": "1/11/2026",
+      "ending_date": "29/10/2027",
+      "commercial_registration_number": "i7897979",
+      "authorized_signature_name": "Salah",
+      "rent_value": "200",
+      "open_issues": "nothing to report again",
+      "currency_type": "OMR"
+    },
+    "progress": {}
   }
 ]
