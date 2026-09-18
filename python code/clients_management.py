@@ -1,10 +1,102 @@
 import json
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import List
 
 DEFAULT_CONTACT_COUNTRY_CODE = "+968"
+
+
+def resolve_clients_data_path(project_root=None):
+    if project_root is None:
+        project_root = Path(__file__).resolve().parent.parent
+
+    project_root = Path(project_root).resolve()
+    canonical_file = project_root / "clients.json"
+    legacy_files = [
+        project_root / "python code" / "clients.json",
+        Path.cwd() / "clients.json",
+        Path(sys.executable).resolve().parent / "clients.json",
+    ]
+
+    def read_json_list(path):
+        try:
+            if not path.exists():
+                return []
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            return payload if isinstance(payload, list) else []
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            return []
+
+    canonical_exists = canonical_file.exists()
+    if canonical_exists:
+        legacy_entries = []
+        seen = set()
+        for legacy_file in legacy_files:
+            if legacy_file == canonical_file or not legacy_file.exists():
+                continue
+            for entry in read_json_list(legacy_file):
+                if not isinstance(entry, dict):
+                    continue
+                name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()
+                contact = str(entry.get("contact") or entry.get("Contact") or "").strip()
+                key = (name, contact)
+                if not key[0] and not key[1]:
+                    continue
+                if key in seen:
+                    continue
+                seen.add(key)
+                legacy_entries.append(entry)
+
+        if legacy_entries:
+            merged = read_json_list(canonical_file)
+            seen_entries = set()
+            for entry in merged:
+                if not isinstance(entry, dict):
+                    continue
+                name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()
+                contact = str(entry.get("contact") or entry.get("Contact") or "").strip()
+                seen_entries.add((name, contact))
+            for entry in legacy_entries:
+                name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()
+                contact = str(entry.get("contact") or entry.get("Contact") or "").strip()
+                key = (name, contact)
+                if key in seen_entries:
+                    continue
+                merged.append(entry)
+                seen_entries.add(key)
+            canonical_file.parent.mkdir(parents=True, exist_ok=True)
+            canonical_file.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+
+        return canonical_file
+
+    all_legacy_entries = []
+    seen = set()
+    for legacy_file in legacy_files:
+        if not legacy_file.exists():
+            continue
+        for entry in read_json_list(legacy_file):
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()
+            contact = str(entry.get("contact") or entry.get("Contact") or "").strip()
+            key = (name, contact)
+            if not key[0] and not key[1]:
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            all_legacy_entries.append(entry)
+
+    if all_legacy_entries:
+        canonical_file.parent.mkdir(parents=True, exist_ok=True)
+        canonical_file.write_text(json.dumps(all_legacy_entries, indent=2), encoding="utf-8")
+        return canonical_file
+
+    canonical_file.parent.mkdir(parents=True, exist_ok=True)
+    canonical_file.write_text("[]", encoding="utf-8")
+    return canonical_file
 
 
 def format_contact_number(value: str, country_code: str = DEFAULT_CONTACT_COUNTRY_CODE) -> str:
@@ -127,8 +219,14 @@ class Client:
 class ClientManager:
     def __init__(self, file_path=None):
         if file_path is None:
-            file_path = Path(__file__).resolve().parent.parent / "clients.json"
-        self.file_path = Path(file_path)
+            self.file_path = resolve_clients_data_path()
+        else:
+            raw_path = Path(file_path)
+            if raw_path.name == "clients.json" and not raw_path.is_absolute():
+                self.file_path = resolve_clients_data_path()
+            else:
+                self.file_path = raw_path.resolve() if raw_path.is_absolute() else (Path.cwd() / raw_path).resolve()
+
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.file_path.exists():
             self.file_path.write_text("[]", encoding="utf-8")

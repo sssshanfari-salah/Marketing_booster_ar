@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -32,6 +33,7 @@ def resolve_target_icon():
 TARGET_ICON = resolve_target_icon()
 COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
+LEGACY_CLIENTS_DATA_FILE = SOURCE_DIR / "clients.json"
 DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
 SUPPORTING_DOCUMENTS_DIR = APP_DIR / "supporting_documents"
 STARCO_RENT_CONTRACT = SUPPORTING_DOCUMENTS_DIR / "starco_rent_contract_1.pdf"
@@ -40,6 +42,12 @@ CLIENT_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "clients_logs"
 TASK_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "tasks_logs"
 OBSERVATION_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "observation_logs"
 OUTPUT_LOG_DIRS = [APPLICATION_OUTPUTS_DIR, CLIENT_LOGS_DIR, TASK_LOGS_DIR, OBSERVATION_LOGS_DIR]
+PROJECT_RUNTIME_DIRECTORIES = [
+    APP_DIR / "supporting_documents",
+    APP_DIR / "starco icon",
+    SOURCE_DIR / "docs",
+    *OUTPUT_LOG_DIRS,
+]
 LEGACY_APP_NAMES = ["marketing_booster", "marketing_booster_ar"]
 LEGACY_DISPLAY_NAMES = ["Marketing Booster", "Marketing Booster AR", "Clients Manager", "Starco Commercial Complex"]
 RUNTIME_DATA_FILES = [
@@ -48,10 +56,7 @@ RUNTIME_DATA_FILES = [
     COUNTRY_CODES_DATA,
     DOCUMENTS_DATA_FILE,
     STARCO_RENT_CONTRACT,
-    *OUTPUT_LOG_DIRS,
-    APP_DIR / "supporting_documents",
-    APP_DIR / "starco icon",
-    SOURCE_DIR / "docs",
+    *PROJECT_RUNTIME_DIRECTORIES,
 ]
 
 # Keep the packaged app aligned with the current client-manager UI/data model.
@@ -68,6 +73,64 @@ def collect_runtime_assets():
         seen.add(key)
         assets.append(path)
     return assets
+
+
+def migrate_legacy_client_data():
+    if CLIENTS_DATA_FILE.exists() and not LEGACY_CLIENTS_DATA_FILE.exists():
+        return
+
+    if not LEGACY_CLIENTS_DATA_FILE.exists():
+        if not CLIENTS_DATA_FILE.exists():
+            CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
+        return
+
+    try:
+        legacy_data = json.loads(LEGACY_CLIENTS_DATA_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, TypeError):
+        legacy_data = []
+
+    if not isinstance(legacy_data, list):
+        legacy_data = []
+
+    if CLIENTS_DATA_FILE.exists():
+        try:
+            canonical_data = json.loads(CLIENTS_DATA_FILE.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, TypeError):
+            canonical_data = []
+    else:
+        canonical_data = []
+
+    if not isinstance(canonical_data, list):
+        canonical_data = []
+
+    seen = set()
+    merged = []
+    for entry in canonical_data + legacy_data:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()
+        contact = str(entry.get("contact") or entry.get("Contact") or "").strip()
+        key = (name, contact)
+        if not key[0] and not key[1]:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(entry)
+
+    CLIENTS_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CLIENTS_DATA_FILE.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+
+
+def add_runtime_assets(cmd):
+    for path in collect_runtime_assets():
+        if not path.exists():
+            continue
+        if path.is_dir():
+            cmd.extend(["--add-data", f"{path}{os.pathsep}."])
+        else:
+            cmd.extend(["--add-data", f"{path}{os.pathsep}."])
+    return cmd
 
 
 def resolve_desktop_dir():
@@ -219,6 +282,8 @@ def ensure_runtime_files():
     if not ENTRY_SCRIPT.exists():
         raise FileNotFoundError(f"Entry script not found: {ENTRY_SCRIPT}")
 
+    migrate_legacy_client_data()
+
     if not CLIENTS_DATA_FILE.exists():
         CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
 
@@ -296,9 +361,7 @@ def build_app():
     if TARGET_ICON.exists():
         cmd.extend(["--icon", str(TARGET_ICON)])
 
-    for data_file in collect_runtime_assets():
-        if data_file.exists():
-            cmd.extend(["--add-data", f"{data_file}{os.pathsep}."])
+    cmd = add_runtime_assets(cmd)
 
     cmd.append(str(ENTRY_SCRIPT))
 

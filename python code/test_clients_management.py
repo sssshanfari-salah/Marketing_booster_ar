@@ -11,7 +11,16 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from clients_management import Client, ClientManager, build_clients_report_text, format_contact_number
-from clients_progress_ui import Plan, ProgressApp, T, get_emoji_font_families, parse_task_items, resolve_log_output_dir, set_language
+from clients_progress_ui import (
+    Plan,
+    ProgressApp,
+    T,
+    get_emoji_font_families,
+    parse_task_items,
+    resolve_log_output_dir,
+    set_language,
+    strip_task_number_prefix,
+)
 from sync_documents import TARGET
 
 try:

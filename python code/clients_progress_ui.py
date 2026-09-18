@@ -20,7 +20,7 @@ except ImportError:
     Image = None
     ImageTk = None
 
-from clients_management import Client, ClientManager, build_clients_report_text, format_contact_number
+from clients_management import Client, ClientManager, build_clients_report_text, format_contact_number, resolve_clients_data_path
 
 APP_ICON = None
 for candidate in [
@@ -200,6 +200,7 @@ TRANSLATIONS = {
         "Client Review": "Client Review",
         "Add Review": "Add Review",
         "Open Review Log": "Open Review Log",
+        "Add Client": "Add Client",
         "Create Client Plan": "Create Client Plan",
         "Save Client": "Save Client",
         "Delete Selected Client": "Delete Selected Client",
@@ -320,6 +321,7 @@ TRANSLATIONS = {
         "Client Review": "ملاحظات العميل",
         "Add Review": "إضافة ملاحظة",
         "Open Review Log": "فتح سجل الملاحظات",
+        "Add Client": "إضافة عميل",
         "Create Client Plan": "إنشاء خطة العميل",
         "Save Client": "حفظ العميل",
         "Delete Selected Client": "حذف العميل المحدد",
@@ -587,6 +589,29 @@ def build_startup_splash():
     return splash
 
 
+_ACTIVE_PROGRESS_APP = None
+
+
+def open_overview_window():
+    global _ACTIVE_PROGRESS_APP
+
+    if _ACTIVE_PROGRESS_APP is not None and _ACTIVE_PROGRESS_APP.winfo_exists():
+        app = _ACTIVE_PROGRESS_APP
+        try:
+            app.deiconify()
+            app.lift()
+            app.focus_set()
+            if hasattr(app, "focus_section"):
+                app.focus_section("overview")
+        except Exception:
+            pass
+        return app
+
+    app = ProgressApp()
+    _ACTIVE_PROGRESS_APP = app
+    return app
+
+
 def open_welcome_home():
     welcome = WelcomeWindow()
     welcome.protocol("WM_DELETE_WINDOW", welcome.destroy)
@@ -663,9 +688,8 @@ class WelcomeWindow(tk.Tk):
 
     def _open_progress_panel(self):
         self.destroy()
-        app = ProgressApp()
-        app.focus_section("progress")
-        app.mainloop()
+        app = open_overview_window()
+        app.focus_section("overview")
 
 
 def safe_main():
@@ -1139,28 +1163,13 @@ class ClientReviewsLogWindow(tk.Toplevel):
 class ProgressApp(tk.Tk):
     @staticmethod
     def resolve_client_file():
-        candidates = [
-            Path(__file__).resolve().parent.parent / "clients.json",
-            Path(__file__).resolve().parent / "clients.json",
-            Path.cwd() / "clients.json",
-            Path(sys.executable).resolve().parent / "clients.json",
-        ]
-
-        if getattr(sys, "_MEIPASS", None):
-            candidates.insert(0, Path(sys._MEIPASS) / "clients.json")
-
-        for candidate in candidates:
-            if candidate.exists():
-                return candidate
-
-        fallback = Path(sys.executable).resolve().parent / "clients.json"
-        fallback.parent.mkdir(parents=True, exist_ok=True)
-        if not fallback.exists():
-            fallback.write_text("[]", encoding="utf-8")
-        return fallback
+        project_root = Path(__file__).resolve().parent.parent
+        return resolve_clients_data_path(project_root=project_root)
 
     def __init__(self):
         super().__init__()
+        global _ACTIVE_PROGRESS_APP
+        _ACTIVE_PROGRESS_APP = self
         self.title(T("Client Progress Manager"))
 
         if APP_ICON.exists():
@@ -1197,9 +1206,15 @@ class ProgressApp(tk.Tk):
 
         self.plan = None
         self.client_combo = None
-        self.protocol("WM_DELETE_WINDOW", self.confirm_exit_app)
+        self.protocol("WM_DELETE_WINDOW", self.close_overview_window)
 
         self.build_ui()
+
+    def close_overview_window(self):
+        global _ACTIVE_PROGRESS_APP
+        if _ACTIVE_PROGRESS_APP is self:
+            _ACTIVE_PROGRESS_APP = None
+        self.destroy()
 
     def build_ui(self):
         self.style.configure("Section.TLabelframe", padding=(10, 8), relief="groove")
@@ -1376,6 +1391,7 @@ class ProgressApp(tk.Tk):
         client_actions_frame.grid_columnconfigure(0, weight=1)
 
         client_action_specs = [
+            (T("Add Client"), self.add_new_client, 18),
             (T("Save Client"), self.save_current_client, 18),
             (T("All Clients"), self.open_all_clients, 18),
             (T("Export Client Log"), self.export_client_log, None),
@@ -1924,6 +1940,13 @@ class ProgressApp(tk.Tk):
         self.total_tasks_var.set(str(len(self.plan.all_tasks)))
         self.refresh_display()
 
+    def add_new_client(self):
+        self.clear_client_form()
+        self.client_name_var.set(T("<New Client>"))
+        if self.client_combo is not None and self.client_combo.winfo_exists():
+            self.client_combo.set(T("<New Client>"))
+        self.focus_client_name_field()
+
     def save_current_client(self):
         self.client_manager.load_clients()
         name = self.client_name_var.get().strip()
@@ -2334,8 +2357,13 @@ class AllClientsProgressWindow(tk.Toplevel):
         ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Save Log"), command=self.export_log).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Home"), command=self.go_home).pack(side="left")
+        ttk.Button(button_row, text=T("Overview"), command=self.open_overview).pack(side="left")
         self.refresh_view()
+
+    def open_overview(self):
+        self.destroy()
+        app = open_overview_window()
+        app.focus_section("overview")
 
     def go_home(self):
         self.destroy()
@@ -2404,6 +2432,8 @@ class AllClientsProgressWindow(tk.Toplevel):
                 self.master.clear_client_form()
             messagebox.showinfo(T("Client deleted"), T("'{client_name}' was removed successfully.", client_name=client_name))
             self.refresh_view()
+            self.lift()
+            self.focus_set()
             return
 
         messagebox.showwarning(T("Client not found"), T("'{client_name}' was not found in the saved client list.", client_name=client_name))

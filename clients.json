@@ -1,88 +1,10 @@
 [
   {
-    "name": "Bin Salim",
-    "contact": "+96899999999",
-    "business": "machineries suppliers 'Hilti'",
+    "name": "al al arjan",
+    "contact": "+968966504855183",
+    "business": "Resturant",
     "email": "",
-    "shop_number": "",
-    "reviews": [
-      {
-        "date": "2026-09-16 14:20:04",
-        "review": "hjkhkjh",
-        "comment": ""
-      }
-    ]
-  },
-  {
-    "name": "Bin Salim",
-    "contact": "+96899999999",
-    "business": "machineries suppliers 'Hilti'",
-    "email": "",
-    "shop_number": "",
-    "reviews": []
-  },
-  {
-    "name": "Khalid Salim",
-    "contact": "+96897709770",
-    "business": "real estate management",
-    "email": "",
-    "shop_number": "",
-    "reviews": []
-  },
-  {
-    "name": "Fahad",
-    "contact": "+968454456564",
-    "business": "furniture",
-    "email": "fahad@gmail.co",
-    "shop_number": "",
-    "reviews": []
-  },
-  {
-    "name": "Salah",
-    "contact": "+96896181142",
-    "business": "real estate",
-    "email": "sssshanfari@yahoo.com",
-    "shop_number": "",
-    "reviews": []
-  },
-  {
-    "name": "Mohammed",
-    "contact": "+96894440006",
-    "business": "consultancy office",
-    "email": "mohammed94@gmail.com",
-    "shop_number": "3",
-    "reviews": [
-      {
-        "date": "2026-09-03 11:35:02",
-        "review": "please make sure prayer room ac on all time during day time",
-        "comment": "care taker boy has been informed to keep ac on all day"
-      },
-      {
-        "date": "2026-09-16 15:49:35",
-        "review": "1.the shops are located in prime area\n2",
-        "comment": ""
-      },
-      {
-        "date": "2026-09-16 16:00:00",
-        "review": "provide extra car park shade for the shops",
-        "comment": "no car park shade planned for this project"
-      }
-    ]
-  },
-  {
-    "name": "\u0635\u0644\u0627\u062d",
-    "contact": "+96896181142",
-    "business": "\u0627\u062a\u0646",
-    "email": "",
-    "shop_number": "6",
-    "reviews": []
-  },
-  {
-    "name": "Salim Salah",
-    "contact": "+96896181143",
-    "business": "sport shop",
-    "email": "",
-    "shop_number": "",
+    "shop_number": "4",
     "reviews": []
   }
 ]
