@@ -361,6 +361,24 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(reloaded.clients[0].transactions[0]["cheque_number"], "CH-204")
         self.assertEqual(reloaded.clients[0].transactions[0]["bank_name"], "Bank Muscat")
 
+    def test_welcome_window_contains_project_manager_todo_listbox(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("Project Manager To-Do", source)
+        self.assertIn("self.todo_listbox", source)
+        self.assertIn("generate_project_manager_todo_tasks", source)
+
+    def test_transaction_window_has_client_selector_dropdown(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("self.client_selector_var", source)
+        self.assertIn("<<ComboboxSelected>>", source)
+        self.assertIn("self._switch_client_for_transactions", source)
+
     def test_transaction_status_uses_checkbox_and_completion_popup(self):
         source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
         with source_path.open("r", encoding="utf-8") as source_file:
@@ -395,6 +413,15 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("def _get_previous_month", source)
         self.assertIn("previous_month = self.month_options[current_index - 1]", source)
         self.assertIn("Outstanding payment", source)
+
+    def test_payment_follow_up_actions_are_generated_from_pending_months(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("def _build_payment_follow_up_tasks", source)
+        self.assertIn("Follow up payment", source)
+        self.assertIn("self.plan.pending_tasks", source)
 
     def test_due_date_matches_selected_month(self):
         source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"

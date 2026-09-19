@@ -862,8 +862,10 @@ class WelcomeWindow(tk.Tk):
 
         main_frame = ttk.Frame(self, padding=(24, 8, 24, 18))
         main_frame.pack(fill="both", expand=True)
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(0, weight=1)
+        main_frame.columnconfigure(0, weight=3)
+        main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(0, weight=0)
+        main_frame.rowconfigure(1, weight=1)
 
         buttons = [
             (T("Overview"), self._open_progress_panel),
@@ -877,17 +879,101 @@ class WelcomeWindow(tk.Tk):
                 style="Action.TButton",
                 width=22,
             )
-            button.grid(row=0, column=0, padx=12, pady=20, sticky="nsew")
+            button.grid(row=0, column=0, padx=(12, 8), pady=(20, 10), sticky="nsew")
+
+        self.transactions_button = ttk.Button(
+            main_frame,
+            text=T("Transactions"),
+            command=self._open_transactions_panel,
+            style="Action.TButton",
+            width=18,
+        )
+        self.transactions_button.grid(row=0, column=1, padx=(8, 12), pady=(20, 10), sticky="nsew")
+
+        todo_label = ttk.Label(main_frame, text=T("Project Manager To-Do"), font=("Segoe UI", 11, "bold"))
+        todo_label.grid(row=1, column=0, sticky="w", padx=(12, 0), pady=(0, 6))
+
+        self.todo_listbox = tk.Listbox(
+            main_frame,
+            height=8,
+            width=50,
+            exportselection=False,
+            bg="#fffdf3",
+            relief="solid",
+            borderwidth=1,
+            font=("Segoe UI", 10),
+        )
+        self.todo_listbox.grid(row=2, column=0, sticky="nsew", padx=(12, 8), pady=(0, 10))
+        main_frame.rowconfigure(2, weight=1)
+
+        self.transactions_hint = ttk.Label(
+            main_frame,
+            text=T("Open client payment records"),
+            font=("Segoe UI", 10),
+            foreground="#374151",
+            wraplength=150,
+        )
+        self.transactions_hint.grid(row=2, column=1, sticky="n", padx=(8, 12), pady=(18, 0))
+        self.refresh_todo_list()
 
         footer = ttk.Frame(self, padding=(0, 0, 24, 18))
         footer.pack(fill="x")
         exit_button = ttk.Button(footer, text=T("Exit"), command=self.destroy, style="Action.TButton", width=14)
         exit_button.pack(anchor="center")
 
+    def generate_project_manager_todo_tasks(self):
+        manager = ClientManager("clients.json")
+        manager.load_clients()
+        tasks = []
+        for client in manager.clients:
+            contract_details = getattr(client, "contract_details", {}) or {}
+            start_date = str(contract_details.get("starting_date") or "").strip()
+            end_date = str(contract_details.get("ending_date") or "").strip()
+            months = generate_contract_months(start_date, end_date)
+            if not months:
+                continue
+
+            transactions_by_month = {}
+            for entry in getattr(client, "transactions", []) or []:
+                month = str(entry.get("month", "") or "").strip()
+                if month:
+                    transactions_by_month[month] = entry
+
+            for month in months:
+                entry = transactions_by_month.get(month)
+                status = str((entry or {}).get("status", "") or "").strip().lower()
+                if entry is not None and status in {"paid", "completed", "complete", "success", "successful"}:
+                    continue
+                tasks.append(f"Follow up payment for {client.name} - {month}")
+
+        if not tasks:
+            tasks.append("No pending payment follow-ups")
+        return tasks
+
+    def refresh_todo_list(self):
+        self.todo_listbox.delete(0, tk.END)
+        for task in self.generate_project_manager_todo_tasks():
+            self.todo_listbox.insert(tk.END, task)
+
     def _open_progress_panel(self):
         self.destroy()
         app = open_overview_window()
         app.focus_section("overview")
+
+    def _open_transactions_panel(self):
+        self.destroy()
+        app = open_overview_window()
+        try:
+            app.deiconify()
+            app.lift()
+            app.focus_set()
+        except Exception:
+            pass
+        try:
+            app.focus_section("overview")
+            app.open_transactions_window()
+        except Exception:
+            pass
 
 
 def safe_main():
@@ -1469,7 +1555,22 @@ class ClientTransactionsWindow(tk.Toplevel):
 
         header = ttk.Frame(main)
         header.pack(fill="x", pady=(0, 10))
-        ttk.Label(header, text=f"{T('Client')}: {self.client_name or T('No client selected')}", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+
+        header_fields = ttk.Frame(header)
+        header_fields.pack(fill="x")
+        header_fields.columnconfigure(1, weight=1)
+
+        ttk.Label(header_fields, text=f"{T('Client')}:", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.client_selector_var = tk.StringVar(value=self.client_name or "")
+        self.client_selector = ttk.Combobox(
+            header_fields,
+            textvariable=self.client_selector_var,
+            values=self._list_client_names(),
+            state="readonly",
+            width=28,
+        )
+        self.client_selector.grid(row=0, column=1, sticky="ew")
+        self.client_selector.bind("<<ComboboxSelected>>", self._switch_client_for_transactions)
 
         columns = ("month", "status", "amount", "method", "cheque", "due_date", "bank", "bank_transaction_detail")
         self.tree = ttk.Treeview(main, columns=columns, show="headings", height=14)
@@ -1493,15 +1594,34 @@ class ClientTransactionsWindow(tk.Toplevel):
         controls.pack(fill="x", pady=(8, 0))
         ttk.Button(controls, text=T("Add Month"), command=self.add_transaction_row).pack(side="left", padx=(0, 8))
         ttk.Button(controls, text=T("Save Transactions"), command=self.save_transactions).pack(side="left", padx=(0, 8))
+        ttk.Button(controls, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
         ttk.Button(controls, text=T("Close"), command=self.destroy).pack(side="left")
 
         self.refresh_view()
+
+    def _list_client_names(self):
+        self.manager.load_clients()
+        return [client.name for client in self.manager.clients if getattr(client, "name", "").strip()]
 
     def _find_client(self, client_name):
         if not client_name:
             return None
         self.manager.load_clients()
         return next((client for client in self.manager.clients if client.name.lower() == client_name.lower()), None)
+
+    def _switch_client_for_transactions(self, event=None):
+        selected_name = str(self.client_selector_var.get() or "").strip()
+        if not selected_name:
+            return
+
+        self.client_name = selected_name
+        self.client = self._find_client(selected_name)
+        self.month_options = self._build_month_options()
+        self.refresh_view()
+
+    def go_home(self):
+        self.destroy()
+        open_welcome_home()
 
     def _build_month_options(self):
         if self.client is None:
@@ -1725,9 +1845,11 @@ class ClientTransactionsWindow(tk.Toplevel):
         if payment_method == "Cheque":
             if not cheque_number:
                 return False
+            return bool(cheque_number)
         elif payment_method == "Bank Transaction":
             if not bank_detail:
                 return False
+            return bool(bank_detail)
 
         current_index = self._get_month_order_index(month)
         if current_index <= 0:
@@ -3266,6 +3388,42 @@ class ProgressApp(tk.Tk):
         else:
             self.progress_bar.configure(style="Green.Horizontal.TProgressbar")
 
+    def _build_payment_follow_up_tasks(self):
+        if self.plan is None:
+            return []
+
+        client_name = self.client_name_var.get().strip() or self.plan.client_name
+        if not client_name:
+            return []
+
+        self.client_manager.load_clients()
+        client = next((item for item in self.client_manager.clients if item.name.lower() == client_name.lower()), None)
+        if client is None:
+            return []
+
+        contract_details = getattr(client, "contract_details", {}) or {}
+        start_date = str(contract_details.get("starting_date") or "").strip()
+        end_date = str(contract_details.get("ending_date") or "").strip()
+        months = generate_contract_months(start_date, end_date)
+        if not months:
+            return []
+
+        transactions_by_month = {}
+        for entry in getattr(client, "transactions", []) or []:
+            month = str(entry.get("month", "") or "").strip()
+            if month:
+                transactions_by_month[month] = entry
+
+        follow_up_tasks = []
+        for month in months:
+            entry = transactions_by_month.get(month)
+            status = str((entry or {}).get("status", "") or "").strip().lower()
+            if entry is not None and status in {"paid", "completed", "complete", "success", "successful"}:
+                continue
+            follow_up_tasks.append(f"Follow up payment for {client.name} - {month}")
+
+        return follow_up_tasks
+
     def refresh_display(self):
         self.all_tasks_box.delete(0, tk.END)
         self.pending_tasks_box.delete(0, tk.END)
@@ -3275,7 +3433,17 @@ class ProgressApp(tk.Tk):
             self.pending_tasks_box.insert(tk.END, T("No pending tasks"))
             return
 
-        self.plan.sync_task_lists(all_tasks=self.plan.all_tasks, pending_tasks=self.plan.pending_tasks)
+        payment_tasks = self._build_payment_follow_up_tasks()
+        base_all_tasks = [task for task in self.plan.all_tasks if not str(task).startswith("Follow up payment for ")]
+        base_pending_tasks = [task for task in self.plan.pending_tasks if not str(task).startswith("Follow up payment for ")]
+
+        for task in payment_tasks:
+            if task not in base_all_tasks:
+                base_all_tasks.append(task)
+            if task not in base_pending_tasks:
+                base_pending_tasks.append(task)
+
+        self.plan.sync_task_lists(all_tasks=base_all_tasks, pending_tasks=base_pending_tasks)
         self.progress_var.set(f"{self.plan.progress}%")
         self.progress_bar["value"] = self.plan.progress
         self._apply_progress_bar_color(self.plan.progress)
