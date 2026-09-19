@@ -425,6 +425,26 @@ class ClientManager:
             or keyword_lower in client.email.lower()
         ]
 
+    def validate_shop_number(self, shop_number: str, exclude_name: str = "") -> tuple[bool, str]:
+        normalized = str(shop_number or "").strip()
+        if not normalized:
+            return False, "Please enter a shop number between 1 and 36."
+
+        if not normalized.isdigit():
+            return False, "Shop number must be a whole number from 1 to 36."
+
+        value = int(normalized)
+        if value < 1 or value > 36:
+            return False, "Shop number must be between 1 and 36."
+
+        for client in self.clients:
+            if client.name.lower() == (exclude_name or "").lower():
+                continue
+            if str(client.shop_number or "").strip() == normalized:
+                return False, f"Shop number '{normalized}' is already used by '{client.name}'."
+
+        return True, ""
+
     def save_clients(self):
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         payload = [client.to_dict() for client in self.clients]
@@ -450,6 +470,41 @@ class ClientManager:
             outfile.write(json.dumps(data, indent=2))
 
 
+def infer_country_from_contact(contact_value):
+    raw = str(contact_value or "").strip()
+    if not raw:
+        return "N/A"
+
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        return "N/A"
+
+    country_map = {
+        "+968": "Oman",
+        "+966": "Saudi Arabia",
+        "+971": "United Arab Emirates",
+        "+974": "Qatar",
+        "+965": "Kuwait",
+        "+973": "Bahrain",
+        "+962": "Jordan",
+        "+20": "Egypt",
+        "+1": "United States",
+        "+44": "United Kingdom",
+        "+49": "Germany",
+        "+33": "France",
+    }
+
+    for code, country in country_map.items():
+        if digits.startswith(code.lstrip("+")):
+            return country
+
+    if digits.startswith("968"):
+        return "Oman"
+    if digits.startswith("0"):
+        return "Oman"
+    return "N/A"
+
+
 def build_clients_report_text(file_path=None):
     resolved_path = Path(file_path) if file_path is not None else Path(__file__).resolve().parent.parent / "clients.json"
     if not resolved_path.exists():
@@ -466,20 +521,52 @@ def build_clients_report_text(file_path=None):
     lines = ["Clients Log", "====================", ""]
     for index, item in enumerate(data, start=1):
         client = Client.from_dict(item)
+        contract = dict(client.contract_details) if isinstance(client.contract_details, dict) else {}
+        progress = dict(client.progress) if isinstance(client.progress, dict) else {}
+
+        lines.append(f"Shop Number: {client.shop_number or 'N/A'}")
         lines.append(f"Client {index}: {client.name}")
+        lines.append("")
+        lines.append("Client Details")
+        lines.append("---------------")
         lines.append(f"Contact: {client.contact}")
         lines.append(f"Business: {client.business}")
         lines.append(f"Email: {client.email or 'N/A'}")
-        lines.append(f"Shop Number: {client.shop_number or 'N/A'}")
+        lines.append(f"Country: {infer_country_from_contact(client.contact) if client.contact else 'N/A'}")
+        lines.append("")
+        lines.append("Contract Details")
+        lines.append("----------------")
+        lines.append(f"Contract Number: {contract.get('contract_number') or 'N/A'}")
+        lines.append(f"Starting Date: {contract.get('starting_date') or 'N/A'}")
+        lines.append(f"Ending Date: {contract.get('ending_date') or 'N/A'}")
+        lines.append(f"Commercial Registration Number: {contract.get('commercial_registration_number') or 'N/A'}")
+        lines.append(f"Authorized Signature Name: {contract.get('authorized_signature_name') or 'N/A'}")
+        lines.append(f"Rent Value: {contract.get('rent_value') or 'N/A'}")
+        lines.append(f"Currency Type: {contract.get('currency_type') or 'OMR'}")
+        lines.append(f"Open Issues: {contract.get('open_issues') or 'N/A'}")
+        lines.append("")
+        lines.append("Tasks")
+        lines.append("-----")
+        lines.append(f"Progress: {progress.get('progress', 0)}%")
+        tasks = progress.get('all_tasks') or []
+        if isinstance(tasks, list) and tasks:
+            lines.append("Task List: " + ", ".join(str(task) for task in tasks))
+        else:
+            lines.append("Task List: None")
+        lines.append("")
+        lines.append("Reviews")
+        lines.append("-------")
         if client.reviews:
-            lines.append("Reviews:")
             for review in client.reviews:
                 review_text = review.get("review", "") if isinstance(review, dict) else str(review)
                 review_date = review.get("date", "") if isinstance(review, dict) else ""
+                comment = review.get("comment", "") if isinstance(review, dict) else ""
                 if review_date:
                     lines.append(f"- {review_date}: {review_text}")
                 else:
                     lines.append(f"- {review_text}")
+                if comment:
+                    lines.append(f"  Comment: {comment}")
         else:
             lines.append("Reviews: None")
         lines.append("")

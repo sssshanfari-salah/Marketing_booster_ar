@@ -5,7 +5,18 @@
     "business": "Resturant",
     "email": "",
     "shop_number": "4",
-    "reviews": [],
+    "reviews": [
+      {
+        "date": "2026-09-19 22:08:34",
+        "review": "i need corner shop",
+        "comment": "all corner shop are booked.  we will keep you in our waiting list"
+      },
+      {
+        "date": "2026-09-19 22:13:41",
+        "review": "i need only one corner shop",
+        "comment": "corner shops comes in pair.  so you need to rent both shops"
+      }
+    ],
     "contract_details": {
       "contract_number": "12345",
       "starting_date": "1/10/2026",
@@ -13,10 +24,15 @@
       "commercial_registration_number": "8678686",
       "authorized_signature_name": "jfdj kldjfkldj",
       "rent_value": "500",
-      "open_issues": "nothing to report",
-      "currency_type": "OMR"
+      "currency_type": "OMR",
+      "open_issues": "nothing to report"
     },
-    "progress": {}
+    "progress": {
+      "client_name": "al al arjan",
+      "progress": 100,
+      "pending_tasks": [],
+      "all_tasks": []
+    }
   },
   {
     "name": "Salah",
@@ -32,9 +48,14 @@
       "commercial_registration_number": "i7897979",
       "authorized_signature_name": "Salah",
       "rent_value": "200",
-      "open_issues": "nothing to report again",
-      "currency_type": "OMR"
+      "currency_type": "OMR",
+      "open_issues": "nothing to report again"
     },
-    "progress": {}
+    "progress": {
+      "client_name": "",
+      "progress": 0,
+      "pending_tasks": [],
+      "all_tasks": []
+    }
   }
 ]

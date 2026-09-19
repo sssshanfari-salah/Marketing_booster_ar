@@ -63,6 +63,29 @@ RUNTIME_DATA_FILES = [
 RUNTIME_DATA_FILES = [path for path in RUNTIME_DATA_FILES if path is not None and path.exists()]
 
 
+def validate_runtime_asset_catalog():
+    required_paths = [
+        ENTRY_SCRIPT,
+        CLIENTS_DATA_FILE,
+        LEGACY_CLIENTS_DATA_FILE,
+        COUNTRY_CODES_DATA,
+        DOCUMENTS_DATA_FILE,
+        SUPPORTING_DOCUMENTS_DIR,
+        *PROJECT_RUNTIME_DIRECTORIES,
+    ]
+
+    missing_paths = [str(path) for path in required_paths if path is not None and not path.exists()]
+    if missing_paths:
+        for missing in missing_paths:
+            print(f"Warning: missing runtime asset for packaged app: {missing}")
+
+    # Keep packaging aligned with the latest client-manager/export/report workflow.
+    for directory in PROJECT_RUNTIME_DIRECTORIES:
+        directory.mkdir(parents=True, exist_ok=True)
+
+    return True
+
+
 def collect_runtime_assets():
     assets = []
     seen = set()
@@ -355,6 +378,7 @@ def ensure_runtime_files():
 
 
 def build_app():
+    validate_runtime_asset_catalog()
     ensure_runtime_files()
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)

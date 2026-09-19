@@ -145,6 +145,11 @@ class ClientManagerTests(unittest.TestCase):
                     "email": "ali@example.com",
                     "shop_number": "12",
                     "reviews": [{"date": "2026-09-08", "review": "Good client"}],
+                    "contract_details": {
+                        "starting_date": "2026-01-01",
+                        "ending_date": "2027-01-01",
+                        "contract_number": "CN-001",
+                    },
                 }
             ], file)
 
@@ -153,6 +158,11 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("Ali", report)
         self.assertIn("+96891234567", report)
         self.assertIn("Good client", report)
+        self.assertIn("Starting Date", report)
+        self.assertIn("2026-01-01", report)
+        self.assertIn("Ending Date", report)
+        self.assertIn("2027-01-01", report)
+        self.assertIn("Contract Number", report)
 
     def test_add_client_with_email(self):
         manager = ClientManager(self.file_path)

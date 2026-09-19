@@ -1103,6 +1103,28 @@ class ContractDetailsWindow(tk.Toplevel):
         self.destroy()
 
 
+class ClientLogPreviewWindow(tk.Toplevel):
+    def __init__(self, master=None, report_text=""):
+        super().__init__(master)
+        self.title(T("Client Overview Preview"))
+        self.geometry("900x600")
+        self.minsize(700, 400)
+        self.transient(master)
+        self.grab_set()
+
+        text_widget = tk.Text(self, wrap="word", font=("Segoe UI", 10), padx=10, pady=10)
+        text_widget.insert("1.0", report_text)
+        text_widget.configure(state="disabled")
+        text_widget.pack(fill="both", expand=True, padx=12, pady=(12, 8))
+
+        button_row = ttk.Frame(self)
+        button_row.pack(fill="x", padx=12, pady=(0, 12))
+        button_row.columnconfigure(0, weight=1)
+        ttk.Button(button_row, text=T("Close Preview"), command=self.destroy).grid(row=0, column=1, sticky="e")
+
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+
+
 class ExportClientsLogWindow(tk.Toplevel):
     def __init__(self, master=None, manager=None):
         super().__init__(master)
@@ -1127,6 +1149,7 @@ class ExportClientsLogWindow(tk.Toplevel):
 
         action_row = ttk.Frame(main)
         action_row.grid(row=1, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        ttk.Button(action_row, text=T("Preview"), command=self.preview_report).pack(side="left", padx=(0, 8))
         ttk.Button(action_row, text=T("Save Log"), command=self.save_report).pack(side="left", padx=(0, 8))
         ttk.Button(action_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
         ttk.Button(action_row, text=T("Cancel"), command=self.destroy).pack(side="left")
@@ -1148,6 +1171,13 @@ class ExportClientsLogWindow(tk.Toplevel):
         if selected:
             self.path_var.set(selected)
 
+    def build_report_text(self):
+        return build_clients_report_text(self.manager.file_path if hasattr(self.manager, "file_path") else "clients.json")
+
+    def preview_report(self):
+        report = self.build_report_text()
+        ClientLogPreviewWindow(self, report)
+
     def save_report(self):
         target_path = self.path_var.get().strip()
         if not target_path:
@@ -1156,7 +1186,7 @@ class ExportClientsLogWindow(tk.Toplevel):
 
         destination = Path(target_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        report = build_clients_report_text(self.manager.file_path if hasattr(self.manager, "file_path") else "clients.json")
+        report = self.build_report_text()
         destination.write_text(report, encoding="utf-8")
         messagebox.showinfo(T("Save Log"), f"Saved: {destination}")
         self.destroy()
@@ -1196,12 +1226,16 @@ class ClientReviewsLogWindow(tk.Toplevel):
         ttk.Label(comment_frame, text=T("Comment")).pack(anchor="w")
         self.comment_text = tk.Text(comment_frame, height=3, wrap="word", font=("Segoe UI", 10))
         self.comment_text.pack(fill="x", pady=(4, 8))
+        self.comment_text.configure(state="disabled")
+
+        self.save_button = ttk.Button(comment_frame, text=T("Save Comment"), command=self.save_selected_comment)
+        self.save_button.pack(anchor="e", pady=(0, 8))
+        self.save_button.configure(state="disabled")
 
         self.refresh_view()
 
         button_row = ttk.Frame(self)
         button_row.pack(pady=(0, 12))
-        ttk.Button(button_row, text=T("Save Comments"), command=self.save_selected_comment).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Close"), command=self.destroy).pack(side="left")
@@ -1226,26 +1260,40 @@ class ClientReviewsLogWindow(tk.Toplevel):
                 lines.append("")
         print_report_document(title, lines)
 
+    def set_comment_entry_state(self, enabled: bool):
+        if enabled:
+            self.comment_text.configure(state="normal")
+            self.save_button.configure(state="normal")
+            return
+
+        self.comment_text.configure(state="disabled")
+        self.comment_text.delete("1.0", tk.END)
+        self.save_button.configure(state="disabled")
+
     def on_review_selected(self, event=None):
         selected = self.tree.selection()
         if not selected:
-            self.comment_text.delete("1.0", tk.END)
+            self.set_comment_entry_state(False)
             return
 
         values = self.tree.item(selected[0], "values")
         if len(values) >= 5:
+            self.set_comment_entry_state(True)
             self.comment_text.delete("1.0", tk.END)
             self.comment_text.insert("1.0", values[4])
+            return
+
+        self.set_comment_entry_state(False)
 
     def save_selected_comment(self):
         selected = self.tree.selection()
         if not selected:
-            messagebox.showwarning(T("No review selected"), T("Select a review row first."))
+            messagebox.showwarning(T("No review selected"), T("Please select a review from the review log first."))
             return
 
         values = self.tree.item(selected[0], "values")
         if len(values) < 5:
-            messagebox.showwarning(T("No review selected"), T("Select a review row first."))
+            messagebox.showwarning(T("No review selected"), T("Please select a valid review from the review log."))
             return
 
         client_name = values[0]
@@ -1271,7 +1319,7 @@ class ClientReviewsLogWindow(tk.Toplevel):
         reviews = self.manager.get_all_reviews()
         if not reviews:
             self.tree.insert("", tk.END, values=(T("No reviews yet"), "", "", "", ""))
-            self.comment_text.delete("1.0", tk.END)
+            self.set_comment_entry_state(False)
             return
 
         for index, review in enumerate(reviews, start=1):
@@ -1290,7 +1338,7 @@ class ClientReviewsLogWindow(tk.Toplevel):
                 ),
             )
 
-        self.comment_text.delete("1.0", tk.END)
+        self.set_comment_entry_state(False)
 
 
 class ProgressApp(tk.Tk):
@@ -1531,7 +1579,7 @@ class ProgressApp(tk.Tk):
             (T("Add Client"), self.add_new_client, 18),
             (T("Save Client"), self.save_current_client, 18),
             (T("All Clients"), self.open_all_clients, 18),
-            (T("Export Client Log"), self.export_client_log, None),
+            (T("Export Clients Log"), self.export_client_log, None),
         ]
 
         for idx, (text, command, width) in enumerate(client_action_specs):
@@ -2115,6 +2163,10 @@ class ProgressApp(tk.Tk):
         )
 
         shop_number = self.shop_number_var.get().strip()
+        valid_shop_number, shop_error = self.client_manager.validate_shop_number(shop_number, exclude_name=name)
+        if not valid_shop_number:
+            messagebox.showwarning(T("Shop number invalid"), T(shop_error))
+            return
 
         formatted_contact = format_contact_number(contact, country_code)
         duplicate_contact = next(
@@ -2420,6 +2472,9 @@ class ClientDetailsWindow(tk.Toplevel):
             raise ValueError(T("Please enter the client contact number before saving."))
         if not business:
             raise ValueError(T("Please enter the client business type before saving."))
+        valid, error = self.manager.validate_shop_number(shop_number, exclude_name=name)
+        if not valid:
+            raise ValueError(T(error))
         return Client(name, format_contact_number(contact, country_code), business, email, shop_number=shop_number)
 
     def share_client(self):
