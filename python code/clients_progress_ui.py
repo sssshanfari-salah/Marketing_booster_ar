@@ -1,9 +1,11 @@
+import calendar
 import json
 import os
 import re
 import sys
 import tempfile
 import webbrowser
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 import tkinter as tk
@@ -20,7 +22,15 @@ except ImportError:
     Image = None
     ImageTk = None
 
-from clients_management import Client, ClientManager, build_clients_report_text, format_contact_number, resolve_clients_data_path
+from clients_management import (
+    Client,
+    ClientManager,
+    build_client_payment_report_text,
+    build_clients_report_text,
+    format_contact_number,
+    generate_contract_months,
+    resolve_clients_data_path,
+)
 
 APP_ICON = None
 for candidate in [
@@ -171,6 +181,118 @@ def parse_contact_for_ui(contact_value):
     return digits, DEFAULT_COUNTRY
 
 
+class DatePickerPopup(tk.Toplevel):
+    def __init__(self, master=None, initial_value=""):
+        super().__init__(master)
+        self.title(T("Select Date"))
+        self.transient(master)
+        self.grab_set()
+        self.result = ""
+
+        self.current_year = datetime.today().year
+        self.current_month = datetime.today().month
+        if initial_value:
+            try:
+                initial_dt = datetime.strptime(initial_value, "%Y-%m-%d")
+                self.current_year = initial_dt.year
+                self.current_month = initial_dt.month
+            except ValueError:
+                try:
+                    initial_dt = datetime.fromisoformat(initial_value)
+                    self.current_year = initial_dt.year
+                    self.current_month = initial_dt.month
+                except ValueError:
+                    pass
+
+        self.month_label = ttk.Label(self, text="")
+        self.month_label.grid(row=0, column=1, sticky="ew", padx=6, pady=(8, 4))
+
+        prev_month = ttk.Button(self, text="<", command=self.prev_month)
+        prev_month.grid(row=0, column=0, padx=(8, 4), pady=(8, 4))
+        next_month = ttk.Button(self, text=">", command=self.next_month)
+        next_month.grid(row=0, column=2, padx=(4, 8), pady=(8, 4))
+
+        weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        for index, day in enumerate(weekdays):
+            ttk.Label(self, text=day).grid(row=1, column=index, padx=3, pady=2)
+
+        self.day_buttons = []
+        for row in range(2, 8):
+            for col in range(7):
+                btn = ttk.Button(self, text="", width=4, command=lambda row=row, col=col: self._select_day(row, col))
+                btn.grid(row=row, column=col, padx=2, pady=2)
+                self.day_buttons.append(btn)
+
+        ok_button = ttk.Button(self, text=T("OK"), command=self._confirm)
+        ok_button.grid(row=8, column=0, columnspan=7, sticky="ew", padx=8, pady=(8, 10))
+
+        self._render_calendar()
+        self.protocol("WM_DELETE_WINDOW", self._cancel)
+
+    def _cancel(self):
+        self.result = ""
+        self.destroy()
+
+    def _confirm(self):
+        if not self.result:
+            self.result = datetime(self.current_year, self.current_month, 1).strftime("%Y-%m-%d")
+        self.destroy()
+
+    def _select_day(self, row, col):
+        button = self.day_buttons[(row - 2) * 7 + col]
+        text = button.cget("text")
+        if not text:
+            return
+        self.result = datetime(self.current_year, self.current_month, int(text)).strftime("%Y-%m-%d")
+        self.destroy()
+
+    def prev_month(self):
+        if self.current_month == 1:
+            self.current_year -= 1
+            self.current_month = 12
+        else:
+            self.current_month -= 1
+        self._render_calendar()
+
+    def next_month(self):
+        if self.current_month == 12:
+            self.current_year += 1
+            self.current_month = 1
+        else:
+            self.current_month += 1
+        self._render_calendar()
+
+    def _render_calendar(self):
+        month_title = datetime(self.current_year, self.current_month, 1).strftime("%B %Y")
+        self.month_label.configure(text=month_title)
+
+        first_weekday, days_in_month = calendar.monthrange(self.current_year, self.current_month)
+        start_day = 1
+        button_index = 0
+        for _ in range(len(self.day_buttons)):
+            self.day_buttons[button_index].configure(text="")
+            button_index += 1
+
+        button_index = 0
+        for offset in range(first_weekday):
+            self.day_buttons[button_index].configure(text="")
+            button_index += 1
+
+        for day in range(1, days_in_month + 1):
+            self.day_buttons[button_index].configure(text=str(day))
+            button_index += 1
+
+        while button_index < len(self.day_buttons):
+            self.day_buttons[button_index].configure(text="")
+            button_index += 1
+
+
+def pick_date(parent, initial_value=""):
+    popup = DatePickerPopup(parent, initial_value=initial_value)
+    parent.wait_window(popup)
+    return popup.result
+
+
 TRANSLATIONS = {
     "eng": {
         "Tkinter could not start in this environment.": "Tkinter could not start in this environment.",
@@ -258,6 +380,20 @@ TRANSLATIONS = {
         "Open Issues Requiring Attention": "Open Issues Requiring Attention",
         "All Clients": "All Clients",
         "Open All Clients": "All Clients",
+        "Transactions": "Transactions",
+        "Client Transactions": "Client Transactions",
+        "Month": "Month",
+        "Status": "Status",
+        "Amount": "Amount",
+        "Payment Method": "Payment Method",
+        "Cheque Number": "Cheque Number",
+        "Due Date": "Due Date",
+        "Bank Name": "Bank Name",
+        "Add Month": "Add Month",
+        "Save Transactions": "Save Transactions",
+        "Transactions saved": "Transactions saved",
+        "Client payment transactions were updated successfully.": "Client payment transactions were updated successfully.",
+        "No payments yet": "No payments yet",
         "Send Email": "Send Email",
         "Save & Exit": "Save & Exit",
         "Cancel": "Cancel",
@@ -388,6 +524,20 @@ TRANSLATIONS = {
         "Open Issues Requiring Attention": "المشكلات المفتوحة التي تحتاج إلى عناية",
         "All Clients": "جميع العملاء",
         "Open All Clients": "جميع العملاء",
+        "Transactions": "المعاملات",
+        "Client Transactions": "معاملات العميل",
+        "Month": "الشهر",
+        "Status": "الحالة",
+        "Amount": "المبلغ",
+        "Payment Method": "طريقة الدفع",
+        "Cheque Number": "رقم الشيك",
+        "Due Date": "تاريخ الاستحقاق",
+        "Bank Name": "اسم البنك",
+        "Add Month": "إضافة شهر",
+        "Save Transactions": "حفظ المعاملات",
+        "Transactions saved": "تم حفظ المعاملات",
+        "Client payment transactions were updated successfully.": "تم تحديث معاملات دفع العميل بنجاح.",
+        "No payments yet": "لا توجد مدفوعات بعد",
         "Send Email": "إرسال بريد إلكتروني",
         "Save & Exit": "حفظ والخروج",
         "Cancel": "إلغاء",
@@ -507,6 +657,36 @@ def T(text, **kwargs):
     if kwargs:
         return translated.format(**kwargs)
     return translated
+
+
+def build_task_log_report_text(plan=None, client_name=""):
+    lines = [T("Task log"), "====================", ""]
+
+    if plan is not None:
+        plan_client = getattr(plan, "client_name", "") or client_name
+        if getattr(plan, "client", None) is not None and not plan_client:
+            plan_client = getattr(plan.client, "name", "")
+        name = str(plan_client or T("No client selected")).strip()
+        progress = getattr(plan, "progress", 0)
+        lines.extend([f"Client: {name}", f"Progress: {progress}%", ""])
+
+        tasks = list(getattr(plan, "all_tasks", []) or [])
+        if tasks:
+            lines.extend(f"- {task}" for task in tasks)
+        else:
+            lines.append(T("No tasks yet"))
+    else:
+        lines.append(T("No task plan available"))
+
+    return "\n".join(str(item) for item in lines).rstrip() + "\n"
+
+
+def build_review_log_report_text(client_name="", review_text=""):
+    lines = [T("Review log"), "====================", ""]
+    name = str(client_name or T("No client selected")).strip()
+    review = str(review_text or T("No review")).strip()
+    lines.extend([f"Client: {name}", f"Review: {review}"])
+    return "\n".join(str(item) for item in lines).rstrip() + "\n"
 
 
 def build_startup_splash():
@@ -1024,7 +1204,14 @@ class ContractDetailsWindow(tk.Toplevel):
             ttk.Label(main, text=label_text, font=("Segoe UI", 10, "bold")).grid(row=row_index, column=0, sticky="w", padx=(0, 12), pady=(0, 8))
             var = tk.StringVar()
             self.values[key] = var
-            ttk.Entry(main, textvariable=var, width=38).grid(row=row_index, column=1, sticky="ew", pady=(0, 8))
+            if key in {"starting_date", "ending_date"}:
+                date_frame = ttk.Frame(main)
+                date_frame.grid(row=row_index, column=1, sticky="ew", pady=(0, 8))
+                date_frame.columnconfigure(0, weight=1)
+                ttk.Entry(date_frame, textvariable=var, width=32).grid(row=0, column=0, sticky="ew", padx=(0, 6))
+                ttk.Button(date_frame, text="📅", width=3, command=lambda selected_key=key, entry_var=var: self._pick_date(selected_key, entry_var)).grid(row=0, column=1, sticky="e")
+            else:
+                ttk.Entry(main, textvariable=var, width=38).grid(row=row_index, column=1, sticky="ew", pady=(0, 8))
             row_index += 1
 
         ttk.Label(main, text=T("Currency Type"), font=("Segoe UI", 10, "bold")).grid(row=row_index, column=0, sticky="w", padx=(0, 12), pady=(0, 8))
@@ -1053,6 +1240,12 @@ class ContractDetailsWindow(tk.Toplevel):
             return None
         self.manager.load_clients()
         return next((client for client in self.manager.clients if client.name.lower() == client_name.lower()), None)
+
+    def _pick_date(self, key, var):
+        date_value = var.get().strip()
+        selected = pick_date(self, date_value)
+        if selected:
+            var.set(selected)
 
     def _collect_contract_details(self):
         details = {}
@@ -1125,6 +1318,858 @@ class ClientLogPreviewWindow(tk.Toplevel):
         self.protocol("WM_DELETE_WINDOW", self.destroy)
 
 
+class ClientPaymentReportWindow(tk.Toplevel):
+    def __init__(self, master=None, client_name=""):
+        super().__init__(master)
+        self.title(T("Client Payment Report"))
+        self.geometry("900x620")
+        self.minsize(720, 420)
+        self.master_app = master
+        self.client_name = str(client_name or "").strip()
+        self.manager = getattr(master, "client_manager", ClientManager("clients.json")) if master is not None else ClientManager("clients.json")
+        self.manager.load_clients()
+
+        self.client = self._find_client(self.client_name) if self.client_name else None
+        if self.client is None and self.master_app is not None and hasattr(self.master_app, "client_name_var"):
+            determined = str(self.master_app.client_name_var.get() or "").strip()
+            self.client_name = determined
+            self.client = self._find_client(determined)
+
+        main = ttk.Frame(self, padding=12)
+        main.pack(fill="both", expand=True)
+
+        contract_status_label = ttk.Label(
+            main,
+            text=f"{T('Contract Period Status')}: {self._contract_status_text()}",
+            font=("Segoe UI", 10, "bold"),
+            anchor="w",
+        )
+        contract_status_label.pack(fill="x", pady=(0, 8))
+
+        text_widget = tk.Text(main, wrap="word", font=("Segoe UI", 10), padx=10, pady=10)
+        text_widget.pack(fill="both", expand=True)
+        text_widget.insert("1.0", self.build_report_text())
+        text_widget.configure(state="disabled")
+
+        button_row = ttk.Frame(main)
+        button_row.pack(fill="x", pady=(8, 0))
+        ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Save Log"), command=self.save_report).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Close"), command=self.destroy).pack(side="left")
+
+    def _find_client(self, client_name):
+        if not client_name:
+            return None
+        self.manager.load_clients()
+        return next((client for client in self.manager.clients if client.name.lower() == client_name.lower()), None)
+
+    def _contract_status_text(self):
+        if self.client is None:
+            return "N/A"
+
+        contract_details = self.client.contract_details or {}
+        contract_start = str(contract_details.get("starting_date") or "").strip()
+        contract_end = str(contract_details.get("ending_date") or "").strip()
+        current_date = datetime.now().strftime("%Y-%m-%d")
+        status = "Active"
+        if contract_start and contract_end:
+            try:
+                start_dt = datetime.strptime(contract_start, "%Y-%m-%d")
+                end_dt = datetime.strptime(contract_end, "%Y-%m-%d")
+                today_dt = datetime.strptime(current_date, "%Y-%m-%d")
+                if today_dt < start_dt:
+                    status = "Not Started"
+                elif today_dt > end_dt:
+                    status = "Expired"
+            except ValueError:
+                status = "Pending evaluation"
+        elif contract_start and not contract_end:
+            status = "In progress"
+        elif not contract_start and contract_end:
+            status = "Pending start date"
+
+        return status
+
+    def build_report_text(self):
+        if self.client is None:
+            return "Client Payment Report\n\nNo client selected."
+        return build_client_payment_report_text(self.client.name, self.manager)
+
+    def print_report(self):
+        if self.client is None:
+            messagebox.showwarning(T("No client selected"), T("Select a client from the list first."))
+            return
+        print_report_document(f"Client Payment Report - {self.client.name}", self.build_report_text().splitlines())
+
+    def save_report(self):
+        if self.client is None:
+            messagebox.showwarning(T("No client selected"), T("Select a client from the list first."))
+            return
+
+        default_dir = resolve_log_output_dir("clients_logs")
+        default_path = default_dir / f"{self.client.name.replace(' ', '_')}_payment_report.txt"
+        destination = filedialog.asksaveasfilename(
+            title=T("Select file path"),
+            initialfile=default_path.name,
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            initialdir=str(default_dir),
+        )
+        if not destination:
+            return
+
+        try:
+            Path(destination).write_text(self.build_report_text(), encoding="utf-8")
+            messagebox.showinfo(T("Save Log"), f"Saved: {destination}")
+        except OSError as exc:
+            messagebox.showerror(T("Save Log"), f"Unable to save report: {exc}")
+
+
+class ClientTransactionsWindow(tk.Toplevel):
+    PAYMENT_METHOD_CHOICES = ("Cash", "Cheque", "Bank Transaction")
+
+    def __init__(self, master=None, client_name=""):
+        super().__init__(master)
+        self.title(T("Client Transactions"))
+        self.geometry("980x560")
+        self.minsize(780, 420)
+        self.master_app = master
+        self.client_name = str(client_name or "").strip()
+        self.manager = getattr(master, "client_manager", ClientManager("clients.json")) if master is not None else ClientManager("clients.json")
+        self.manager.load_clients()
+
+        self.client = self._find_client(self.client_name) if self.client_name else None
+        if self.client is None and self.master_app is not None and hasattr(self.master_app, "client_name_var"):
+            determined = str(self.master_app.client_name_var.get() or "").strip()
+            self.client_name = determined
+            self.client = self._find_client(determined)
+
+        self.status_checkbuttons = {}
+        self.status_vars = {}
+        self.method_comboboxes = {}
+        self.method_vars = {}
+        self.cheque_entries = {}
+        self.cheque_vars = {}
+        self.bank_transaction_entries = {}
+        self.bank_transaction_vars = {}
+        self.amount_entries = {}
+        self.amount_vars = {}
+        self.due_date_entries = {}
+        self.due_date_vars = {}
+        self.bank_name_entries = {}
+        self.bank_name_vars = {}
+        self.due_date_buttons = {}
+        self.month_comboboxes = {}
+        self.month_vars = {}
+        self.month_options = self._build_month_options()
+
+        main = ttk.Frame(self, padding=12)
+        main.pack(fill="both", expand=True)
+        main.columnconfigure(0, weight=1)
+
+        header = ttk.Frame(main)
+        header.pack(fill="x", pady=(0, 10))
+        ttk.Label(header, text=f"{T('Client')}: {self.client_name or T('No client selected')}", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+
+        columns = ("month", "status", "amount", "method", "cheque", "due_date", "bank", "bank_transaction_detail")
+        self.tree = ttk.Treeview(main, columns=columns, show="headings", height=14)
+        for column, title in zip(columns, [T("Month"), T("Status"), T("Amount"), T("Payment Method"), T("Cheque Number"), T("Due Date"), T("Bank Name"), T("Bank Transaction Details")]):
+            self.tree.heading(column, text=title)
+            self.tree.column(column, width=120, anchor="w")
+        self.tree.pack(fill="both", expand=True)
+        self.tree.bind("<Configure>", lambda event: (
+            self._position_status_checkbuttons(),
+            self._position_method_comboboxes(),
+            self._position_cheque_entries(),
+            self._position_bank_transaction_entries(),
+            self._position_amount_entries(),
+            self._position_due_date_entries(),
+            self._position_due_date_buttons(),
+            self._position_bank_name_entries(),
+            self._position_month_comboboxes(),
+        ))
+
+        controls = ttk.Frame(main)
+        controls.pack(fill="x", pady=(8, 0))
+        ttk.Button(controls, text=T("Add Month"), command=self.add_transaction_row).pack(side="left", padx=(0, 8))
+        ttk.Button(controls, text=T("Save Transactions"), command=self.save_transactions).pack(side="left", padx=(0, 8))
+        ttk.Button(controls, text=T("Close"), command=self.destroy).pack(side="left")
+
+        self.refresh_view()
+
+    def _find_client(self, client_name):
+        if not client_name:
+            return None
+        self.manager.load_clients()
+        return next((client for client in self.manager.clients if client.name.lower() == client_name.lower()), None)
+
+    def _build_month_options(self):
+        if self.client is None:
+            return []
+
+        contract_details = getattr(self.client, "contract_details", {}) or {}
+        start_date = str(contract_details.get("starting_date") or "").strip()
+        end_date = str(contract_details.get("ending_date") or "").strip()
+        months = generate_contract_months(start_date, end_date)
+        if months:
+            return months
+        return []
+
+    def _normalize_payment_method(self, value):
+        if value is None:
+            return "Cash"
+
+        normalized = str(value).strip()
+        if not normalized:
+            return "Cash"
+
+        lookup = {choice.lower(): choice for choice in self.PAYMENT_METHOD_CHOICES}
+        if normalized.lower() in lookup:
+            return lookup[normalized.lower()]
+
+        for choice in self.PAYMENT_METHOD_CHOICES:
+            if normalized.lower() in choice.lower():
+                return choice
+
+        return "Cash"
+
+    def _is_payment_completed(self, entry):
+        status = str(entry.get("status", "") or "").strip().lower()
+        return status in {"paid", "completed", "complete", "success", "successful", "yes", "true", "1"}
+
+    def _position_status_checkbuttons(self):
+        for row_id, checkbutton in list(self.status_checkbuttons.items()):
+            if not self.tree.exists(row_id):
+                checkbutton.destroy()
+                self.status_checkbuttons.pop(row_id, None)
+                self.status_vars.pop(row_id, None)
+                continue
+
+            try:
+                x, y, width, height = self.tree.bbox(row_id, "status")
+            except Exception:
+                continue
+
+            if width <= 0:
+                continue
+
+            checkbutton.place(x=x + 4, y=y + 2, width=max(18, width - 8), height=max(18, height - 4))
+
+    def _position_method_comboboxes(self):
+        for row_id, combobox in list(self.method_comboboxes.items()):
+            if not self.tree.exists(row_id):
+                combobox.destroy()
+                self.method_comboboxes.pop(row_id, None)
+                self.method_vars.pop(row_id, None)
+                continue
+
+            try:
+                x, y, width, height = self.tree.bbox(row_id, "method")
+            except Exception:
+                continue
+
+            if width <= 0:
+                continue
+
+            combobox.place(x=x + 2, y=y + 2, width=max(120, width - 6), height=max(22, height - 4))
+
+    def _position_cheque_entries(self):
+        for row_id, entry_widget in list(self.cheque_entries.items()):
+            if not self.tree.exists(row_id):
+                entry_widget.destroy()
+                self.cheque_entries.pop(row_id, None)
+                self.cheque_vars.pop(row_id, None)
+                continue
+
+            try:
+                x, y, width, height = self.tree.bbox(row_id, "cheque")
+            except Exception:
+                continue
+
+            if width <= 0:
+                continue
+
+            entry_widget.place(x=x + 2, y=y + 2, width=max(90, width - 6), height=max(22, height - 4))
+
+    def _position_bank_transaction_entries(self):
+        for row_id, entry_widget in list(self.bank_transaction_entries.items()):
+            if not self.tree.exists(row_id):
+                entry_widget.destroy()
+                self.bank_transaction_entries.pop(row_id, None)
+                self.bank_transaction_vars.pop(row_id, None)
+                continue
+
+            try:
+                x, y, width, height = self.tree.bbox(row_id, "bank_transaction_detail")
+            except Exception:
+                continue
+
+            if width <= 0:
+                continue
+
+            entry_widget.place(x=x + 2, y=y + 2, width=max(110, width - 6), height=max(22, height - 4))
+
+    def _position_amount_entries(self):
+        for row_id, entry_widget in list(self.amount_entries.items()):
+            if not self.tree.exists(row_id):
+                entry_widget.destroy()
+                self.amount_entries.pop(row_id, None)
+                self.amount_vars.pop(row_id, None)
+                continue
+
+            try:
+                x, y, width, height = self.tree.bbox(row_id, "amount")
+            except Exception:
+                continue
+
+            if width <= 0:
+                continue
+
+            entry_widget.place(x=x + 2, y=y + 2, width=max(90, width - 6), height=max(22, height - 4))
+
+    def _position_due_date_entries(self):
+        for row_id, entry_widget in list(self.due_date_entries.items()):
+            if not self.tree.exists(row_id):
+                entry_widget.destroy()
+                self.due_date_entries.pop(row_id, None)
+                self.due_date_vars.pop(row_id, None)
+                continue
+
+            try:
+                x, y, width, height = self.tree.bbox(row_id, "due_date")
+            except Exception:
+                continue
+
+            if width <= 0:
+                continue
+
+            entry_widget.place(x=x + 2, y=y + 2, width=max(92, width - 34), height=max(22, height - 4))
+
+    def _position_due_date_buttons(self):
+        for row_id, button_widget in list(self.due_date_buttons.items()):
+            if not self.tree.exists(row_id):
+                button_widget.destroy()
+                self.due_date_buttons.pop(row_id, None)
+                continue
+
+            try:
+                x, y, width, height = self.tree.bbox(row_id, "due_date")
+            except Exception:
+                continue
+
+            if width <= 0:
+                continue
+
+            button_widget.place(x=x + max(92, width - 28), y=y + 2, width=28, height=max(22, height - 4))
+
+    def _position_bank_name_entries(self):
+        for row_id, entry_widget in list(self.bank_name_entries.items()):
+            if not self.tree.exists(row_id):
+                entry_widget.destroy()
+                self.bank_name_entries.pop(row_id, None)
+                self.bank_name_vars.pop(row_id, None)
+                continue
+
+            try:
+                x, y, width, height = self.tree.bbox(row_id, "bank")
+            except Exception:
+                continue
+
+            if width <= 0:
+                continue
+
+            entry_widget.place(x=x + 2, y=y + 2, width=max(110, width - 6), height=max(22, height - 4))
+
+    def _position_month_comboboxes(self):
+        for row_id, combobox in list(self.month_comboboxes.items()):
+            if not self.tree.exists(row_id):
+                combobox.destroy()
+                self.month_comboboxes.pop(row_id, None)
+                self.month_vars.pop(row_id, None)
+                continue
+
+            try:
+                x, y, width, height = self.tree.bbox(row_id, "month")
+            except Exception:
+                continue
+
+            if width <= 0:
+                continue
+
+            combobox.place(x=x + 2, y=y + 2, width=max(110, width - 6), height=max(22, height - 4))
+
+    def _get_month_order_index(self, month_value):
+        if not month_value:
+            return -1
+        if not self.month_options:
+            return -1
+        try:
+            return self.month_options.index(month_value)
+        except ValueError:
+            return -1
+
+    def _can_complete_payment(self, entry):
+        if not entry:
+            return False
+
+        month = str(entry.get("month", "") or "").strip()
+        amount = str(entry.get("amount", "") or "").strip()
+        payment_method = self._normalize_payment_method(entry.get("payment_method", "Cash"))
+        due_date = str(entry.get("due_date", "") or "").strip()
+        cheque_number = str(entry.get("cheque_number", "") or "").strip()
+        bank_detail = str(entry.get("bank_transaction_details", "") or "").strip()
+
+        if not month or not amount or not due_date:
+            return False
+
+        if payment_method == "Cheque":
+            if not cheque_number:
+                return False
+        elif payment_method == "Bank Transaction":
+            if not bank_detail:
+                return False
+
+        current_index = self._get_month_order_index(month)
+        if current_index <= 0:
+            return True
+
+        previous_month = self.month_options[current_index - 1] if current_index - 1 >= 0 else ""
+        if not previous_month:
+            return True
+
+        for candidate in (getattr(self.client, "transactions", []) or []):
+            if str(candidate.get("month", "") or "").strip() != previous_month:
+                continue
+            if str(candidate.get("status", "") or "").strip().lower() not in {"paid", "completed", "complete", "success", "successful"}:
+                return False
+            break
+        else:
+            return False
+
+        return True
+
+    def _toggle_status(self, row_id, entry, var):
+        completed = bool(var.get())
+        if not completed:
+            entry["status"] = "Pending"
+            self.tree.set(row_id, "status", "Pending")
+            return
+
+        if not self._can_complete_payment(entry):
+            var.set(False)
+            entry["status"] = "Pending"
+            self.tree.set(row_id, "status", "Pending")
+            prior_month = self._get_previous_month(entry.get("month", ""))
+            if prior_month:
+                messagebox.showwarning(T("Outstanding payment"), T("Complete the previous month payment for '{month}' before marking this payment as paid.", month=prior_month))
+            else:
+                messagebox.showwarning(T("Incomplete payment"), T("Complete the required payment details before marking this month as paid."))
+            return
+
+        entry["status"] = "Paid"
+        self.tree.set(row_id, "status", "Paid")
+
+    def _coerce_due_date_for_month(self, month_value, due_date_value):
+        month_text = str(month_value or "").strip()
+        if not month_text:
+            return str(due_date_value or "").strip()
+
+        try:
+            month_start = datetime.strptime(f"{month_text}-01", "%Y-%m-%d")
+        except ValueError:
+            return str(due_date_value or "").strip()
+
+        last_day = calendar.monthrange(month_start.year, month_start.month)[1]
+        month_end = datetime(month_start.year, month_start.month, last_day).strftime("%Y-%m-%d")
+
+        value = str(due_date_value or "").strip()
+        if not value:
+            return month_end
+
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%d")
+        except ValueError:
+            try:
+                parsed = datetime.fromisoformat(value)
+            except ValueError:
+                return month_end
+
+        if parsed.year == month_start.year and parsed.month == month_start.month:
+            return parsed.strftime("%Y-%m-%d")
+        return month_end
+
+    def _get_previous_month(self, month_value):
+        month = str(month_value or "").strip()
+        current_index = self._get_month_order_index(month)
+        if current_index <= 0 or not self.month_options:
+            return ""
+        return self.month_options[current_index - 1]
+
+    def _update_month(self, row_id, entry, var):
+        entry["month"] = str(var.get() or "").strip()
+        self.tree.set(row_id, "month", entry["month"])
+
+        coerced_due_date = self._coerce_due_date_for_month(entry["month"], entry.get("due_date", ""))
+        if coerced_due_date != str(entry.get("due_date", "") or "").strip():
+            entry["due_date"] = coerced_due_date
+            self.tree.set(row_id, "due_date", coerced_due_date)
+            if row_id in self.due_date_vars:
+                self.due_date_vars[row_id].set(coerced_due_date)
+
+    def _update_payment_method(self, row_id, entry, var):
+        entry["payment_method"] = self._normalize_payment_method(var.get())
+        self.tree.set(row_id, "method", entry["payment_method"])
+
+        cheque_entry = self.cheque_entries.get(row_id)
+        if cheque_entry is not None:
+            if entry["payment_method"] == "Cheque":
+                cheque_entry.configure(state="normal")
+            else:
+                if entry.get("cheque_number", "").strip():
+                    entry["cheque_number"] = ""
+                    self.cheque_vars[row_id].set("")
+                cheque_entry.configure(state="disabled")
+
+        bank_detail_entry = self.bank_transaction_entries.get(row_id)
+        if bank_detail_entry is not None:
+            if entry["payment_method"] == "Bank Transaction":
+                bank_detail_entry.configure(state="normal")
+            else:
+                if entry.get("bank_transaction_details", "").strip():
+                    entry["bank_transaction_details"] = ""
+                    self.bank_transaction_vars[row_id].set("")
+                bank_detail_entry.configure(state="disabled")
+
+    def refresh_view(self):
+        self.month_options = self._build_month_options()
+
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        for row_id, checkbutton in list(self.status_checkbuttons.items()):
+            checkbutton.destroy()
+        self.status_checkbuttons.clear()
+        self.status_vars.clear()
+
+        for row_id, combobox in list(self.method_comboboxes.items()):
+            combobox.destroy()
+        self.method_comboboxes.clear()
+        self.method_vars.clear()
+
+        for row_id, entry_widget in list(self.cheque_entries.items()):
+            entry_widget.destroy()
+        self.cheque_entries.clear()
+        self.cheque_vars.clear()
+
+        for row_id, entry_widget in list(self.bank_transaction_entries.items()):
+            entry_widget.destroy()
+        self.bank_transaction_entries.clear()
+        self.bank_transaction_vars.clear()
+
+        for row_id, entry_widget in list(self.amount_entries.items()):
+            entry_widget.destroy()
+        self.amount_entries.clear()
+        self.amount_vars.clear()
+
+        for row_id, entry_widget in list(self.due_date_entries.items()):
+            entry_widget.destroy()
+        self.due_date_entries.clear()
+        self.due_date_vars.clear()
+
+        for row_id, button_widget in list(self.due_date_buttons.items()):
+            button_widget.destroy()
+        self.due_date_buttons.clear()
+
+        for row_id, entry_widget in list(self.bank_name_entries.items()):
+            entry_widget.destroy()
+        self.bank_name_entries.clear()
+        self.bank_name_vars.clear()
+
+        for row_id, combobox in list(self.month_comboboxes.items()):
+            combobox.destroy()
+        self.month_comboboxes.clear()
+        self.month_vars.clear()
+
+        if self.client is None:
+            self.tree.insert("", "end", values=(T("No client selected"), "", "", "", "", "", ""))
+            return
+
+        transactions = list(getattr(self.client, "transactions", []) or [])
+        if not transactions:
+            self.tree.insert("", "end", values=(T("No payments yet"), "", "", "", "", "", ""))
+            return
+
+        for entry in transactions:
+            month_value = str(entry.get("month", "") or "").strip()
+            if self.month_options and month_value not in self.month_options:
+                month_value = month_value or self.month_options[0]
+            if not month_value:
+                month_value = self.month_options[0] if self.month_options else ""
+
+            row_id = self.tree.insert(
+                "",
+                "end",
+                values=(
+                    month_value,
+                    "",
+                    str(entry.get("amount", "")),
+                    self._normalize_payment_method(entry.get("payment_method", "Cash")),
+                    str(entry.get("cheque_number", "")),
+                    str(entry.get("due_date", "")),
+                    str(entry.get("bank_name", "")),
+                    str(entry.get("bank_transaction_details", "")),
+                ),
+            )
+
+            month_var = tk.StringVar(value=month_value)
+            self.month_vars[row_id] = month_var
+            month_combo = ttk.Combobox(
+                self.tree,
+                textvariable=month_var,
+                values=list(self.month_options) if self.month_options else [month_value],
+                state="readonly" if self.month_options else "normal",
+                width=12,
+            )
+            month_combo.bind(
+                "<<ComboboxSelected>>",
+                lambda event, current_row=row_id, current_entry=entry, current_var=month_var: self._update_month(current_row, current_entry, current_var),
+            )
+            self.month_comboboxes[row_id] = month_combo
+
+            checkbox_var = tk.BooleanVar(value=self._is_payment_completed(entry))
+            self.status_vars[row_id] = checkbox_var
+            checkbutton = tk.Checkbutton(
+                self.tree,
+                variable=checkbox_var,
+                command=lambda current_row=row_id, current_entry=entry, current_var=checkbox_var: self._toggle_status(current_row, current_entry, current_var),
+                bd=0,
+                highlightthickness=0,
+                padx=0,
+                pady=0,
+            )
+            self.status_checkbuttons[row_id] = checkbutton
+
+            method_var = tk.StringVar(value=self._normalize_payment_method(entry.get("payment_method", "Cash")))
+            self.method_vars[row_id] = method_var
+            combobox = ttk.Combobox(
+                self.tree,
+                textvariable=method_var,
+                values=list(self.PAYMENT_METHOD_CHOICES),
+                state="readonly",
+                width=16,
+            )
+            combobox.bind(
+                "<<ComboboxSelected>>",
+                lambda event, current_row=row_id, current_entry=entry, current_var=method_var: self._update_payment_method(current_row, current_entry, current_var),
+            )
+            self.method_comboboxes[row_id] = combobox
+
+            amount_var = tk.StringVar(value=str(entry.get("amount", "")))
+            self.amount_vars[row_id] = amount_var
+            amount_entry = ttk.Entry(self.tree, textvariable=amount_var, width=10)
+            amount_entry.bind("<FocusOut>", lambda event, current_row=row_id, current_entry=entry, current_var=amount_var: self._update_amount(current_row, current_entry, current_var))
+            self.amount_entries[row_id] = amount_entry
+
+            due_date_var = tk.StringVar(value=str(entry.get("due_date", "")))
+            self.due_date_vars[row_id] = due_date_var
+            due_date_entry = ttk.Entry(self.tree, textvariable=due_date_var, width=12, state="readonly")
+            due_date_entry.bind("<FocusOut>", lambda event, current_row=row_id, current_entry=entry, current_var=due_date_var: self._update_due_date(current_row, current_entry, current_var))
+            self.due_date_entries[row_id] = due_date_entry
+            due_date_button = ttk.Button(self.tree, text="📅", width=3, command=lambda current_row=row_id, current_var=due_date_var, current_entry=entry: self._pick_due_date(current_row, current_var, current_entry))
+            self.due_date_buttons[row_id] = due_date_button
+
+            bank_name_var = tk.StringVar(value=str(entry.get("bank_name", "")))
+            self.bank_name_vars[row_id] = bank_name_var
+            bank_name_entry = ttk.Entry(self.tree, textvariable=bank_name_var, width=14)
+            bank_name_entry.bind("<FocusOut>", lambda event, current_row=row_id, current_entry=entry, current_var=bank_name_var: self._update_bank_name(current_row, current_entry, current_var))
+            self.bank_name_entries[row_id] = bank_name_entry
+
+            cheque_var = tk.StringVar(value=str(entry.get("cheque_number", "")))
+            self.cheque_vars[row_id] = cheque_var
+            cheque_entry = ttk.Entry(self.tree, textvariable=cheque_var, width=12)
+            cheque_entry.bind("<FocusOut>", lambda event, current_row=row_id, current_entry=entry, current_var=cheque_var: self._update_cheque_number(current_row, current_entry, current_var))
+            self.cheque_entries[row_id] = cheque_entry
+            if self._normalize_payment_method(entry.get("payment_method", "Cash")) != "Cheque":
+                cheque_entry.configure(state="disabled")
+
+            bank_transaction_var = tk.StringVar(value=str(entry.get("bank_transaction_details", "")))
+            self.bank_transaction_vars[row_id] = bank_transaction_var
+            bank_transaction_entry = ttk.Entry(self.tree, textvariable=bank_transaction_var, width=14)
+            bank_transaction_entry.bind("<FocusOut>", lambda event, current_row=row_id, current_entry=entry, current_var=bank_transaction_var: self._update_bank_transaction_details(current_row, current_entry, current_var))
+            self.bank_transaction_entries[row_id] = bank_transaction_entry
+            if self._normalize_payment_method(entry.get("payment_method", "Cash")) != "Bank Transaction":
+                bank_transaction_entry.configure(state="disabled")
+
+        self._position_status_checkbuttons()
+        self._position_method_comboboxes()
+        self._position_amount_entries()
+        self._position_due_date_entries()
+        self._position_due_date_buttons()
+        self._position_bank_name_entries()
+        self._position_cheque_entries()
+        self._position_bank_transaction_entries()
+        self._position_month_comboboxes()
+
+    def _update_amount(self, row_id, entry, var):
+        value = str(var.get() or "").strip()
+        try:
+            if value:
+                float(value)
+            entry["amount"] = value
+        except ValueError:
+            entry["amount"] = ""
+            var.set("")
+            messagebox.showwarning(T("Invalid amount"), T("Please enter a valid numeric amount."))
+
+    def _pick_due_date(self, row_id, var, entry=None):
+        selected = pick_date(self, var.get())
+        if not selected:
+            return
+        current_month = str((entry or {}).get("month", "") or "").strip()
+        normalized = self._coerce_due_date_for_month(current_month, selected)
+        var.set(normalized)
+        self.tree.set(row_id, "due_date", normalized)
+        if entry is not None:
+            entry["due_date"] = normalized
+        if row_id in self.due_date_vars:
+            self.due_date_vars[row_id].set(normalized)
+
+    def _update_due_date(self, row_id, entry, var):
+        value = str(var.get() or "").strip()
+        normalized = self._coerce_due_date_for_month(entry.get("month", ""), value)
+        entry["due_date"] = normalized
+        self.tree.set(row_id, "due_date", normalized)
+        var.set(normalized)
+
+    def _update_bank_name(self, row_id, entry, var):
+        entry["bank_name"] = str(var.get() or "").strip()
+
+    def _update_cheque_number(self, row_id, entry, var):
+        entry["cheque_number"] = str(var.get() or "").strip()
+
+    def _update_bank_transaction_details(self, row_id, entry, var):
+        entry["bank_transaction_details"] = str(var.get() or "").strip()
+
+    def _next_month_for_new_row(self):
+        if not self.month_options:
+            return ""
+
+        saved_months = [
+            str(item.get("month", "") or "").strip()
+            for item in (getattr(self.client, "transactions", []) or [])
+            if str(item.get("month", "") or "").strip()
+        ]
+        if not saved_months:
+            return self.month_options[0]
+
+        contract_end_month = self.month_options[-1]
+        existing_months = {month for month in saved_months if month in self.month_options}
+        if contract_end_month in existing_months:
+            return contract_end_month
+
+        last_month = ""
+        last_dt = None
+        for month_value in saved_months:
+            if month_value not in self.month_options:
+                continue
+            try:
+                candidate = datetime.strptime(f"{month_value}-01", "%Y-%m-%d")
+            except ValueError:
+                continue
+            if last_dt is None or candidate > last_dt:
+                last_dt = candidate
+                last_month = month_value
+
+        if last_dt is None:
+            return self.month_options[0]
+
+        current_index = self.month_options.index(last_month) if last_month in self.month_options else -1
+        if current_index >= len(self.month_options) - 1:
+            return contract_end_month
+
+        return self.month_options[current_index + 1]
+
+    def add_transaction_row(self):
+        if self.client is None:
+            messagebox.showwarning(T("No client selected"), T("Select a client from the list first."))
+            return
+
+        if self.month_options:
+            existing_months = {
+                str(item.get("month", "") or "").strip()
+                for item in (getattr(self.client, "transactions", []) or [])
+                if str(item.get("month", "") or "").strip()
+            }
+            if self.month_options[-1] in existing_months:
+                return
+
+        month_value = self._next_month_for_new_row()
+        self.client.transactions.append({
+            "month": month_value,
+            "status": "Pending",
+            "amount": "",
+            "payment_method": "Cash",
+            "cheque_number": "",
+            "due_date": "",
+            "bank_name": "",
+            "bank_transaction_details": "",
+        })
+        self.refresh_view()
+
+    def save_transactions(self):
+        if self.client is None:
+            messagebox.showwarning(T("No client selected"), T("Select a client from the list first."))
+            return
+
+        completed_rows = []
+        for row_id, entry in zip(self.tree.get_children(), self.client.transactions):
+            if row_id in self.month_vars:
+                entry["month"] = str(self.month_vars[row_id].get() or "").strip()
+            if row_id in self.status_vars:
+                entry["status"] = "Paid" if self.status_vars[row_id].get() else "Pending"
+            if row_id in self.amount_vars:
+                entry["amount"] = str(self.amount_vars[row_id].get() or "").strip()
+            if row_id in self.method_vars:
+                entry["payment_method"] = self._normalize_payment_method(self.method_vars[row_id].get())
+            if row_id in self.cheque_vars:
+                entry["cheque_number"] = str(self.cheque_vars[row_id].get() or "").strip()
+            if row_id in self.due_date_vars:
+                entry["due_date"] = str(self.due_date_vars[row_id].get() or "").strip()
+            if row_id in self.bank_name_vars:
+                entry["bank_name"] = str(self.bank_name_vars[row_id].get() or "").strip()
+            if row_id in self.bank_transaction_vars:
+                entry["bank_transaction_details"] = str(self.bank_transaction_vars[row_id].get() or "").strip()
+
+            if entry.get("status", "").lower() == "paid" and self._can_complete_payment(entry):
+                completed_rows.append(entry)
+
+        self.manager.load_clients()
+        for existing in self.manager.clients:
+            if existing.name.lower() == self.client.name.lower():
+                existing.transactions = [
+                    {
+                        "month": str(item.get("month", "") or "").strip(),
+                        "status": str(item.get("status", "") or "").strip(),
+                        "amount": str(item.get("amount", "") or "").strip(),
+                        "payment_method": str(item.get("payment_method", "") or "").strip(),
+                        "cheque_number": str(item.get("cheque_number", "") or "").strip(),
+                        "due_date": str(item.get("due_date", "") or "").strip(),
+                        "bank_name": str(item.get("bank_name", "") or "").strip(),
+                        "bank_transaction_details": str(item.get("bank_transaction_details", "") or "").strip(),
+                    }
+                    for item in self.client.transactions
+                ]
+                break
+        self.manager.save_clients()
+
+        if completed_rows:
+            month_name = str(completed_rows[-1].get("month", "") or "").strip() or "this month"
+            messagebox.showinfo(T("Payment completed"), f"Payment for {month_name} has been marked as successfully completed.")
+
+        messagebox.showinfo(T("Transactions saved"), T("Client payment transactions were updated successfully."))
+        self.refresh_view()
+
+
 class ExportClientsLogWindow(tk.Toplevel):
     def __init__(self, master=None, manager=None):
         super().__init__(master)
@@ -1188,6 +2233,154 @@ class ExportClientsLogWindow(tk.Toplevel):
         destination.parent.mkdir(parents=True, exist_ok=True)
         report = self.build_report_text()
         destination.write_text(report, encoding="utf-8")
+        messagebox.showinfo(T("Save Log"), f"Saved: {destination}")
+        self.destroy()
+
+
+class ExportTaskLogWindow(tk.Toplevel):
+    def __init__(self, master=None, plan=None):
+        super().__init__(master)
+        self.title(T("Export Task Log"))
+        self.geometry("560x180")
+        self.minsize(420, 150)
+        self.plan = plan or getattr(master, "plan", None) if master is not None else None
+
+        main = ttk.Frame(self, padding=16)
+        main.pack(fill="both", expand=True)
+        main.columnconfigure(1, weight=1)
+
+        default_dir = resolve_log_output_dir("tasks_logs")
+        default_path = default_dir / "tasks_log.txt"
+
+        ttk.Label(main, text=T("Select file path")).grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 8))
+        self.path_var = tk.StringVar(value=str(default_path))
+        self.path_entry = ttk.Entry(main, textvariable=self.path_var)
+        self.path_entry.grid(row=0, column=1, sticky="ew", pady=(0, 8))
+
+        ttk.Button(main, text=T("Browse"), command=self.choose_file_path).grid(row=0, column=2, sticky="ew", padx=(8, 0), pady=(0, 8))
+
+        action_row = ttk.Frame(main)
+        action_row.grid(row=1, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        ttk.Button(action_row, text=T("Preview"), command=self.preview_report).pack(side="left", padx=(0, 8))
+        ttk.Button(action_row, text=T("Save Log"), command=self.save_report).pack(side="left", padx=(0, 8))
+        ttk.Button(action_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
+        ttk.Button(action_row, text=T("Cancel"), command=self.destroy).pack(side="left")
+
+    def go_home(self):
+        self.destroy()
+        open_welcome_home()
+
+    def choose_file_path(self):
+        default_dir = resolve_log_output_dir("tasks_logs")
+        initial = self.path_var.get().strip() or str(default_dir / "tasks_log.txt")
+        selected = filedialog.asksaveasfilename(
+            title=T("Select file path"),
+            initialfile=Path(initial).name or "tasks_log.txt",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            initialdir=str(Path(initial).parent if Path(initial).parent.exists() else default_dir),
+        )
+        if selected:
+            self.path_var.set(selected)
+
+    def build_report_text(self):
+        plan = self.plan
+        if plan is None and self.master is not None and hasattr(self.master, "plan"):
+            plan = self.master.plan
+
+        client_name = ""
+        if self.master is not None and hasattr(self.master, "client_name_var"):
+            client_name = str(self.master.client_name_var.get() or "").strip()
+        if plan is not None:
+            plan_client_name = str(getattr(plan, "client_name", "") or client_name or "").strip()
+            if not plan_client_name and getattr(plan, "client", None) is not None:
+                plan_client_name = str(getattr(plan.client, "name", "") or "").strip()
+            return build_task_log_report_text(plan, client_name=plan_client_name)
+        return build_task_log_report_text(client_name=client_name)
+
+    def preview_report(self):
+        ClientLogPreviewWindow(self, self.build_report_text())
+
+    def save_report(self):
+        target_path = self.path_var.get().strip()
+        if not target_path:
+            messagebox.showwarning(T("Select file path"), T("Select file path"))
+            return
+
+        destination = Path(target_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(self.build_report_text(), encoding="utf-8")
+        messagebox.showinfo(T("Save Log"), f"Saved: {destination}")
+        self.destroy()
+
+
+class ExportReviewLogWindow(tk.Toplevel):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.title(T("Export Review Log"))
+        self.geometry("560x180")
+        self.minsize(420, 150)
+
+        main = ttk.Frame(self, padding=16)
+        main.pack(fill="both", expand=True)
+        main.columnconfigure(1, weight=1)
+
+        default_dir = resolve_log_output_dir("observation_logs")
+        default_path = default_dir / "review_log.txt"
+
+        ttk.Label(main, text=T("Select file path")).grid(row=0, column=0, sticky="w", padx=(0, 8), pady=(0, 8))
+        self.path_var = tk.StringVar(value=str(default_path))
+        self.path_entry = ttk.Entry(main, textvariable=self.path_var)
+        self.path_entry.grid(row=0, column=1, sticky="ew", pady=(0, 8))
+
+        ttk.Button(main, text=T("Browse"), command=self.choose_file_path).grid(row=0, column=2, sticky="ew", padx=(8, 0), pady=(0, 8))
+
+        action_row = ttk.Frame(main)
+        action_row.grid(row=1, column=0, columnspan=3, sticky="e", pady=(12, 0))
+        ttk.Button(action_row, text=T("Preview"), command=self.preview_report).pack(side="left", padx=(0, 8))
+        ttk.Button(action_row, text=T("Save Log"), command=self.save_report).pack(side="left", padx=(0, 8))
+        ttk.Button(action_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
+        ttk.Button(action_row, text=T("Cancel"), command=self.destroy).pack(side="left")
+
+    def go_home(self):
+        self.destroy()
+        open_welcome_home()
+
+    def choose_file_path(self):
+        default_dir = resolve_log_output_dir("observation_logs")
+        initial = self.path_var.get().strip() or str(default_dir / "review_log.txt")
+        selected = filedialog.asksaveasfilename(
+            title=T("Select file path"),
+            initialfile=Path(initial).name or "review_log.txt",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+            initialdir=str(Path(initial).parent if Path(initial).parent.exists() else default_dir),
+        )
+        if selected:
+            self.path_var.set(selected)
+
+    def build_report_text(self):
+        client_name = ""
+        review_text = ""
+        if self.master is not None:
+            if hasattr(self.master, "client_name_var"):
+                client_name = str(self.master.client_name_var.get() or "").strip()
+            if hasattr(self.master, "review_text"):
+                review_text = str(self.master.review_text.get("1.0", "end") or "").strip()
+        return build_review_log_report_text(client_name=client_name, review_text=review_text)
+
+    def preview_report(self):
+        ClientLogPreviewWindow(self, self.build_report_text())
+
+    def save_report(self):
+        target_path = self.path_var.get().strip()
+        if not target_path:
+            messagebox.showwarning(T("Select file path"), T("Select file path"))
+            return
+
+        destination = Path(target_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(self.build_report_text(), encoding="utf-8")
         messagebox.showinfo(T("Save Log"), f"Saved: {destination}")
         self.destroy()
 
@@ -1722,6 +2915,8 @@ class ProgressApp(tk.Tk):
             (T("Add Task"), self.add_task),
             (T("Tasks Details"), self.open_task_details_window),
             (T("Contract Details"), self.open_contract_details_window),
+            (T("Transactions"), self.open_transactions_window),
+            (T("Payment Report"), self.open_payment_report_window),
             (T("Refresh Progress"), self.refresh_display),
             (T("Export Task Log"), self.export_task_log),
         ]
@@ -1994,6 +3189,12 @@ class ProgressApp(tk.Tk):
 
     def open_contract_details_window(self):
         ContractDetailsWindow(self)
+
+    def open_transactions_window(self):
+        ClientTransactionsWindow(self, self.client_name_var.get().strip())
+
+    def open_payment_report_window(self):
+        ClientPaymentReportWindow(self, self.client_name_var.get().strip())
 
     def focus_client_name_field(self):
         if hasattr(self, "client_combo") and self.client_combo.winfo_exists():
@@ -2303,48 +3504,10 @@ class ProgressApp(tk.Tk):
         ExportClientsLogWindow(self, self.client_manager)
 
     def export_task_log(self):
-        default_dir = resolve_log_output_dir("tasks_logs")
-        default_path = default_dir / "tasks_log.txt"
-        target = filedialog.asksaveasfilename(
-            title=T("Export Task Log"),
-            initialfile="tasks_log.txt",
-            defaultextension=".txt",
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
-            initialdir=str(default_dir),
-        )
-        if not target:
-            return
-        destination = Path(target)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        report_lines = [T("Task log"), ""]
-        if self.plan is not None:
-            report_lines.extend([f"Client: {self.plan.client_name}", f"Progress: {self.plan.progress}%", ""])
-            report_lines.extend([f"- {task}" for task in self.plan.all_tasks])
-        else:
-            report_lines.append(T("No task plan available"))
-        destination.write_text("\n".join(str(item) for item in report_lines), encoding="utf-8")
-        messagebox.showinfo(T("Export Task Log"), f"Saved: {destination}")
+        ExportTaskLogWindow(self)
 
     def export_review_log(self):
-        default_dir = resolve_log_output_dir("observation_logs")
-        default_path = default_dir / "review_log.txt"
-        target = filedialog.asksaveasfilename(
-            title=T("Export Review Log"),
-            initialfile="review_log.txt",
-            defaultextension=".txt",
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
-            initialdir=str(default_dir),
-        )
-        if not target:
-            return
-        destination = Path(target)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        lines = [T("Review log"), ""]
-        name = self.client_name_var.get().strip() or T("No client selected")
-        review = self.review_text.get("1.0", "end").strip() or T("No review")
-        lines.extend([f"Client: {name}", f"Review: {review}"])
-        destination.write_text("\n".join(str(item) for item in lines), encoding="utf-8")
-        messagebox.showinfo(T("Export Review Log"), f"Saved: {destination}")
+        ExportReviewLogWindow(self)
 
     def export_observation_log(self):
         self.export_review_log()

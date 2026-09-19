@@ -1,9 +1,11 @@
+import calendar
 import json
 import os
 import shutil
 import subprocess
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
@@ -46,6 +48,7 @@ OUTPUT_LOG_DIRS = [APPLICATION_OUTPUTS_DIR, CLIENT_LOGS_DIR, TASK_LOGS_DIR, OBSE
 PROJECT_RUNTIME_DIRECTORIES = [
     APP_DIR / "supporting_documents",
     APP_DIR / "starco icon",
+    SOURCE_DIR,
     SOURCE_DIR / "docs",
     CLIENTS_ROOT_DIR,
     *OUTPUT_LOG_DIRS,
@@ -69,6 +72,9 @@ RUNTIME_DATA_FILES = [path for path in RUNTIME_DATA_FILES if path is not None an
 def validate_runtime_asset_catalog():
     required_paths = [
         ENTRY_SCRIPT,
+        SOURCE_DIR / "main.py",
+        SOURCE_DIR / "clients_management.py",
+        SOURCE_DIR / "clients_progress_ui.py",
         CLIENTS_DATA_FILE,
         LEGACY_CLIENTS_DATA_FILE,
         COUNTRY_CODES_DATA,
@@ -104,6 +110,145 @@ def collect_runtime_assets():
     return assets
 
 
+def normalize_contract_details(value):
+    contract_fields = {
+        "contract_number": "",
+        "starting_date": "",
+        "ending_date": "",
+        "commercial_registration_number": "",
+        "authorized_signature_name": "",
+        "rent_value": "",
+        "currency_type": "OMR",
+        "open_issues": "",
+    }
+
+    if not isinstance(value, dict):
+        return dict(contract_fields)
+
+    normalized = {}
+    for key, default in contract_fields.items():
+        raw = value.get(key, default)
+        normalized[key] = str(raw) if raw is not None else default
+    return normalized
+
+
+def normalize_payment_method(value):
+    choices = ["Cash", "Cheque", "Bank Transaction"]
+    if value is None:
+        return "Cash"
+
+    normalized = str(value).strip()
+    if not normalized:
+        return "Cash"
+
+    lookup = {choice.lower(): choice for choice in choices}
+    if normalized.lower() in lookup:
+        return lookup[normalized.lower()]
+
+    for choice in choices:
+        if normalized.lower() in choice.lower():
+            return choice
+
+    return "Cash"
+
+
+def coerce_due_date_for_month(month_value, due_date_value):
+    month_text = str(month_value or "").strip()
+    if not month_text:
+        return str(due_date_value or "").strip()
+
+    try:
+        month_start = datetime.strptime(f"{month_text}-01", "%Y-%m-%d")
+    except ValueError:
+        return str(due_date_value or "").strip()
+
+    last_day = calendar.monthrange(month_start.year, month_start.month)[1]
+    month_end = datetime(month_start.year, month_start.month, last_day).strftime("%Y-%m-%d")
+
+    value = str(due_date_value or "").strip()
+    if not value:
+        return month_end
+
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return month_end
+
+    if parsed.year == month_start.year and parsed.month == month_start.month:
+        return parsed.strftime("%Y-%m-%d")
+    return month_end
+
+
+def is_transaction_complete(value):
+    if not isinstance(value, dict):
+        return False
+
+    month = str(value.get("month", "") or "").strip()
+    amount = str(value.get("amount", "") or "").strip()
+    due_date = str(value.get("due_date", "") or "").strip()
+    payment_method = normalize_payment_method(value.get("payment_method", "Cash"))
+    cheque_number = str(value.get("cheque_number", "") or "").strip()
+    bank_transaction_details = str(value.get("bank_transaction_details", "") or "").strip()
+
+    if not month or not amount or not due_date:
+        return False
+
+    if payment_method == "Cheque":
+        return bool(cheque_number)
+    if payment_method == "Bank Transaction":
+        return bool(bank_transaction_details)
+    return True
+
+
+def normalize_transaction_entry(value):
+    transaction_fields = {
+        "month": "",
+        "status": "",
+        "amount": "",
+        "payment_method": "Cash",
+        "cheque_number": "",
+        "due_date": "",
+        "bank_name": "",
+        "bank_transaction_details": "",
+    }
+
+    if not isinstance(value, dict):
+        return dict(transaction_fields)
+
+    normalized = {}
+    for key, default in transaction_fields.items():
+        raw = value.get(key, default)
+        if key == "payment_method":
+            normalized[key] = normalize_payment_method(raw)
+        elif key == "status":
+            normalized[key] = str(raw) if raw is not None else default
+        else:
+            normalized[key] = str(raw) if raw is not None else default
+
+    normalized["due_date"] = coerce_due_date_for_month(normalized.get("month", ""), normalized.get("due_date", ""))
+
+    raw_status = str(normalized.get("status", "") or "").strip().lower()
+    if raw_status in {"paid", "completed", "complete", "success", "successful", "yes", "true", "1"} and is_transaction_complete(normalized):
+        normalized["status"] = "Paid"
+    else:
+        normalized["status"] = "Pending"
+
+    if normalized["payment_method"] == "Cheque":
+        normalized["cheque_number"] = str(normalized.get("cheque_number", "") or "").strip()
+    else:
+        normalized["cheque_number"] = ""
+
+    if normalized["payment_method"] == "Bank Transaction":
+        normalized["bank_transaction_details"] = str(normalized.get("bank_transaction_details", "") or "").strip()
+    else:
+        normalized["bank_transaction_details"] = ""
+
+    return normalized
+
+
 def normalize_legacy_client_data(entries):
     normalized = []
     for entry in entries or []:
@@ -117,14 +262,33 @@ def normalize_legacy_client_data(entries):
             contract_details = {}
         else:
             contract_details = dict(contract_details)
-        contract_details.setdefault("currency_type", "OMR")
-        normalized_entry["contract_details"] = contract_details
+        normalized_entry["contract_details"] = normalize_contract_details(contract_details)
+        normalized_entry["contract_details"].setdefault("currency_type", "OMR")
 
         progress_data = normalized_entry.get("progress")
         if not isinstance(progress_data, dict):
             progress_data = {}
         normalized_entry["progress"] = dict(progress_data)
 
+        reviews = normalized_entry.get("reviews")
+        if not isinstance(reviews, list):
+            reviews = []
+        normalized_entry["reviews"] = list(reviews)
+
+        transactions = normalized_entry.get("transactions")
+        if not isinstance(transactions, list):
+            transactions = []
+
+        normalized_transactions = []
+        for item in transactions:
+            transaction = normalize_transaction_entry(item)
+            transaction["payment_method"] = normalize_payment_method(transaction.get("payment_method", "Cash"))
+            transaction["bank_name"] = str(transaction.get("bank_name", "") or "").strip()
+            transaction["cheque_number"] = str(transaction.get("cheque_number", "") or "").strip()
+            transaction["bank_transaction_details"] = str(transaction.get("bank_transaction_details", "") or "").strip()
+            normalized_transactions.append(transaction)
+
+        normalized_entry["transactions"] = normalized_transactions
         normalized.append(normalized_entry)
 
     return normalized

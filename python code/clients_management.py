@@ -32,6 +32,81 @@ def normalize_contract_details(value):
     return normalized
 
 
+def normalize_transaction_entry(value):
+    transaction_fields = {
+        "month": "",
+        "status": "",
+        "amount": "",
+        "payment_method": "",
+        "cheque_number": "",
+        "due_date": "",
+        "bank_name": "",
+        "bank_transaction_details": "",
+    }
+
+    if not isinstance(value, dict):
+        return dict(transaction_fields)
+
+    normalized = {}
+    for key, default in transaction_fields.items():
+        raw_value = value.get(key, default)
+        if raw_value is None:
+            raw_value = default
+        normalized[key] = str(raw_value)
+    return normalized
+
+
+def generate_contract_months(start_date=None, end_date=None):
+    start_value = str(start_date or "").strip()
+    end_value = str(end_date or "").strip()
+    if not start_value and not end_value:
+        return []
+
+    def parse_date(value):
+        if not value:
+            return None
+        for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            return None
+
+    start_dt = parse_date(start_value)
+    end_dt = parse_date(end_value)
+
+    if start_dt is None and end_dt is not None:
+        start_dt = end_dt.replace(day=1)
+    if end_dt is None and start_dt is not None:
+        end_dt = start_dt.replace(day=28)
+    if start_dt is None or end_dt is None:
+        return []
+
+    if end_dt < start_dt:
+        start_dt, end_dt = end_dt, start_dt
+
+    months = []
+    current = start_dt.replace(day=1)
+    while current <= end_dt:
+        months.append(current.strftime("%Y-%m"))
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1)
+        else:
+            current = current.replace(month=current.month + 1)
+
+    seen = set()
+    unique_months = []
+    for month in months:
+        if month in seen:
+            continue
+        seen.add(month)
+        unique_months.append(month)
+    return unique_months
+
+
 def normalize_client_progress(value):
     default_progress = {
         "client_name": "",
@@ -179,7 +254,7 @@ def format_contact_number(value: str, country_code: str = DEFAULT_CONTACT_COUNTR
 
 
 class Client:
-    def __init__(self, name: str, contact: str, business: str, email: str = "", shop_number: str = "", reviews=None, contract_details=None, progress=None):
+    def __init__(self, name: str, contact: str, business: str, email: str = "", shop_number: str = "", reviews=None, contract_details=None, progress=None, transactions=None):
         self.name = name
         self.contact = format_contact_number(contact, DEFAULT_CONTACT_COUNTRY_CODE)
         self.business = business
@@ -188,6 +263,7 @@ class Client:
         self.reviews = []
         self.contract_details = normalize_contract_details(contract_details)
         self.progress = normalize_client_progress(progress)
+        self.transactions = []
 
         if reviews is not None:
             for review in reviews:
@@ -200,6 +276,11 @@ class Client:
                 elif isinstance(review, str):
                     self.reviews.append({"date": "", "review": review, "comment": ""})
 
+        if transactions is not None:
+            for entry in transactions:
+                normalized = normalize_transaction_entry(entry)
+                self.transactions.append(normalized)
+
     def to_dict(self):
         return {
             "name": self.name,
@@ -210,6 +291,7 @@ class Client:
             "reviews": list(self.reviews),
             "contract_details": dict(self.contract_details),
             "progress": dict(self.progress),
+            "transactions": [dict(entry) for entry in self.transactions],
         }
 
     def share_text(self):
@@ -266,6 +348,9 @@ class Client:
         progress = pick("progress", default={})
         if not isinstance(progress, dict):
             progress = {}
+        transactions = pick("transactions", default=[])
+        if not isinstance(transactions, list):
+            transactions = []
 
         return cls(
             str(name),
@@ -276,6 +361,7 @@ class Client:
             reviews=reviews,
             contract_details=contract_details,
             progress=progress,
+            transactions=transactions,
         )
 
     def __repr__(self):
@@ -587,4 +673,94 @@ def build_clients_report_text(file_path=None):
             lines.append("Reviews: None")
         lines.append("")
 
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def build_client_payment_report_text(client_name, client_manager=None):
+    if client_manager is None:
+        client_manager = ClientManager("clients.json")
+
+    client_manager.load_clients()
+    client = next((item for item in client_manager.clients if item.name.lower() == str(client_name or "").strip().lower()), None)
+    if client is None:
+        return f"Client Payment Report\n\nClient '{client_name}' was not found."
+
+    contract_details = client.contract_details or {}
+    contract_start = str(contract_details.get("starting_date") or "").strip()
+    contract_end = str(contract_details.get("ending_date") or "").strip()
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    contract_status = "Active"
+    if contract_start and contract_end:
+        try:
+            start_dt = datetime.strptime(contract_start, "%Y-%m-%d")
+            end_dt = datetime.strptime(contract_end, "%Y-%m-%d")
+            today_dt = datetime.strptime(current_date, "%Y-%m-%d")
+            if today_dt < start_dt:
+                contract_status = "Not Started"
+            elif today_dt > end_dt:
+                contract_status = "Expired"
+        except ValueError:
+            contract_status = "Pending evaluation"
+    elif contract_start and not contract_end:
+        contract_status = "In progress"
+    elif not contract_start and contract_end:
+        contract_status = "Pending start date"
+
+    total_amount = 0.0
+    paid_count = 0
+    pending_count = 0
+    transaction_lines = []
+    transactions = list(getattr(client, "transactions", []) or [])
+    for index, transaction in enumerate(transactions, start=1):
+        month = str(transaction.get("month", "") or "").strip() or "N/A"
+        status = str(transaction.get("status", "") or "").strip() or "Pending"
+        amount = str(transaction.get("amount", "") or "").strip()
+        payment_method = str(transaction.get("payment_method", "") or "").strip() or "Cash"
+        cheque_number = str(transaction.get("cheque_number", "") or "").strip()
+        bank_transaction_details = str(transaction.get("bank_transaction_details", "") or "").strip()
+        due_date = str(transaction.get("due_date", "") or "").strip()
+        bank_name = str(transaction.get("bank_name", "") or "").strip()
+
+        try:
+            total_amount += float(amount) if amount else 0.0
+        except ValueError:
+            pass
+
+        if status.lower() in {"paid", "completed", "complete", "success", "successful"}:
+            paid_count += 1
+        else:
+            pending_count += 1
+
+        transaction_lines.append(f"{index}. Month: {month}")
+        transaction_lines.append(f"   Status: {status}")
+        transaction_lines.append(f"   Amount: {amount or 'N/A'}")
+        transaction_lines.append(f"   Payment Method: {payment_method}")
+        if payment_method.lower() == "cheque":
+            transaction_lines.append(f"   Cheque Number: {cheque_number or 'N/A'}")
+        if payment_method.lower() == "bank transaction":
+            transaction_lines.append(f"   Bank Transaction Details: {bank_transaction_details or 'N/A'}")
+        transaction_lines.append(f"   Due Date: {due_date or 'N/A'}")
+        transaction_lines.append(f"   Bank Name: {bank_name or 'N/A'}")
+        transaction_lines.append("")
+
+    if not transaction_lines:
+        transaction_lines = ["No transactions recorded."]
+
+    lines = [
+        f"Client Payment Report - {client.name}",
+        "=" * 40,
+        "",
+        f"Business: {client.business or 'N/A'}",
+        f"Contact: {client.contact or 'N/A'}",
+        f"Shop Number: {client.shop_number or 'N/A'}",
+        f"Contract Period: {contract_start or 'N/A'} to {contract_end or 'N/A'}",
+        f"Contract Period Status: {contract_status}",
+        f"Total Amount: {total_amount:.2f} OMR",
+        f"Paid Transactions: {paid_count}",
+        f"Pending Transactions: {pending_count}",
+        "",
+        "Transactions",
+        "-----------",
+    ]
+    lines.extend(transaction_lines)
     return "\n".join(lines).rstrip() + "\n"

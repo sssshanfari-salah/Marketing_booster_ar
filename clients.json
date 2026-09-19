@@ -32,7 +32,8 @@
       "progress": 100,
       "pending_tasks": [],
       "all_tasks": []
-    }
+    },
+    "transactions": []
   },
   {
     "name": "Salah",
@@ -56,6 +57,32 @@
       "progress": 0,
       "pending_tasks": [],
       "all_tasks": []
-    }
+    },
+    "transactions": []
+  },
+  {
+    "name": "Salim Salah",
+    "contact": "+9688999809890",
+    "business": "HR business",
+    "email": "",
+    "shop_number": "9",
+    "reviews": [],
+    "contract_details": {
+      "contract_number": "",
+      "starting_date": "",
+      "ending_date": "",
+      "commercial_registration_number": "",
+      "authorized_signature_name": "",
+      "rent_value": "",
+      "currency_type": "OMR",
+      "open_issues": ""
+    },
+    "progress": {
+      "client_name": "",
+      "progress": 0,
+      "pending_tasks": [],
+      "all_tasks": []
+    },
+    "transactions": []
   }
 ]

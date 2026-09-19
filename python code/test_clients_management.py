@@ -10,11 +10,19 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from clients_management import Client, ClientManager, build_clients_report_text, format_contact_number
+from clients_management import (
+    Client,
+    ClientManager,
+    build_clients_report_text,
+    format_contact_number,
+    generate_contract_months,
+)
 from clients_progress_ui import (
     Plan,
     ProgressApp,
     T,
+    build_review_log_report_text,
+    build_task_log_report_text,
     get_emoji_font_families,
     parse_task_items,
     resolve_log_output_dir,
@@ -173,6 +181,13 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("2027-01-01", report)
         self.assertIn("Contract Number", report)
 
+    def test_contract_months_are_generated_from_contract_dates(self):
+        months = generate_contract_months("2026-01-15", "2026-03-10")
+
+        self.assertEqual(months[0], "2026-01")
+        self.assertEqual(months[-1], "2026-03")
+        self.assertIn("2026-02", months)
+
     def test_add_client_with_email(self):
         manager = ClientManager(self.file_path)
         manager.add_client("Nora", "555", "Consulting", "nora@example.com")
@@ -237,6 +252,20 @@ class ClientManagerTests(unittest.TestCase):
 
         tasks = parse_task_items("", fallback_total=3)
         self.assertEqual(tasks, ["1", "2", "3"])
+
+    def test_task_and_review_log_reports_include_preview_text(self):
+        plan = Plan(Client("Ali", "123456", "Stationery"), all_tasks=["Call client", "Send invoice"])
+
+        task_report = build_task_log_report_text(plan)
+        self.assertIn("Task log", task_report)
+        self.assertIn("Ali", task_report)
+        self.assertIn("Call client", task_report)
+        self.assertIn("Progress:", task_report)
+
+        review_report = build_review_log_report_text("Ali", "Positive follow-up")
+        self.assertIn("Review log", review_report)
+        self.assertIn("Ali", review_report)
+        self.assertIn("Positive follow-up", review_report)
 
     def test_parse_task_items_handles_numbered_bullet_entries(self):
         tasks = parse_task_items("1. Research\n2. Design\n3) Launch")
@@ -310,6 +339,110 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("Commercial Registration Number", source)
         self.assertIn("Authorized Signature Name", source)
         self.assertIn("Open Issues Requiring Attention", source)
+
+    def test_client_transactions_are_persisted_and_available_in_ui(self):
+        self.assertTrue(hasattr(ProgressApp, "open_transactions_window"))
+
+        manager = ClientManager(self.file_path)
+        manager.add_client("Ali", "123456", "Retail")
+        manager.clients[0].transactions = [{
+            "month": "2026-09",
+            "status": "Paid",
+            "amount": "250",
+            "payment_method": "Cheque",
+            "cheque_number": "CH-204",
+            "due_date": "2026-09-30",
+            "bank_name": "Bank Muscat",
+        }]
+        manager.save_clients()
+
+        reloaded = ClientManager(self.file_path)
+        self.assertEqual(reloaded.clients[0].transactions[0]["month"], "2026-09")
+        self.assertEqual(reloaded.clients[0].transactions[0]["cheque_number"], "CH-204")
+        self.assertEqual(reloaded.clients[0].transactions[0]["bank_name"], "Bank Muscat")
+
+    def test_transaction_status_uses_checkbox_and_completion_popup(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("Checkbutton", source)
+        self.assertIn("showinfo", source)
+        self.assertIn("Payment completed", source)
+        self.assertIn("Bank Transaction", source)
+        self.assertIn("Cheque", source)
+        self.assertIn("state=\"disabled\"", source)
+
+    def test_transaction_completion_popup_requires_valid_saved_row(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("def _can_complete_payment", source)
+        self.assertIn("if not completed:", source)
+        self.assertIn("entry[\"status\"] = \"Pending\"", source)
+        self.assertIn("return bool(cheque_number)", source)
+        self.assertIn("return bool(bank_detail)", source)
+        self.assertIn("save_transactions", source)
+        self.assertIn("Payment completed", source)
+        self.assertIn("showinfo", source)
+
+    def test_previous_month_must_be_paid_before_next_month_completion(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("def _get_previous_month", source)
+        self.assertIn("previous_month = self.month_options[current_index - 1]", source)
+        self.assertIn("Outstanding payment", source)
+
+    def test_due_date_matches_selected_month(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("def _coerce_due_date_for_month", source)
+        self.assertIn("calendar.monthrange", source)
+        self.assertIn("normalized = self._coerce_due_date_for_month", source)
+
+    def test_transaction_row_edits_and_payment_preview_are_available(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("def _update_amount", source)
+        self.assertIn("def _update_due_date", source)
+        self.assertIn("def _update_bank_name", source)
+        self.assertIn("ClientLogPreviewWindow", source)
+        self.assertIn("text_widget.insert(\"1.0\", self.build_report_text())", source)
+
+    def test_transaction_due_date_picker_and_next_month_logic_are_present(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("def _pick_due_date", source)
+        self.assertIn("def _next_month_for_new_row", source)
+        self.assertIn("self._next_month_for_new_row()", source)
+        self.assertIn("if self.month_options[-1] in existing_months:", source)
+
+    def test_payment_report_includes_contract_period_and_transaction_details(self):
+        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("build_client_payment_report_text", source)
+        self.assertIn("Contract Period Status", source)
+        self.assertIn("Bank Transaction Details", source)
+
+    def test_package_app_keeps_latest_transaction_fields(self):
+        source_path = Path(__file__).resolve().parent.parent / "package_app.py"
+        with source_path.open("r", encoding="utf-8") as source_file:
+            source = source_file.read()
+
+        self.assertIn("bank_transaction_details", source)
+        self.assertIn("normalize_payment_method", source)
+        self.assertIn("Bank Transaction", source)
 
     def test_contract_details_are_saved_with_client_record(self):
         manager = ClientManager(self.file_path)
