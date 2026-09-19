@@ -306,7 +306,7 @@ class ClientManager:
                 return client
         return None
 
-    def add_client(self, name: str, contact: str, business: str, email: str = ""):
+    def add_client(self, name: str, contact: str, business: str, email: str = "", shop_number: str = ""):
         name = (name or "").strip()
         if not name:
             return False
@@ -315,9 +315,10 @@ class ClientManager:
         if existing is not None:
             return False
 
-        client = Client(name, contact, business, email)
+        client = Client(name, contact, business, email, shop_number=shop_number)
         self.clients.append(client)
         self.save_clients()
+        self.create_client_directory(client)
         return True
 
     def delete_client(self, name: str):
@@ -444,6 +445,21 @@ class ClientManager:
                 return False, f"Shop number '{normalized}' is already used by '{client.name}'."
 
         return True, ""
+
+    def create_client_directory(self, client):
+        if client is None or not isinstance(client, Client):
+            return None
+
+        project_root = self.file_path.parent if self.file_path is not None else Path.cwd()
+        clients_root = project_root / "Clients"
+        clients_root.mkdir(parents=True, exist_ok=True)
+
+        safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", str(client.name or "Client").strip()).strip("._") or "Client"
+        safe_shop = str(client.shop_number or "").strip()
+        folder_name = f"{safe_name}_{safe_shop}" if safe_shop else safe_name
+        folder_path = clients_root / folder_name
+        folder_path.mkdir(parents=True, exist_ok=True)
+        return folder_path
 
     def save_clients(self):
         self.file_path.parent.mkdir(parents=True, exist_ok=True)

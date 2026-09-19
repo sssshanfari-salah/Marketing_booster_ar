@@ -45,6 +45,15 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(manager.clients[0].name, "Bin Salim")
         self.assertIn("Bin Salim", manager.list_clients())
 
+    def test_client_directory_uses_client_name_and_shop_number(self):
+        manager = ClientManager(self.file_path)
+        result = manager.add_client("Alpha Test", "5551234", "Retail", "alpha@example.com", shop_number="12")
+
+        self.assertTrue(result)
+        expected_dir = Path(self.file_path).parent / "Clients" / "Alpha_Test_12"
+        self.assertTrue(expected_dir.exists())
+        self.assertEqual(manager.clients[0].shop_number, "12")
+
     def test_search_client(self):
         manager = ClientManager(self.file_path)
         manager.add_client("Ali", "123456", "Stationery")

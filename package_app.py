@@ -38,6 +38,7 @@ DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
 SUPPORTING_DOCUMENTS_DIR = APP_DIR / "supporting_documents"
 STARCO_RENT_CONTRACT = SUPPORTING_DOCUMENTS_DIR / "starco_rent_contract_1.pdf"
 APPLICATION_OUTPUTS_DIR = APP_DIR / "application_outputs"
+CLIENTS_ROOT_DIR = APP_DIR / "Clients"
 CLIENT_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "clients_logs"
 TASK_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "tasks_logs"
 OBSERVATION_LOGS_DIR = APPLICATION_OUTPUTS_DIR / "observation_logs"
@@ -46,8 +47,10 @@ PROJECT_RUNTIME_DIRECTORIES = [
     APP_DIR / "supporting_documents",
     APP_DIR / "starco icon",
     SOURCE_DIR / "docs",
+    CLIENTS_ROOT_DIR,
     *OUTPUT_LOG_DIRS,
 ]
+REQUIRED_RUNTIME_DIRECTORIES = list(PROJECT_RUNTIME_DIRECTORIES)
 LEGACY_APP_NAMES = ["marketing_booster", "marketing_booster_ar"]
 LEGACY_DISPLAY_NAMES = ["Marketing Booster", "Marketing Booster AR", "Clients Manager", "Starco Commercial Complex"]
 RUNTIME_DATA_FILES = [
@@ -71,13 +74,16 @@ def validate_runtime_asset_catalog():
         COUNTRY_CODES_DATA,
         DOCUMENTS_DATA_FILE,
         SUPPORTING_DOCUMENTS_DIR,
-        *PROJECT_RUNTIME_DIRECTORIES,
+        *REQUIRED_RUNTIME_DIRECTORIES,
     ]
 
     missing_paths = [str(path) for path in required_paths if path is not None and not path.exists()]
     if missing_paths:
-        for missing in missing_paths:
-            print(f"Warning: missing runtime asset for packaged app: {missing}")
+        details = "\n".join(f" - {missing}" for missing in missing_paths)
+        raise FileNotFoundError(
+            "Packaging aborted: required runtime folders/files are missing.\n"
+            f"{details}"
+        )
 
     # Keep packaging aligned with the latest client-manager/export/report workflow.
     for directory in PROJECT_RUNTIME_DIRECTORIES:
@@ -344,6 +350,8 @@ def ensure_runtime_files():
     if not CLIENTS_DATA_FILE.exists():
         CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
 
+    CLIENTS_ROOT_DIR.mkdir(parents=True, exist_ok=True)
+
     COUNTRY_CODES_DATA.parent.mkdir(parents=True, exist_ok=True)
     if not COUNTRY_CODES_DATA.exists():
         COUNTRY_CODES_DATA.write_text("[]", encoding="utf-8")
@@ -378,8 +386,8 @@ def ensure_runtime_files():
 
 
 def build_app():
-    validate_runtime_asset_catalog()
     ensure_runtime_files()
+    validate_runtime_asset_catalog()
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     remove_stale_artifacts()

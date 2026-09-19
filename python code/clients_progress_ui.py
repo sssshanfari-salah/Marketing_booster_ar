@@ -2187,6 +2187,7 @@ class ProgressApp(tk.Tk):
                 shop_number=shop_number,
             )
             self.client_manager.clients.append(client)
+            self.client_manager.create_client_directory(client)
         else:
             existing.contact = formatted_contact
             existing.business = business
@@ -2503,6 +2504,7 @@ class ClientDetailsWindow(tk.Toplevel):
         existing = next((item for item in self.manager.clients if item.name.lower() == client.name.lower()), None)
         if existing is None:
             self.manager.clients.append(client)
+            self.manager.create_client_directory(client)
         else:
             existing.name = client.name
             existing.contact = client.contact
