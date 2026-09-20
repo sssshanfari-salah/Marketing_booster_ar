@@ -254,12 +254,16 @@ def format_contact_number(value: str, country_code: str = DEFAULT_CONTACT_COUNTR
 
 
 class Client:
-    def __init__(self, name: str, contact: str, business: str, email: str = "", shop_number: str = "", reviews=None, contract_details=None, progress=None, transactions=None):
+    def __init__(self, name: str, contact: str, business: str, email: str = "", shop_number: str = "", reviews=None, contract_details=None, progress=None, transactions=None, address: str = "", electrical_meter: str = "", notes: str = ""):
         self.name = name
         self.contact = format_contact_number(contact, DEFAULT_CONTACT_COUNTRY_CODE)
         self.business = business
         self.email = email
         self.shop_number = shop_number
+        self.address = str(address or "")
+        meter_value = str(electrical_meter or notes or "")
+        self.electrical_meter = meter_value
+        self.notes = meter_value
         self.reviews = []
         self.contract_details = normalize_contract_details(contract_details)
         self.progress = normalize_client_progress(progress)
@@ -288,6 +292,9 @@ class Client:
             "business": self.business,
             "email": self.email,
             "shop_number": self.shop_number,
+            "address": self.address,
+            "electrical_meter": self.electrical_meter,
+            "notes": self.notes,
             "reviews": list(self.reviews),
             "contract_details": dict(self.contract_details),
             "progress": dict(self.progress),
@@ -339,6 +346,11 @@ class Client:
         business = pick("business", "business type", "business_type", "Business", default="")
         email = pick("email", "Email", default="")
         shop_number = pick("shop_number", "shop number", "shop_number", "Shop Number", default="")
+        address = pick("address", "Address", default="")
+        electrical_meter = pick("electrical_meter", "Electrical Meter", "electrical meter", "electric_meter", default="")
+        notes = pick("notes", "Notes", default="")
+        if not electrical_meter:
+            electrical_meter = notes
         reviews = pick("reviews", default=[])
         if not isinstance(reviews, list):
             reviews = []
@@ -362,6 +374,9 @@ class Client:
             contract_details=contract_details,
             progress=progress,
             transactions=transactions,
+            address=str(address),
+            electrical_meter=str(electrical_meter),
+            notes=str(notes),
         )
 
     def __repr__(self):

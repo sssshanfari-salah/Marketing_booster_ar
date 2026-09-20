@@ -34,6 +34,7 @@ def resolve_target_icon():
 
 TARGET_ICON = resolve_target_icon()
 COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
+SHOPS_ELECTRICAL_METERS_FILE = SOURCE_DIR / "Shops_Elect_meters.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
 LEGACY_CLIENTS_DATA_FILE = SOURCE_DIR / "clients.json"
 DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
@@ -60,6 +61,7 @@ RUNTIME_DATA_FILES = [
     TARGET_ICON,
     CLIENTS_DATA_FILE,
     COUNTRY_CODES_DATA,
+    SHOPS_ELECTRICAL_METERS_FILE,
     DOCUMENTS_DATA_FILE,
     STARCO_RENT_CONTRACT,
     *PROJECT_RUNTIME_DIRECTORIES,
@@ -78,6 +80,7 @@ def validate_runtime_asset_catalog():
         CLIENTS_DATA_FILE,
         LEGACY_CLIENTS_DATA_FILE,
         COUNTRY_CODES_DATA,
+        SHOPS_ELECTRICAL_METERS_FILE,
         DOCUMENTS_DATA_FILE,
         SUPPORTING_DOCUMENTS_DIR,
         *REQUIRED_RUNTIME_DIRECTORIES,
@@ -95,6 +98,7 @@ def validate_runtime_asset_catalog():
     ui_markers = [
         "Project Manager To-Do",
         "generate_project_manager_todo_tasks",
+        "load_shop_electrical_meter_map",
         "self.client_selector_var",
         "_switch_client_for_transactions",
         "ClientTransactionsWindow",
@@ -630,6 +634,10 @@ def ensure_runtime_files():
     COUNTRY_CODES_DATA.parent.mkdir(parents=True, exist_ok=True)
     if not COUNTRY_CODES_DATA.exists():
         COUNTRY_CODES_DATA.write_text("[]", encoding="utf-8")
+
+    SHOPS_ELECTRICAL_METERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not SHOPS_ELECTRICAL_METERS_FILE.exists():
+        SHOPS_ELECTRICAL_METERS_FILE.write_text("[]", encoding="utf-8")
 
     DOCUMENTS_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
     if not DOCUMENTS_DATA_FILE.exists():

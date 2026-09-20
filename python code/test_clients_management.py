@@ -24,6 +24,7 @@ from clients_progress_ui import (
     build_review_log_report_text,
     build_task_log_report_text,
     get_emoji_font_families,
+    load_shop_electrical_meter_map,
     parse_task_items,
     resolve_log_output_dir,
     set_language,
@@ -61,6 +62,33 @@ class ClientManagerTests(unittest.TestCase):
         expected_dir = Path(self.file_path).parent / "Clients" / "Alpha_Test_12"
         self.assertTrue(expected_dir.exists())
         self.assertEqual(manager.clients[0].shop_number, "12")
+
+    def test_client_address_and_electrical_meter_are_persisted(self):
+        client = Client(
+            "Nora",
+            "5551234",
+            "Consulting",
+            "nora@example.com",
+            "12",
+            address="Main Street, Muscat",
+            electrical_meter="EM-2048",
+        )
+
+        payload = client.to_dict()
+        self.assertEqual(payload["address"], "Main Street, Muscat")
+        self.assertEqual(payload["electrical_meter"], "EM-2048")
+        self.assertEqual(payload["notes"], "EM-2048")
+
+        rebuilt = Client.from_dict(payload)
+        self.assertEqual(rebuilt.address, "Main Street, Muscat")
+        self.assertEqual(rebuilt.electrical_meter, "EM-2048")
+        self.assertEqual(rebuilt.notes, "EM-2048")
+
+    def test_shop_number_lookup_fills_electrical_meter(self):
+        meters = load_shop_electrical_meter_map()
+        self.assertIn("12", meters)
+        self.assertEqual(meters["12"], "28609687")
+        self.assertEqual(meters["Office"], "28609686")
 
     def test_search_client(self):
         manager = ClientManager(self.file_path)

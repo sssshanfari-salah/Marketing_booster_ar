@@ -92,6 +92,31 @@ def resolve_log_output_dir(log_type="general"):
     return target_dir
 
 
+def load_shop_electrical_meter_map():
+    meters_path = Path(__file__).resolve().parent / "Shops_Elect_meters.json"
+    mapping = {}
+    if not meters_path.exists():
+        return mapping
+
+    try:
+        with meters_path.open("r", encoding="utf-8") as infile:
+            entries = json.load(infile)
+    except (json.JSONDecodeError, OSError, TypeError):
+        return mapping
+
+    if not isinstance(entries, list):
+        return mapping
+
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        shop_value = str(item.get("Shop") or item.get("shop") or item.get("shop_number") or "").strip()
+        meter_value = str(item.get("Elec meter") or item.get("Elec Meter") or item.get("electrical_meter") or item.get("meter") or "").strip()
+        if shop_value and meter_value:
+            mapping[shop_value] = meter_value
+    return mapping
+
+
 def load_country_codes():
     fallback = [
         {"country": "Oman", "code": "+968"},
@@ -2699,6 +2724,8 @@ class ProgressApp(tk.Tk):
         self.contact_var = tk.StringVar(value="")
         self.business_var = tk.StringVar(value="")
         self.shop_number_var = tk.StringVar(value="")
+        self.address_var = tk.StringVar(value="")
+        self.electrical_meter_var = tk.StringVar(value="")
         self.email_var = tk.StringVar(value="")
         self.review_var = tk.StringVar(value="")
         self.total_tasks_var = tk.StringVar(value="0")
@@ -2875,6 +2902,22 @@ class ProgressApp(tk.Tk):
         self.translatable_labels.append((shop_label, "Shop Number"))
         self.shop_number_entry = ttk.Entry(details_frame, textvariable=self.shop_number_var)
         self.shop_number_entry.grid(row=5, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
+        self.shop_number_entry.bind("<FocusOut>", self._sync_electrical_meter_from_shop_number)
+        self.shop_number_entry.bind("<Return>", self._sync_electrical_meter_from_shop_number)
+
+        address_label = ttk.Label(details_frame, text=f"📍 {T('Address')}")
+        set_emoji_translated_label(address_label, "Address", "📍 ")
+        address_label.grid(row=6, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
+        self.translatable_labels.append((address_label, "Address"))
+        self.address_entry = ttk.Entry(details_frame, textvariable=self.address_var)
+        self.address_entry.grid(row=6, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
+
+        electrical_meter_label = ttk.Label(details_frame, text=f"⚡ {T('Electrical Meter')}")
+        set_emoji_translated_label(electrical_meter_label, "Electrical Meter", "⚡ ")
+        electrical_meter_label.grid(row=7, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
+        self.translatable_labels.append((electrical_meter_label, "Electrical Meter"))
+        self.electrical_meter_entry = ttk.Entry(details_frame, textvariable=self.electrical_meter_var)
+        self.electrical_meter_entry.grid(row=7, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
 
         self.review_frame = ttk.LabelFrame(main, text=f"📝 {T('Client Review')}", style="Section.TLabelframe")
         set_emoji_translated_label(self.review_frame, "Client Review", "📝 ")
@@ -3137,6 +3180,8 @@ class ProgressApp(tk.Tk):
         self.contact_var.set("")
         self.business_var.set("")
         self.shop_number_var.set("")
+        self.address_var.set("")
+        self.electrical_meter_var.set("")
         self.email_var.set("")
         self.total_tasks_var.set("0")
         self.new_task_var.set("")
@@ -3203,7 +3248,9 @@ class ProgressApp(tk.Tk):
         self.contact_var.set(local_number)
         self.country_name_var.set(country_name if country_name in COUNTRY_OPTIONS else DEFAULT_COUNTRY)
         self.business_var.set(matching_client.business)
-        self.shop_number_var.set(matching_client.shop_number)
+        self.shop_number_var.set(str(matching_client.shop_number))
+        self.address_var.set(getattr(matching_client, "address", ""))
+        self.electrical_meter_var.set(str(getattr(matching_client, "electrical_meter", getattr(matching_client, "notes", ""))))
         self.email_var.set(matching_client.email)
 
     def _parse_task_list(self):
@@ -3475,7 +3522,9 @@ class ProgressApp(tk.Tk):
             self.contact_var.set(local_number)
             self.country_name_var.set(country_name if country_name in COUNTRY_OPTIONS else DEFAULT_COUNTRY)
             self.business_var.set(matching_client.business)
-            self.shop_number_var.set(matching_client.shop_number)
+            self.shop_number_var.set(str(matching_client.shop_number))
+            self.address_var.set(getattr(matching_client, "address", ""))
+            self.electrical_meter_var.set(str(getattr(matching_client, "electrical_meter", getattr(matching_client, "notes", ""))))
             self.email_var.set(matching_client.email)
         else:
             client = Client(client_name, "N/A", business, shop_number="")
@@ -3505,6 +3554,14 @@ class ProgressApp(tk.Tk):
             self.client_combo.set(T("<New Client>"))
         self.focus_client_name_field()
 
+    def _sync_electrical_meter_from_shop_number(self, event=None):
+        shop_number = str(self.shop_number_var.get()).strip()
+        if not shop_number:
+            return
+        meter_value = load_shop_electrical_meter_map().get(shop_number)
+        if meter_value:
+            self.electrical_meter_var.set(str(meter_value))
+
     def save_current_client(self):
         self.client_manager.load_clients()
         name = self.client_name_var.get().strip()
@@ -3531,7 +3588,8 @@ class ProgressApp(tk.Tk):
             None,
         )
 
-        shop_number = self.shop_number_var.get().strip()
+        shop_number = str(self.shop_number_var.get()).strip()
+        self._sync_electrical_meter_from_shop_number()
         valid_shop_number, shop_error = self.client_manager.validate_shop_number(shop_number, exclude_name=name)
         if not valid_shop_number:
             messagebox.showwarning(T("Shop number invalid"), T(shop_error))
@@ -3547,6 +3605,9 @@ class ProgressApp(tk.Tk):
             messagebox.showwarning(T("Duplicate contact"), T("A client with this contact number already exists."))
             return
 
+        address = self.address_var.get().strip()
+        electrical_meter = self.electrical_meter_var.get().strip()
+
         if existing is None:
             client = Client(
                 name,
@@ -3554,6 +3615,8 @@ class ProgressApp(tk.Tk):
                 business,
                 self.email_var.get().strip(),
                 shop_number=shop_number,
+                address=address,
+                notes=electrical_meter,
             )
             self.client_manager.clients.append(client)
             self.client_manager.create_client_directory(client)
@@ -3561,6 +3624,8 @@ class ProgressApp(tk.Tk):
             existing.contact = formatted_contact
             existing.business = business
             existing.shop_number = shop_number
+            existing.address = address
+            existing.notes = electrical_meter
             existing.email = self.email_var.get().strip() or existing.email
             client = existing
 
@@ -3711,6 +3776,8 @@ class ClientDetailsWindow(tk.Toplevel):
             (T("Business"), "business"),
             (T("Email"), "email"),
             (T("Shop Number"), "shop_number"),
+            (T("Address"), "address"),
+            (T("Electrical Meter"), "electrical_meter"),
         ]
 
         for index, (label_text, key) in enumerate(labels):
@@ -3722,13 +3789,13 @@ class ClientDetailsWindow(tk.Toplevel):
             self.fields[key] = {"var": var, "entry": entry}
 
         vcard_frame = ttk.LabelFrame(main, text=T("vCard (.vcf)"), style="Section.TLabelframe")
-        vcard_frame.grid(row=7, column=0, columnspan=2, sticky="nsew", pady=(8, 8))
+        vcard_frame.grid(row=9, column=0, columnspan=2, sticky="nsew", pady=(8, 8))
         vcard_frame.columnconfigure(0, weight=1)
         self.vcard_text = tk.Text(vcard_frame, height=8, wrap="word", font=("Segoe UI", 9), state="disabled")
         self.vcard_text.grid(row=0, column=0, sticky="nsew", padx=(8, 8), pady=(8, 8))
 
         footer = ttk.Frame(main)
-        footer.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(0, 0))
+        footer.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(0, 0))
         footer.columnconfigure(0, weight=1)
         footer.columnconfigure(1, weight=1)
         footer.columnconfigure(2, weight=1)
@@ -3752,6 +3819,14 @@ class ClientDetailsWindow(tk.Toplevel):
         for info in self.fields.values():
             info["entry"].configure(state="normal" if editable else "disabled")
 
+    def _sync_electrical_meter_from_shop_number(self, event=None):
+        shop_number = str(self.fields["shop_number"]["var"].get() or "").strip()
+        if not shop_number:
+            return
+        meter_value = load_shop_electrical_meter_map().get(shop_number)
+        if meter_value:
+            self.fields["electrical_meter"]["var"].set(meter_value)
+
     def toggle_edit(self):
         self._set_editable(not self.edit_mode)
 
@@ -3763,6 +3838,8 @@ class ClientDetailsWindow(tk.Toplevel):
             self.fields["business"]["var"].set("")
             self.fields["email"]["var"].set("")
             self.fields["shop_number"]["var"].set("")
+            self.fields["address"]["var"].set("")
+            self.fields["electrical_meter"]["var"].set("")
             self._render_vcard_preview()
             return
 
@@ -3772,7 +3849,9 @@ class ClientDetailsWindow(tk.Toplevel):
         self.fields["contact"]["var"].set(parse_contact_for_ui(self.client.contact)[0])
         self.fields["business"]["var"].set(self.client.business)
         self.fields["email"]["var"].set(self.client.email)
-        self.fields["shop_number"]["var"].set(self.client.shop_number)
+        self.fields["shop_number"]["var"].set(getattr(self.client, "shop_number", ""))
+        self.fields["address"]["var"].set(getattr(self.client, "address", ""))
+        self.fields["electrical_meter"]["var"].set(getattr(self.client, "electrical_meter", getattr(self.client, "notes", "")))
         self._render_vcard_preview()
 
     def _render_vcard_preview(self):
@@ -3796,6 +3875,8 @@ class ClientDetailsWindow(tk.Toplevel):
         business = self.fields["business"]["var"].get().strip()
         email = self.fields["email"]["var"].get().strip()
         shop_number = self.fields["shop_number"]["var"].get().strip()
+        address = self.fields["address"]["var"].get().strip()
+        electrical_meter = self.fields["electrical_meter"]["var"].get().strip()
         country_name = self.fields["country"]["var"].get().strip() or DEFAULT_COUNTRY
         country_code = normalize_country_code(COUNTRY_CODE_BY_NAME.get(country_name, DEFAULT_COUNTRY_CODE))
         if not name:
@@ -3807,7 +3888,7 @@ class ClientDetailsWindow(tk.Toplevel):
         valid, error = self.manager.validate_shop_number(shop_number, exclude_name=name)
         if not valid:
             raise ValueError(T(error))
-        return Client(name, format_contact_number(contact, country_code), business, email, shop_number=shop_number)
+        return Client(name, format_contact_number(contact, country_code), business, email, shop_number=shop_number, address=address, notes=electrical_meter)
 
     def share_client(self):
         try:
@@ -3842,6 +3923,8 @@ class ClientDetailsWindow(tk.Toplevel):
             existing.business = client.business
             existing.email = client.email
             existing.shop_number = client.shop_number
+            existing.address = client.address
+            existing.notes = client.notes
             client = existing
 
         self.manager.save_clients()

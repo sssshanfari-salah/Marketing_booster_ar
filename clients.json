@@ -5,6 +5,9 @@
     "business": "Resturant",
     "email": "",
     "shop_number": "4",
+    "address": "",
+    "electrical_meter": "28602714",
+    "notes": "28602714",
     "reviews": [
       {
         "date": "2026-09-19 22:08:34",
@@ -41,6 +44,9 @@
     "business": "realaadljkl",
     "email": "",
     "shop_number": "6",
+    "address": "",
+    "electrical_meter": "",
+    "notes": "",
     "reviews": [],
     "contract_details": {
       "contract_number": "989878787",
@@ -66,6 +72,9 @@
     "business": "HR business",
     "email": "",
     "shop_number": "9",
+    "address": "",
+    "electrical_meter": "",
+    "notes": "",
     "reviews": [],
     "contract_details": {
       "contract_number": "",
