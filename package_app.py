@@ -98,6 +98,8 @@ def validate_runtime_asset_catalog():
     ui_markers = [
         "Project Manager To-Do",
         "generate_project_manager_todo_tasks",
+        "validate_translation_coverage",
+        "Open client payment records",
         "load_shop_electrical_meter_map",
         "self.client_selector_var",
         "_switch_client_for_transactions",

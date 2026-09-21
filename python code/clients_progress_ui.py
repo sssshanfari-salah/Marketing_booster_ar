@@ -1,3 +1,5 @@
+import arabic_reshaper
+from bidi.algorithm import get_display
 import calendar
 import json
 import os
@@ -405,6 +407,10 @@ TRANSLATIONS = {
         "Open Issues Requiring Attention": "Open Issues Requiring Attention",
         "All Clients": "All Clients",
         "Open All Clients": "All Clients",
+        "Project Manager To-Do": "Project Manager To-Do",
+        "Open client payment records": "Open client payment records",
+        "Follow up payment for {client_name} - {month}": "Follow up payment for {client_name} - {month}",
+        "No pending payment follow-ups": "No pending payment follow-ups",
         "Transactions": "Transactions",
         "Client Transactions": "Client Transactions",
         "Month": "Month",
@@ -549,6 +555,10 @@ TRANSLATIONS = {
         "Open Issues Requiring Attention": "المشكلات المفتوحة التي تحتاج إلى عناية",
         "All Clients": "جميع العملاء",
         "Open All Clients": "جميع العملاء",
+        "Project Manager To-Do": "مدير المشاريع - المهام",
+        "Open client payment records": "فتح سجلات الدفع للعميل",
+        "Follow up payment for {client_name} - {month}": "متابعة الدفع لـ {client_name} - {month}",
+        "No pending payment follow-ups": "لا توجد متابعة مستحقة للدفع",
         "Transactions": "المعاملات",
         "Client Transactions": "معاملات العميل",
         "Month": "الشهر",
@@ -676,12 +686,37 @@ def set_language(lang):
     return CURRENT_LANGUAGE
 
 
+# def T(text, **kwargs):
+#     language_map = TRANSLATIONS.get(CURRENT_LANGUAGE, TRANSLATIONS["eng"])
+#     translated = language_map.get(text, text)
+#     if kwargs:
+#         return translated.format(**kwargs)
+#     return translated
+
+
 def T(text, **kwargs):
     language_map = TRANSLATIONS.get(CURRENT_LANGUAGE, TRANSLATIONS["eng"])
     translated = language_map.get(text, text)
+
+    # Apply formatting if needed
     if kwargs:
-        return translated.format(**kwargs)
+        translated = translated.format(**kwargs)
+
+    # Keep Arabic strings in their natural logical order. The reshaper/bidi pipeline
+    # used here reverses the displayed text in the current Tkinter environment,
+    # so we rely on the translation table itself for correct Arabic content.
     return translated
+
+
+def validate_translation_coverage():
+    english_keys = set(TRANSLATIONS.get("eng", {}).keys())
+    arabic_keys = set(TRANSLATIONS.get("ar", {}).keys())
+    missing = sorted(key for key in english_keys if key not in arabic_keys)
+    if missing:
+        raise ValueError(
+            "Missing Arabic translations for UI labels:\n" + "\n".join(f" - {key}" for key in missing[:50])
+        )
+    return None
 
 
 def build_task_log_report_text(plan=None, client_name=""):

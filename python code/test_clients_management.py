@@ -29,6 +29,7 @@ from clients_progress_ui import (
     resolve_log_output_dir,
     set_language,
     strip_task_number_prefix,
+    validate_translation_coverage,
 )
 from sync_documents import TARGET
 
@@ -346,6 +347,9 @@ class ClientManagerTests(unittest.TestCase):
         self.assertTrue(hasattr(ProgressApp, "export_client_log"))
         self.assertTrue(hasattr(ProgressApp, "export_task_log"))
         self.assertTrue(hasattr(ProgressApp, "export_observation_log"))
+
+    def test_arabic_translations_cover_all_ui_labels(self):
+        self.assertIsNone(validate_translation_coverage())
 
     def test_task_listboxes_include_horizontal_scrollbars(self):
         source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
