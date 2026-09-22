@@ -109,6 +109,18 @@ def validate_runtime_asset_catalog():
         "self.transactions_button",
         "Home",
         "go_home",
+        "apply_bidi_text",
+        "is_arabic_text",
+        "arabic_reshaper",
+        "if not is_arabic_text(text):",
+        "return get_display(arabic_reshaper.reshape(text))",
+        "\"Preview\": \"Preview\"",
+        "\"Close Preview\": \"Close Preview\"",
+        "\"Save\": \"Save\"",
+        "\"Edit\": \"Edit\"",
+        "\"OK\": \"OK\"",
+        "\"Payment Report\": \"Payment Report\"",
+        "\"Save Comment\": \"Save Comment\"",
     ]
     ui_content = ui_file.read_text(encoding="utf-8") if ui_file.exists() else ""
     missing_markers = [marker for marker in ui_markers if marker not in ui_content]

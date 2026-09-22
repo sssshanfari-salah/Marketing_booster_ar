@@ -6,6 +6,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import arabic_reshaper
+from bidi.algorithm import get_display
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -21,6 +24,7 @@ from clients_progress_ui import (
     Plan,
     ProgressApp,
     T,
+    apply_bidi_text,
     build_review_log_report_text,
     build_task_log_report_text,
     get_emoji_font_families,
@@ -316,12 +320,29 @@ class ClientManagerTests(unittest.TestCase):
         self.assertTrue(hasattr(module, "plan"))
         self.assertEqual(module.plan.Clients_progress, {})
 
+    def test_apply_bidi_only_to_pure_arabic_labels(self):
+        pure_arabic = "العنوان"
+        mixed_text = "Address العنوان"
+        self.assertEqual(apply_bidi_text(pure_arabic), get_display(arabic_reshaper.reshape(pure_arabic)))
+        self.assertEqual(apply_bidi_text(mixed_text), mixed_text)
+
+        self.assertEqual(T("Address"), "Address")
+        set_language("ar")
+        self.assertEqual(T("Address"), "العنوان")
+        self.assertEqual(T("Client Details"), "تفاصيل العميل")
+        self.assertEqual(T("Client: {client_name}"), "العميل: {client_name}")
+        set_language("eng")
+
     def test_language_switch_supports_english_and_arabic(self):
         self.assertEqual(T("Client Details"), "Client Details")
         set_language("ar")
         self.assertEqual(T("Client Details"), "تفاصيل العميل")
+        self.assertEqual(T("Address"), "العنوان")
+        self.assertEqual(T("Electrical Meter"), "عداد الكهرباء")
         set_language("eng")
         self.assertEqual(T("Client Details"), "Client Details")
+        self.assertEqual(T("Address"), "Address")
+        self.assertEqual(T("Electrical Meter"), "Electrical Meter")
 
     def test_resolve_desktop_dir_uses_existing_windows_desktop(self):
         if resolve_desktop_dir is None:

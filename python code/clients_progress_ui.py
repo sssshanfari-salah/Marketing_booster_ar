@@ -77,10 +77,54 @@ def configure_emoji_label(widget, text, *, size=10, bold=False):
     return False
 
 
+def is_arabic_text(value):
+    text = str(value or "")
+    return any(
+        0x0600 <= ord(ch) <= 0x06FF
+        or 0x0750 <= ord(ch) <= 0x077F
+        or 0x08A0 <= ord(ch) <= 0x08FF
+        or 0xFB50 <= ord(ch) <= 0xFDFF
+        or 0xFE70 <= ord(ch) <= 0xFEFF
+        for ch in text
+    )
+
+
+def apply_bidi_text(value):
+    text = str(value or "")
+    if not text:
+        return ""
+
+    if not is_arabic_text(text):
+        return text
+
+    normalized = text.strip()
+    if not normalized:
+        return text
+
+    if any(ch in text for ch in "{}()[]<>/\\|=+*#@%$£€¥0123456789"):
+        return text
+
+    allowed = set(" \t\n\r" + "0123456789")
+    for ch in text:
+        if not (
+            0x0600 <= ord(ch) <= 0x06FF
+            or 0x0750 <= ord(ch) <= 0x077F
+            or 0x08A0 <= ord(ch) <= 0x08FF
+            or 0xFB50 <= ord(ch) <= 0xFDFF
+            or 0xFE70 <= ord(ch) <= 0xFEFF
+            or ch in allowed
+        ):
+            return text
+
+    return get_display(arabic_reshaper.reshape(text))
+
+
 def set_emoji_translated_label(widget, original_text, emoji_prefix=""):
     widget._emoji_prefix = emoji_prefix
-    widget.configure(text=f"{emoji_prefix}{T(original_text)}")
-    configure_emoji_label(widget, f"{emoji_prefix}{T(original_text)}")
+    translated = T(original_text)
+    formatted = f"{emoji_prefix}{translated}"
+    widget.configure(text=formatted)
+    configure_emoji_label(widget, formatted)
 
 
 def resolve_log_output_dir(log_type="general"):
@@ -345,6 +389,8 @@ TRANSLATIONS = {
         "Contact": "Contact Number",
         "Business": "Business",
         "Shop Number": "Shop Number",
+        "Address": "Address",
+        "Electrical Meter": "Electrical Meter",
         "Email": "Email",
         "Client Review": "Client Review",
         "Add Review": "Add Review",
@@ -395,7 +441,14 @@ TRANSLATIONS = {
         "Add Task": "Add Task",
         "Tasks Details": "Tasks Details",
         "Contract Details": "Contract Details",
+        "Preview": "Preview",
+        "Close Preview": "Close Preview",
+        "Save": "Save",
+        "Edit": "Edit",
+        "OK": "OK",
         "Refresh Progress": "Refresh Progress",
+        "Payment Report": "Payment Report",
+        "Save Comment": "Save Comment",
         "Share Client Info": "Share Client Info",
         "Contract Number": "Contract Number",
         "Starting Date": "Starting Date",
@@ -493,6 +546,8 @@ TRANSLATIONS = {
         "Contact": "رقم التواصل",
         "Business": "نوع النشاط",
         "Shop Number": "رقم المحل",
+        "Address": "العنوان",
+        "Electrical Meter": "عداد الكهرباء",
         "Email": "البريد الإلكتروني",
         "Client Review": "ملاحظات العميل",
         "Add Review": "إضافة ملاحظة",
@@ -543,7 +598,14 @@ TRANSLATIONS = {
         "Add Task": "إضافة مهمة",
         "Tasks Details": "تفاصيل المهام",
         "Contract Details": "تفاصيل العقد",
+        "Preview": "معاينة",
+        "Close Preview": "إغلاق المعاينة",
+        "Save": "حفظ",
+        "Edit": "تعديل",
+        "OK": "موافق",
         "Refresh Progress": "تحديث التقدم",
+        "Payment Report": "تقرير الدفع",
+        "Save Comment": "حفظ التعليق",
         "Share Client Info": "مشاركة معلومات العميل",
         "Contract Number": "رقم العقد",
         "Starting Date": "تاريخ البداية",
@@ -698,13 +760,12 @@ def T(text, **kwargs):
     language_map = TRANSLATIONS.get(CURRENT_LANGUAGE, TRANSLATIONS["eng"])
     translated = language_map.get(text, text)
 
-    # Apply formatting if needed
     if kwargs:
         translated = translated.format(**kwargs)
 
-    # Keep Arabic strings in their natural logical order. The reshaper/bidi pipeline
-    # used here reverses the displayed text in the current Tkinter environment,
-    # so we rely on the translation table itself for correct Arabic content.
+    if CURRENT_LANGUAGE == "ar":
+        translated = apply_bidi_text(translated)
+
     return translated
 
 
