@@ -1253,6 +1253,16 @@ class TaskDetailsWindow(tk.Toplevel):
 
         self.populate_lists(all_tasks=all_tasks, pending_tasks=pending_tasks)
 
+        self.new_task_var = tk.StringVar()
+        task_entry_row = ttk.Frame(main)
+        task_entry_row.pack(fill="x", pady=(0, 10))
+        new_task_label = ttk.Label(task_entry_row, text=T("New task"))
+        new_task_label.pack(side="left", padx=(0, 6))
+        self.new_task_entry = ttk.Entry(task_entry_row, textvariable=self.new_task_var)
+        self.new_task_entry.bind("<Return>", lambda event: self.save_task())
+        self.new_task_entry.pack(side="left", fill="x", expand=True)
+        ttk.Button(task_entry_row, text=T("Add Task"), command=self.save_task, style="Action.TButton", width=14).pack(side="left", padx=(6, 0))
+
         button_row = ttk.Frame(main)
         button_row.pack(fill="x", pady=(0, 8))
         ttk.Button(button_row, text=T("Edit"), command=self.edit_selected_task).pack(side="left", padx=(0, 8))
@@ -1261,6 +1271,25 @@ class TaskDetailsWindow(tk.Toplevel):
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Close"), command=self.close_window).pack(side="left")
+
+    def save_task(self):
+        if self.plan is None:
+            messagebox.showwarning(T("No task plan"), T("There is no active task plan to update."))
+            return
+
+        task = self.new_task_var.get().strip()
+        if not task:
+            self.new_task_entry.focus_set()
+            self.new_task_entry.icursor(len(self.new_task_entry.get()))
+            return
+
+        self.plan.add_pending_task(task)
+        if self.master_app and hasattr(self.master_app, "refresh_display"):
+            self.master_app.refresh_display()
+        self.populate_lists(all_tasks=self.plan.all_tasks, pending_tasks=self.plan.pending_tasks)
+        self.new_task_var.set("")
+        self.new_task_entry.focus_set()
+        self.new_task_entry.icursor(0)
 
     def go_home(self):
         self.destroy()
@@ -3173,7 +3202,6 @@ class ProgressApp(tk.Tk):
         button_row.columnconfigure(1, weight=1)
 
         action_buttons = [
-            (T("Add Task"), self.add_task),
             (T("Tasks Details"), self.open_task_details_window),
             (T("Contract Details"), self.open_contract_details_window),
             (T("Transactions"), self.open_transactions_window),
@@ -3194,18 +3222,6 @@ class ProgressApp(tk.Tk):
             button.grid(row=row, column=column, sticky="ew", padx=(0, 4), pady=(0, 4))
             button.configure(width=max(18, len(text) + 4))
             self.translatable_buttons.append((button, text))
-
-        task_entry_row = ttk.Frame(tasks_frame)
-        task_entry_row.grid(row=2, column=0, columnspan=5, sticky="ew", padx=(8, 8), pady=(0, 6))
-        new_task_label = ttk.Label(task_entry_row, text=T("New task"))
-        new_task_label.pack(side="left", padx=(0, 6))
-        self.translatable_labels.append((new_task_label, "New task"))
-        self.new_task_entry = ttk.Entry(task_entry_row, textvariable=self.new_task_var)
-        self.new_task_entry.bind("<Return>", lambda event: self.save_task())
-        self.new_task_entry.pack(side="left", fill="x", expand=True)
-        save_task_button = ttk.Button(task_entry_row, text=T("Save Task"), command=self.save_task, style="Action.TButton", width=14)
-        save_task_button.pack(side="left", padx=(6, 0))
-        self.translatable_buttons.append((save_task_button, "Save Task"))
 
         main.rowconfigure(4, weight=2)
         tasks_frame.rowconfigure(1, weight=1)
@@ -3483,8 +3499,7 @@ class ProgressApp(tk.Tk):
             messagebox.showwarning(T("No client plan"), T("Create a client plan first."))
             return
 
-        self.new_task_entry.focus_set()
-        self.new_task_entry.icursor(len(self.new_task_entry.get()))
+        self.open_task_details_window()
 
     def save_task(self):
         name = self.client_name_var.get().strip()
@@ -3496,6 +3511,10 @@ class ProgressApp(tk.Tk):
         if self.plan is None:
             self.focus_client_name_field()
             messagebox.showwarning(T("No client plan"), T("Create a client plan first."))
+            return
+
+        if not hasattr(self, "new_task_entry") or not hasattr(self, "new_task_var"):
+            self.open_task_details_window()
             return
 
         task = self.new_task_var.get().strip()
