@@ -28,13 +28,28 @@
       "authorized_signature_name": "jfdj kldjfkldj",
       "rent_value": "500",
       "currency_type": "OMR",
-      "open_issues": "nothing to report"
+      "open_issues": "nothing to report",
+      "duration_years": "",
+      "renewable": "Yes",
+      "first_party": "",
+      "second_party": ""
     },
     "progress": {
       "client_name": "al al arjan",
       "progress": 100,
       "pending_tasks": [],
       "all_tasks": []
+    },
+    "reservation_status": {
+      "client_name": "",
+      "contact": "",
+      "shop_number": "",
+      "deposit_status": "",
+      "contract_status": "",
+      "contract_duration": "",
+      "rent_value": "",
+      "deposit_amount": "",
+      "last_updated": ""
     },
     "transactions": []
   },
@@ -56,13 +71,28 @@
       "authorized_signature_name": "Salah",
       "rent_value": "200",
       "currency_type": "OMR",
-      "open_issues": "nothing to report again"
+      "open_issues": "nothing to report again",
+      "duration_years": "",
+      "renewable": "Yes",
+      "first_party": "",
+      "second_party": ""
     },
     "progress": {
       "client_name": "",
       "progress": 0,
       "pending_tasks": [],
       "all_tasks": []
+    },
+    "reservation_status": {
+      "client_name": "",
+      "contact": "",
+      "shop_number": "",
+      "deposit_status": "",
+      "contract_status": "",
+      "contract_duration": "",
+      "rent_value": "",
+      "deposit_amount": "",
+      "last_updated": ""
     },
     "transactions": []
   },
@@ -84,13 +114,28 @@
       "authorized_signature_name": "",
       "rent_value": "",
       "currency_type": "OMR",
-      "open_issues": ""
+      "open_issues": "",
+      "duration_years": "",
+      "renewable": "Yes",
+      "first_party": "",
+      "second_party": ""
     },
     "progress": {
       "client_name": "",
       "progress": 0,
       "pending_tasks": [],
       "all_tasks": []
+    },
+    "reservation_status": {
+      "client_name": "",
+      "contact": "",
+      "shop_number": "",
+      "deposit_status": "",
+      "contract_status": "",
+      "contract_duration": "",
+      "rent_value": "",
+      "deposit_amount": "",
+      "last_updated": ""
     },
     "transactions": []
   }

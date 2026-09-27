@@ -9,7 +9,8 @@ from datetime import datetime
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
-SOURCE_DIR = APP_DIR / "python code"
+SOURCE_DIR_CANDIDATES = [APP_DIR / "python_code", APP_DIR / "python code"]
+SOURCE_DIR = next((candidate for candidate in SOURCE_DIR_CANDIDATES if candidate.exists()), APP_DIR / "python_code")
 ENTRY_SCRIPT = SOURCE_DIR / "main.py"
 DIST_DIR = APP_DIR / "dist"
 BUILD_DIR = APP_DIR / "build"
@@ -77,6 +78,7 @@ def validate_runtime_asset_catalog():
         SOURCE_DIR / "main.py",
         SOURCE_DIR / "clients_management.py",
         SOURCE_DIR / "clients_progress_ui.py",
+        SOURCE_DIR / "ui_reservation_contract.py",
         CLIENTS_DATA_FILE,
         LEGACY_CLIENTS_DATA_FILE,
         COUNTRY_CODES_DATA,
@@ -96,38 +98,40 @@ def validate_runtime_asset_catalog():
 
     ui_file = SOURCE_DIR / "clients_progress_ui.py"
     ui_markers = [
+        "class WelcomeWindow(tk.Tk):",
+        "def open_welcome_home():",
+        "def set_language(lang):",
+        "def refresh_window_language(widget_list):",
+        "def T(key: str, **kwargs):",
+        "if CURRENT_LANGUAGE == \"ar\":",
+        "return arabic_ui(text)",
+        "def refresh_translatable_widget(widget, original_text, *, allow_label_frame=False):",
+        "if not isinstance(widget, supported_widget_types):",
+        "return False",
+        "self.title(T(\"Starco Commercial Complex\"))",
+        "text=\"Welcome to Starco Commercial Complex\"",
+        "text=\"مرحباً بكم في مجمع ستاركو التجاري\"",
+        "title = ttk.Label(",
+        "subtitle = ttk.Label(",
         "Project Manager To-Do",
-        "generate_project_manager_todo_tasks",
-        "validate_translation_coverage",
+        "self.todo_listbox = tk.Listbox(",
+        "self.transactions_button = ttk.Button(",
+        "command=self._open_transactions_panel",
         "Open client payment records",
-        "load_shop_electrical_meter_map",
-        "self.client_selector_var",
-        "_switch_client_for_transactions",
+        "Saved Reservation Contracts",
+        "self.saved_contract_listbox = tk.Listbox(",
+        "profile_frame = ttk.Frame(self, padding=(12, 6))",
+        "main_frame = ttk.Frame(self, padding=(18, 4, 18, 12))",
         "ClientTransactionsWindow",
-        "open_welcome_home",
-        "No reviews yet",
-        "self.transactions_button",
-        "Home",
-        "go_home",
-        "apply_bidi_text",
-        "is_arabic_text",
-        "arabic_reshaper",
-        "if not is_arabic_text(text):",
-        "return get_display(arabic_reshaper.reshape(text))",
-        "Task Details - {client_name}",
-        "Task Details",
-        "New task",
-        "Add Task",
-        "self.new_task_var",
-        "self.new_task_entry",
-        "save_task",
-        "\"Preview\": \"Preview\"",
-        "\"Close Preview\": \"Close Preview\"",
-        "\"Save\": \"Save\"",
-        "\"Edit\": \"Edit\"",
-        "\"OK\": \"OK\"",
-        "\"Payment Report\": \"Payment Report\"",
-        "\"Save Comment\": \"Save Comment\"",
+        "self.language_var = tk.StringVar(value=CURRENT_LANGUAGE)",
+        "self.language_combo = ttk.Combobox(",
+        "self.language_combo.bind(\"<<ComboboxSelected>>\", self.switch_language)",
+        "def switch_language(self, event=None):",
+        "widget.configure(text=translated)",
+        "widget.grid_configure(sticky=\"e\")",
+        "widget.pack_configure(anchor=\"e\", fill=\"x\")",
+        "validate_translation_coverage",
+        "def arabic_ui(text):",
     ]
     ui_content = ui_file.read_text(encoding="utf-8") if ui_file.exists() else ""
     missing_markers = [marker for marker in ui_markers if marker not in ui_content]
@@ -208,6 +212,70 @@ def generate_contract_months(start_date=None, end_date=None):
     return unique_months
 
 
+def normalize_duration_value(value):
+    if value is None:
+        return ""
+
+    text = str(value).strip()
+    if not text:
+        return ""
+
+    cleaned = text.lower().replace("years", "").replace("year", "").replace("yrs", "").replace("yr", "").strip()
+    cleaned = cleaned.strip("()[]{} ")
+    match = __import__("re").search(r"[-+]?\d+(?:\.\d+)?", cleaned)
+    if match:
+        return match.group(0)
+    return cleaned
+
+
+def normalize_shop_value(value):
+    if value is None:
+        return ""
+
+    if isinstance(value, (list, tuple, set)):
+        flattened = []
+        for item in value:
+            normalized = normalize_shop_value(item)
+            if not normalized:
+                continue
+            for part in normalized.split(","):
+                cleaned = part.strip()
+                if cleaned and cleaned not in flattened:
+                    flattened.append(cleaned)
+        return ", ".join(flattened)
+
+    if isinstance(value, dict):
+        for key in ("shop_number", "shop_number_primary", "primary_shop", "selected_shop", "shop"):
+            if key in value:
+                return normalize_shop_value(value[key])
+        return ""
+
+    text = str(value).strip()
+    if not text:
+        return ""
+
+    text = text.replace(";", ",").replace("|", ",")
+    parts = [part.strip() for part in text.split(",")]
+    cleaned = [part for part in parts if part]
+    return ", ".join(cleaned)
+
+
+def normalize_renewable_value(value):
+    if value is None:
+        return "Yes"
+
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+
+    text = str(value).strip().lower()
+    if not text:
+        return "Yes"
+
+    if text in {"yes", "y", "true", "1", "renewable"}:
+        return "Yes"
+    return "No"
+
+
 def normalize_contract_details(value):
     contract_fields = {
         "contract_number": "",
@@ -218,6 +286,10 @@ def normalize_contract_details(value):
         "rent_value": "",
         "currency_type": "OMR",
         "open_issues": "",
+        "duration_years": "",
+        "renewable": "",
+        "first_party": "",
+        "second_party": "",
     }
 
     if not isinstance(value, dict):
@@ -226,7 +298,42 @@ def normalize_contract_details(value):
     normalized = {}
     for key, default in contract_fields.items():
         raw = value.get(key, default)
-        normalized[key] = str(raw) if raw is not None else default
+        if raw is None:
+            raw = default
+        if key == "duration_years":
+            normalized[key] = normalize_duration_value(raw)
+        elif key == "renewable":
+            normalized[key] = normalize_renewable_value(raw)
+        else:
+            normalized[key] = str(raw)
+    return normalized
+
+
+def normalize_reservation_status(value):
+    reservation_fields = {
+        "client_name": "",
+        "contact": "",
+        "shop_number": "",
+        "deposit_status": "",
+        "contract_status": "",
+        "contract_duration": "",
+        "rent_value": "",
+        "deposit_amount": "",
+        "last_updated": "",
+    }
+
+    if not isinstance(value, dict):
+        return dict(reservation_fields)
+
+    normalized = {}
+    for key, default in reservation_fields.items():
+        raw = value.get(key, default)
+        if raw is None:
+            raw = default
+        if key == "contract_duration":
+            normalized[key] = normalize_duration_value(raw)
+        else:
+            normalized[key] = str(raw)
     return normalized
 
 
@@ -410,6 +517,11 @@ def normalize_legacy_client_data(entries):
         if not isinstance(reviews, list):
             reviews = []
         normalized_entry["reviews"] = list(reviews)
+
+        reservation_status = normalized_entry.get("reservation_status")
+        if not isinstance(reservation_status, dict):
+            reservation_status = {}
+        normalized_entry["reservation_status"] = normalize_reservation_status(reservation_status)
 
         transactions = normalized_entry.get("transactions")
         if not isinstance(transactions, list):
@@ -637,13 +749,29 @@ def remove_directory(path):
 
 
 def ensure_runtime_files():
+    
+    global SOURCE_DIR
+    SOURCE_DIR.mkdir(parents=True, exist_ok=True)
+    # rest of your logic...
+
     APP_DIR.mkdir(parents=True, exist_ok=True)
     SOURCE_DIR.mkdir(parents=True, exist_ok=True)
     for output_dir in OUTPUT_LOG_DIRS:
         output_dir.mkdir(parents=True, exist_ok=True)
 
     if not ENTRY_SCRIPT.exists():
-        raise FileNotFoundError(f"Entry script not found: {ENTRY_SCRIPT}")
+        if SOURCE_DIR.name == "python_code":
+            legacy_entry = APP_DIR / "python code" / "main.py"
+            if legacy_entry.exists():
+                SOURCE_DIR = APP_DIR / "python code"
+                globals()["SOURCE_DIR"] = SOURCE_DIR
+                globals()["ENTRY_SCRIPT"] = SOURCE_DIR / "main.py"
+                globals()["COUNTRY_CODES_DATA"] = SOURCE_DIR / "country_codes.json"
+                globals()["SHOPS_ELECTRICAL_METERS_FILE"] = SOURCE_DIR / "Shops_Elect_meters.json"
+                globals()["LEGACY_CLIENTS_DATA_FILE"] = SOURCE_DIR / "clients.json"
+                globals()["DOCUMENTS_DATA_FILE"] = SOURCE_DIR / "docs" / "documents.txt"
+        if not ENTRY_SCRIPT.exists():
+            raise FileNotFoundError(f"Entry script not found: {ENTRY_SCRIPT}")
 
     migrate_legacy_client_data()
 
@@ -730,6 +858,18 @@ def build_app():
 
     if TARGET_ICON.exists():
         cmd.extend(["--icon", str(TARGET_ICON)])
+
+    for hidden_module in [
+        "arabic_reshaper",
+        "bidi",
+        "bidi.algorithm",
+        "PIL",
+        "PIL.Image",
+    ]:
+        cmd.extend(["--hidden-import", hidden_module])
+
+    cmd.extend(["--collect-all", "arabic_reshaper"])
+    cmd.extend(["--collect-all", "bidi"])
 
     cmd = add_runtime_assets(cmd)
 
