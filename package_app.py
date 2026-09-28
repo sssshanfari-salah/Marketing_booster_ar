@@ -104,48 +104,67 @@ def validate_runtime_asset_catalog():
         )
 
     ui_file = SOURCE_DIR / "clients_progress_ui.py"
+    action_file = SOURCE_DIR / "ui_client_actions.py"
     translation_file = SOURCE_DIR / "translations.py"
     ui_content = ui_file.read_text(encoding="utf-8") if ui_file.exists() else ""
+    action_content = action_file.read_text(encoding="utf-8") if action_file.exists() else ""
     translation_content = translation_file.read_text(encoding="utf-8") if translation_file.exists() else ""
 
     ui_markers = [
-        "def apply_bidi_text",
-        "def is_arabic_text",
+        "def refresh_translatable_widget",
         "def format_translated_label_text",
         "def set_emoji_translated_label",
-        "widget._original_text",
-        "class WelcomeWindow",
-        "def _sync_overview_access",
-        "overview_button",
-        "contract_button",
-        "arabic_reshaper",
-        "get_display(",
+        "def is_arabic_text",
+        "def apply_bidi_text",
         "import translations as lang",
-        "CURRENT_LANGUAGE = lang.CURRENT_LANGUAGE",
-        "def T(key: str, **kwargs)",
-        "def set_language(lang_code)",
-        "def refresh_lang_ui(self)",
-        "def safe_main",
-        "CURRENT_LANGUAGE == \"ar\"",
+        "T = lang.T",
+        "set_language = lang.set_language",
+        "lang.CURRENT_LANGUAGE",
+        "T(original_text)",
+        "refresh_lang_ui(self)",
         "Client Details",
+    ]
+
+    action_markers = [
+        "class ClientManagementMixin",
+        "def switch_language(self, event=None):",
+        "import translations as lang",
+        "lang.set_language(selected)",
+        "self.language_var.set(lang.CURRENT_LANGUAGE)",
+        "self.refresh_lang_ui()",
     ]
 
     translation_markers = [
         "CURRENT_LANGUAGE = \"eng\"",
-        "def set_language(lang)",
-        "def T(key: str, **kwargs):",
-        "def validate_translation_coverage()",
+        "def set_language(lang):",
+        "def T(text, **kwargs):",
+        "def validate_translation_coverage():",
         "TRANSLATIONS = {",
         "\"Language\": \"Language\"",
     ]
 
+    stale_ui_markers = [
+        "def current_language(",
+        "CURRENT_LANGUAGE = lang.CURRENT_LANGUAGE",
+        "def T(key: str, **kwargs)",
+        "def set_language(lang_code)",
+    ]
+
     missing_markers = [marker for marker in ui_markers if marker not in ui_content]
+    missing_action_markers = [marker for marker in action_markers if marker not in action_content]
     missing_translation_markers = [marker for marker in translation_markers if marker not in translation_content]
-    all_missing = missing_markers + missing_translation_markers
+    stale_markers = [marker for marker in stale_ui_markers if marker in ui_content]
+    all_missing = missing_markers + missing_action_markers + missing_translation_markers
+    if stale_markers:
+        details = "\n".join(f" - {marker}" for marker in stale_markers)
+        raise RuntimeError(
+            "Packaging aborted: stale duplicated language logic remains in the UI module.\n"
+            f"Conflicting markers:\n{details}"
+        )
     if all_missing:
         details = "\n".join(f" - {marker}" for marker in all_missing)
         raise RuntimeError(
-            "Packaging aborted: the app UI and translation module do not contain the expected client-management and RTL behavior.\n"
+            "Packaging aborted: the app UI, action mixin, and translation modules do not contain the expected language and RTL behavior.\n"
             f"Missing markers:\n{details}"
         )
 
@@ -246,6 +265,56 @@ def find_built_exe():
 
 
 TARGET_EXE = find_built_exe()
+
+
+def normalize_payment_method(value):
+    text = str(value or "").strip().lower()
+    if not text:
+        return "Cash"
+    mapping = {
+        "cash": "Cash",
+        "cheque": "Cheque",
+        "check": "Cheque",
+        "bank transaction": "Bank Transaction",
+        "bank_transaction": "Bank Transaction",
+        "bank": "Bank Transaction",
+        "bank transfer": "Bank Transaction",
+    }
+    return mapping.get(text, text.title())
+
+
+def normalize_legacy_client_data(records):
+    if not isinstance(records, list):
+        return []
+
+    migrated = []
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+
+        normalized = dict(item)
+        contract_details = normalized.get("contract_details")
+        if not isinstance(contract_details, dict):
+            contract_details = {}
+        contract_details = dict(contract_details)
+        contract_details.setdefault("currency_type", "OMR")
+        normalized["contract_details"] = contract_details
+
+        transactions = normalized.get("transactions")
+        if isinstance(transactions, list):
+            normalized["transactions"] = [
+                {
+                    **entry,
+                    "bank_transaction_details": str(entry.get("bank_transaction_details", "") or "").strip(),
+                    "payment_method": normalize_payment_method(entry.get("payment_method", "Cash")),
+                }
+                if isinstance(entry, dict)
+                else entry
+                for entry in transactions
+            ]
+
+        migrated.append(normalized)
+    return migrated
 
 
 def ensure_pyinstaller():

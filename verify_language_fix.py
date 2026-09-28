@@ -3,6 +3,8 @@ import pathlib
 import tkinter as tk
 from tkinter import ttk
 
+import python_code.translations as translations
+
 base = pathlib.Path(__file__).resolve().parent
 
 
@@ -27,7 +29,7 @@ root.withdraw()
 label = ttk.Label(root, text='Client Name')
 label.pack()
 orig_font = label.cget('font')
-ui.set_language('ar')
+translations.set_language('ar')
 ui.refresh_translatable_widget(label, 'Client Name')
 text = label.cget('text')
 font = label.cget('font')

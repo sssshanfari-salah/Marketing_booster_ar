@@ -3,6 +3,8 @@ import pathlib
 import tkinter as tk
 from tkinter import ttk
 
+import python_code.translations as translations
+
 root = pathlib.Path(__file__).resolve().parent
 
 
@@ -18,12 +20,12 @@ spec = importlib.util.spec_from_file_location('ui', p)
 ui = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ui)
 
+translations.set_language('ar')
 root_window = tk.Tk()
 root_window.withdraw()
 label = ttk.Label(root_window, text='Client Name')
 label.pack()
 print('initial>', repr(label.cget('text')))
-ui.set_language('ar')
 print('before refresh>', repr(label.cget('text')))
 res = ui.refresh_translatable_widget(label, 'Client Name')
 print('res>', res)

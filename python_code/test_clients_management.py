@@ -6,6 +6,7 @@ import tempfile
 import tkinter as tk
 import unittest
 from pathlib import Path
+from unittest import mock
 from tkinter import ttk
 
 import arabic_reshaper
@@ -53,6 +54,49 @@ except ImportError:
 
 
 class WelcomeAccessTests(unittest.TestCase):
+    def test_translation_helpers_are_exposed(self):
+        import clients_progress_ui as ui
+        self.assertTrue(callable(ui.T))
+        self.assertTrue(callable(ui.set_language))
+        self.assertEqual(ui.T("Guest"), "Guest")
+        self.assertEqual(ui.set_language("ar"), "ar")
+        self.assertEqual(ui.T("Guest"), "ضيف")
+        self.assertEqual(ui.set_language("eng"), "eng")
+
+    def test_successful_welcome_login_opens_overview(self):
+        import clients_progress_ui as ui
+
+        class DummyVar:
+            def __init__(self, value=""):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+            def set(self, value):
+                self.value = value
+
+        dummy = type("DummyWelcome", (), {
+            "user_name_var": DummyVar("Alice"),
+            "user_email_var": DummyVar("alice@example.com"),
+            "destroy": lambda self: None,
+            "_refresh_login_status": lambda self: None,
+            "guest_mode": False,
+        })()
+
+        with mock.patch.object(ui, "verify_registered_user", return_value=True), \
+             mock.patch.object(ui, "save_user_profile"), \
+             mock.patch.object(ui, "set_current_session_profile"), \
+             mock.patch.object(ui, "messagebox") as mock_msgbox, \
+             mock.patch.object(ui, "open_overview_window") as mock_open_overview:
+            mock_app = mock.Mock()
+            mock_open_overview.return_value = mock_app
+            ui.WelcomeWindow.login_user(dummy)
+
+        mock_msgbox.showinfo.assert_called_once()
+        mock_open_overview.assert_called_once()
+        mock_app.focus_section.assert_called_once_with("overview")
+
     def test_overview_button_is_enabled_only_after_login(self):
         original_profile = getattr(__import__("clients_progress_ui", fromlist=["CURRENT_SESSION_PROFILE"]), "CURRENT_SESSION_PROFILE").copy()
         try:
