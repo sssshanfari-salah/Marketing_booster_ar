@@ -112,16 +112,13 @@ def validate_runtime_asset_catalog():
 
     ui_markers = [
         "def refresh_translatable_widget",
-        "def format_translated_label_text",
         "def set_emoji_translated_label",
         "def is_arabic_text",
         "def apply_bidi_text",
-        "import translations as lang",
-        "T = lang.T",
-        "set_language = lang.set_language",
-        "lang.CURRENT_LANGUAGE",
-        "T(original_text)",
-        "refresh_lang_ui(self)",
+        "def set_language(lang):",
+        "def T(text, **kwargs):",
+        "def validate_translation_coverage():",
+        "CURRENT_LANGUAGE = \"eng\"",
         "Client Details",
     ]
 
@@ -155,6 +152,10 @@ def validate_runtime_asset_catalog():
     missing_translation_markers = [marker for marker in translation_markers if marker not in translation_content]
     stale_markers = [marker for marker in stale_ui_markers if marker in ui_content]
     all_missing = missing_markers + missing_action_markers + missing_translation_markers
+
+    # The project currently uses a direct translation helper module and a canonical UI
+    # implementation, so the packaging check must validate the active contract rather
+    # than the legacy duplicate-language pattern.
     if stale_markers:
         details = "\n".join(f" - {marker}" for marker in stale_markers)
         raise RuntimeError(
