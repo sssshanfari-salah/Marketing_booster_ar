@@ -94,8 +94,43 @@ class WelcomeAccessTests(unittest.TestCase):
             ui.WelcomeWindow.login_user(dummy)
 
         mock_msgbox.showinfo.assert_called_once()
-        mock_open_overview.assert_called_once()
+        mock_open_overview.assert_called_once_with(force_new=True)
         mock_app.focus_section.assert_called_once_with("overview")
+
+    def test_successful_relogin_opens_a_fresh_overview(self):
+        import clients_progress_ui as ui
+
+        class DummyVar:
+            def __init__(self, value=""):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+            def set(self, value):
+                self.value = value
+
+        dummy = type("DummyWelcome", (), {
+            "user_name_var": DummyVar("Alice"),
+            "user_email_var": DummyVar("alice@example.com"),
+            "destroy": lambda self: None,
+            "_refresh_login_status": lambda self: None,
+            "guest_mode": False,
+        })()
+
+        with mock.patch.object(ui, "verify_registered_user", return_value=True), \
+             mock.patch.object(ui, "save_user_profile"), \
+             mock.patch.object(ui, "set_current_session_profile"), \
+             mock.patch.object(ui, "messagebox"), \
+             mock.patch.object(ui, "open_overview_window") as mock_open_overview:
+            mock_app = mock.Mock()
+            mock_open_overview.return_value = mock_app
+            ui.WelcomeWindow.login_user(dummy)
+            ui.WelcomeWindow.login_user(dummy)
+
+        self.assertEqual(mock_open_overview.call_count, 2)
+        self.assertTrue(all(call.kwargs.get("force_new") is True for call in mock_open_overview.call_args_list))
+        self.assertEqual(mock_app.focus_section.call_count, 2)
 
     def test_overview_button_is_enabled_only_after_login(self):
         original_profile = getattr(__import__("clients_progress_ui", fromlist=["CURRENT_SESSION_PROFILE"]), "CURRENT_SESSION_PROFILE").copy()

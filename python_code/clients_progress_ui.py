@@ -1389,20 +1389,32 @@ def build_startup_splash():
 _ACTIVE_PROGRESS_APP = None
 
 
-def open_overview_window():
+def open_overview_window(force_new=False):
     global _ACTIVE_PROGRESS_APP
 
-    if _ACTIVE_PROGRESS_APP is not None and _ACTIVE_PROGRESS_APP.winfo_exists():
-        app = _ACTIVE_PROGRESS_APP
+    if force_new and _ACTIVE_PROGRESS_APP is not None:
         try:
-            app.deiconify()
-            app.lift()
-            app.focus_set()
-            if hasattr(app, "focus_section"):
-                app.focus_section("overview")
+            if _ACTIVE_PROGRESS_APP.winfo_exists():
+                _ACTIVE_PROGRESS_APP.destroy()
         except Exception:
             pass
-        return app
+        _ACTIVE_PROGRESS_APP = None
+
+    if _ACTIVE_PROGRESS_APP is not None:
+        try:
+            if _ACTIVE_PROGRESS_APP.winfo_exists():
+                app = _ACTIVE_PROGRESS_APP
+                try:
+                    app.deiconify()
+                    app.lift()
+                    app.focus_set()
+                    if hasattr(app, "focus_section"):
+                        app.focus_section("overview")
+                except Exception:
+                    pass
+                return app
+        except Exception:
+            pass
 
     app = ProgressApp()
     _ACTIVE_PROGRESS_APP = app
@@ -1835,9 +1847,15 @@ class WelcomeWindow(tk.Tk):
             self._refresh_login_status()
             messagebox.showinfo(T("Login"), T("Guest read-only access enabled. Overview is view-only."))
             self.destroy()
-            welcome = WelcomeWindow()
-            welcome.protocol("WM_DELETE_WINDOW", welcome.destroy)
-            welcome.mainloop()
+            app = open_overview_window(force_new=True)
+            try:
+                app.deiconify()
+                app.lift()
+                app.focus_set()
+            except Exception:
+                pass
+            if hasattr(app, "focus_section"):
+                app.focus_section("overview")
             return
 
         if not verify_registered_user(user_name, user_email):
@@ -1860,9 +1878,15 @@ class WelcomeWindow(tk.Tk):
         self._refresh_login_status()
         messagebox.showinfo(T("Login"), T("Login successful. Access granted to the app."))
         self.destroy()
-        welcome = WelcomeWindow()
-        welcome.protocol("WM_DELETE_WINDOW", welcome.destroy)
-        welcome.mainloop()
+        app = open_overview_window(force_new=True)
+        try:
+            app.deiconify()
+            app.lift()
+            app.focus_set()
+        except Exception:
+            pass
+        if hasattr(app, "focus_section"):
+            app.focus_section("overview")
 
     def refresh_todo_list(self):
         if not hasattr(self, "todo_listbox") or self.todo_listbox is None:
@@ -1922,6 +1946,16 @@ class WelcomeWindow(tk.Tk):
         self._refresh_login_status()
         messagebox.showinfo(T("Logout"), T("You have logged out and returned to guest access."))
         self.destroy()
+
+        global _ACTIVE_PROGRESS_APP
+        if _ACTIVE_PROGRESS_APP is not None:
+            try:
+                if _ACTIVE_PROGRESS_APP.winfo_exists():
+                    _ACTIVE_PROGRESS_APP.destroy()
+            except Exception:
+                pass
+            _ACTIVE_PROGRESS_APP = None
+
         welcome = WelcomeWindow()
         welcome.protocol("WM_DELETE_WINDOW", welcome.destroy)
         welcome.mainloop()
@@ -2096,13 +2130,15 @@ class LoginWindow(tk.Toplevel):
                     self.master.destroy()
                 except Exception:
                     pass
-            app = open_overview_window()
+            app = open_overview_window(force_new=True)
             try:
                 app.deiconify()
                 app.lift()
                 app.focus_set()
             except Exception:
                 pass
+            if hasattr(app, "focus_section"):
+                app.focus_section("overview")
             messagebox.showinfo(T("Login"), T("Guest read-only access enabled. Overview is view-only."))
             return
 
@@ -2124,13 +2160,15 @@ class LoginWindow(tk.Toplevel):
                 self.master.destroy()
             except Exception:
                 pass
-        app = open_overview_window()
+        app = open_overview_window(force_new=True)
         try:
             app.deiconify()
             app.lift()
             app.focus_set()
         except Exception:
             pass
+        if hasattr(app, "focus_section"):
+            app.focus_section("overview")
         messagebox.showinfo(T("Login"), T("Login successful. Access granted to the app."))
 
 
