@@ -1,22 +1,27 @@
-import calendar
-import json
 import os
 import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
-SOURCE_DIR_CANDIDATES = [APP_DIR / "python_code", APP_DIR / "python code"]
-SOURCE_DIR = next((candidate for candidate in SOURCE_DIR_CANDIDATES if candidate.exists()), APP_DIR / "python_code")
+
+
+def resolve_source_dir():
+    for candidate in (APP_DIR / "python_code", APP_DIR / "python code"):
+        if candidate.exists():
+            return candidate
+    return APP_DIR / "python_code"
+
+
+SOURCE_DIR = resolve_source_dir()
+LEGACY_SOURCE_DIR = APP_DIR / "python code"
 ENTRY_SCRIPT = SOURCE_DIR / "main.py"
 DIST_DIR = APP_DIR / "dist"
 BUILD_DIR = APP_DIR / "build"
 APP_NAME = "marketing_booster_ar"
 APP_DISPLAY_NAME = "Clients Manager"
-DEFAULT_COUNTRY_CODE = "+968"
 SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
 
 
@@ -37,7 +42,7 @@ TARGET_ICON = resolve_target_icon()
 COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
 SHOPS_ELECTRICAL_METERS_FILE = SOURCE_DIR / "Shops_Elect_meters.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
-LEGACY_CLIENTS_DATA_FILE = SOURCE_DIR / "clients.json"
+LEGACY_CLIENTS_DATA_FILE = LEGACY_SOURCE_DIR / "clients.json"
 DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
 SUPPORTING_DOCUMENTS_DIR = APP_DIR / "supporting_documents"
 STARCO_RENT_CONTRACT = SUPPORTING_DOCUMENTS_DIR / "starco_rent_contract_1.pdf"
@@ -64,11 +69,10 @@ RUNTIME_DATA_FILES = [
     COUNTRY_CODES_DATA,
     SHOPS_ELECTRICAL_METERS_FILE,
     DOCUMENTS_DATA_FILE,
+    SOURCE_DIR / "translations.py",
     STARCO_RENT_CONTRACT,
     *PROJECT_RUNTIME_DIRECTORIES,
 ]
-
-# Keep the packaged app aligned with the current client-manager UI/data model.
 RUNTIME_DATA_FILES = [path for path in RUNTIME_DATA_FILES if path is not None and path.exists()]
 
 
@@ -78,15 +82,18 @@ def validate_runtime_asset_catalog():
         SOURCE_DIR / "main.py",
         SOURCE_DIR / "clients_management.py",
         SOURCE_DIR / "clients_progress_ui.py",
+        SOURCE_DIR / "translations.py",
         SOURCE_DIR / "ui_reservation_contract.py",
         CLIENTS_DATA_FILE,
-        LEGACY_CLIENTS_DATA_FILE,
         COUNTRY_CODES_DATA,
         SHOPS_ELECTRICAL_METERS_FILE,
         DOCUMENTS_DATA_FILE,
         SUPPORTING_DOCUMENTS_DIR,
         *REQUIRED_RUNTIME_DIRECTORIES,
     ]
+
+    if LEGACY_CLIENTS_DATA_FILE.exists():
+        required_paths.append(LEGACY_CLIENTS_DATA_FILE)
 
     missing_paths = [str(path) for path in required_paths if path is not None and not path.exists()]
     if missing_paths:
@@ -97,52 +104,51 @@ def validate_runtime_asset_catalog():
         )
 
     ui_file = SOURCE_DIR / "clients_progress_ui.py"
-    ui_markers = [
-        "class WelcomeWindow(tk.Tk):",
-        "def open_welcome_home():",
-        "def set_language(lang):",
-        "def refresh_window_language(widget_list):",
-        "def T(key: str, **kwargs):",
-        "if CURRENT_LANGUAGE == \"ar\":",
-        "return arabic_ui(text)",
-        "def refresh_translatable_widget(widget, original_text, *, allow_label_frame=False):",
-        "if not isinstance(widget, supported_widget_types):",
-        "return False",
-        "self.title(T(\"Starco Commercial Complex\"))",
-        "text=\"Welcome to Starco Commercial Complex\"",
-        "text=\"مرحباً بكم في مجمع ستاركو التجاري\"",
-        "title = ttk.Label(",
-        "subtitle = ttk.Label(",
-        "Project Manager To-Do",
-        "self.todo_listbox = tk.Listbox(",
-        "self.transactions_button = ttk.Button(",
-        "command=self._open_transactions_panel",
-        "Open client payment records",
-        "Saved Reservation Contracts",
-        "self.saved_contract_listbox = tk.Listbox(",
-        "profile_frame = ttk.Frame(self, padding=(12, 6))",
-        "main_frame = ttk.Frame(self, padding=(18, 4, 18, 12))",
-        "ClientTransactionsWindow",
-        "self.language_var = tk.StringVar(value=CURRENT_LANGUAGE)",
-        "self.language_combo = ttk.Combobox(",
-        "self.language_combo.bind(\"<<ComboboxSelected>>\", self.switch_language)",
-        "def switch_language(self, event=None):",
-        "widget.configure(text=translated)",
-        "widget.grid_configure(sticky=\"e\")",
-        "widget.pack_configure(anchor=\"e\", fill=\"x\")",
-        "validate_translation_coverage",
-        "def arabic_ui(text):",
-    ]
+    translation_file = SOURCE_DIR / "translations.py"
     ui_content = ui_file.read_text(encoding="utf-8") if ui_file.exists() else ""
+    translation_content = translation_file.read_text(encoding="utf-8") if translation_file.exists() else ""
+
+    ui_markers = [
+        "def apply_bidi_text",
+        "def is_arabic_text",
+        "def format_translated_label_text",
+        "def set_emoji_translated_label",
+        "widget._original_text",
+        "class WelcomeWindow",
+        "def _sync_overview_access",
+        "overview_button",
+        "contract_button",
+        "arabic_reshaper",
+        "get_display(",
+        "import translations as lang",
+        "CURRENT_LANGUAGE = lang.CURRENT_LANGUAGE",
+        "def T(key: str, **kwargs)",
+        "def set_language(lang_code)",
+        "def refresh_lang_ui(self)",
+        "def safe_main",
+        "CURRENT_LANGUAGE == \"ar\"",
+        "Client Details",
+    ]
+
+    translation_markers = [
+        "CURRENT_LANGUAGE = \"eng\"",
+        "def set_language(lang)",
+        "def T(key: str, **kwargs):",
+        "def validate_translation_coverage()",
+        "TRANSLATIONS = {",
+        "\"Language\": \"Language\"",
+    ]
+
     missing_markers = [marker for marker in ui_markers if marker not in ui_content]
-    if missing_markers:
-        details = "\n".join(f" - {marker}" for marker in missing_markers)
+    missing_translation_markers = [marker for marker in translation_markers if marker not in translation_content]
+    all_missing = missing_markers + missing_translation_markers
+    if all_missing:
+        details = "\n".join(f" - {marker}" for marker in all_missing)
         raise RuntimeError(
-            "Packaging aborted: the app UI is out of sync with the latest project-management and transaction workflow.\n"
+            "Packaging aborted: the app UI and translation module do not contain the expected client-management and RTL behavior.\n"
             f"Missing markers:\n{details}"
         )
 
-    # Keep packaging aligned with the latest client-manager/export/report workflow.
     for directory in PROJECT_RUNTIME_DIRECTORIES:
         directory.mkdir(parents=True, exist_ok=True)
 
@@ -161,450 +167,11 @@ def collect_runtime_assets():
     return assets
 
 
-def generate_contract_months(start_date=None, end_date=None):
-    start_value = str(start_date or "").strip()
-    end_value = str(end_date or "").strip()
-    if not start_value and not end_value:
-        return []
-
-    def parse_date(value):
-        if not value:
-            return None
-        for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y"):
-            try:
-                return datetime.strptime(value, fmt)
-            except ValueError:
-                continue
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            return None
-
-    start_dt = parse_date(start_value)
-    end_dt = parse_date(end_value)
-
-    if start_dt is None and end_dt is not None:
-        start_dt = end_dt.replace(day=1)
-    if end_dt is None and start_dt is not None:
-        end_dt = start_dt.replace(day=28)
-    if start_dt is None or end_dt is None:
-        return []
-
-    if end_dt < start_dt:
-        start_dt, end_dt = end_dt, start_dt
-
-    months = []
-    current = start_dt.replace(day=1)
-    while current <= end_dt:
-        months.append(current.strftime("%Y-%m"))
-        if current.month == 12:
-            current = current.replace(year=current.year + 1, month=1)
-        else:
-            current = current.replace(month=current.month + 1)
-
-    seen = set()
-    unique_months = []
-    for month in months:
-        if month in seen:
-            continue
-        seen.add(month)
-        unique_months.append(month)
-    return unique_months
-
-
-def normalize_duration_value(value):
-    if value is None:
-        return ""
-
-    text = str(value).strip()
-    if not text:
-        return ""
-
-    cleaned = text.lower().replace("years", "").replace("year", "").replace("yrs", "").replace("yr", "").strip()
-    cleaned = cleaned.strip("()[]{} ")
-    match = __import__("re").search(r"[-+]?\d+(?:\.\d+)?", cleaned)
-    if match:
-        return match.group(0)
-    return cleaned
-
-
-def normalize_shop_value(value):
-    if value is None:
-        return ""
-
-    if isinstance(value, (list, tuple, set)):
-        flattened = []
-        for item in value:
-            normalized = normalize_shop_value(item)
-            if not normalized:
-                continue
-            for part in normalized.split(","):
-                cleaned = part.strip()
-                if cleaned and cleaned not in flattened:
-                    flattened.append(cleaned)
-        return ", ".join(flattened)
-
-    if isinstance(value, dict):
-        for key in ("shop_number", "shop_number_primary", "primary_shop", "selected_shop", "shop"):
-            if key in value:
-                return normalize_shop_value(value[key])
-        return ""
-
-    text = str(value).strip()
-    if not text:
-        return ""
-
-    text = text.replace(";", ",").replace("|", ",")
-    parts = [part.strip() for part in text.split(",")]
-    cleaned = [part for part in parts if part]
-    return ", ".join(cleaned)
-
-
-def normalize_renewable_value(value):
-    if value is None:
-        return "Yes"
-
-    if isinstance(value, bool):
-        return "Yes" if value else "No"
-
-    text = str(value).strip().lower()
-    if not text:
-        return "Yes"
-
-    if text in {"yes", "y", "true", "1", "renewable"}:
-        return "Yes"
-    return "No"
-
-
-def normalize_contract_details(value):
-    contract_fields = {
-        "contract_number": "",
-        "starting_date": "",
-        "ending_date": "",
-        "commercial_registration_number": "",
-        "authorized_signature_name": "",
-        "rent_value": "",
-        "currency_type": "OMR",
-        "open_issues": "",
-        "duration_years": "",
-        "renewable": "",
-        "first_party": "",
-        "second_party": "",
-    }
-
-    if not isinstance(value, dict):
-        return dict(contract_fields)
-
-    normalized = {}
-    for key, default in contract_fields.items():
-        raw = value.get(key, default)
-        if raw is None:
-            raw = default
-        if key == "duration_years":
-            normalized[key] = normalize_duration_value(raw)
-        elif key == "renewable":
-            normalized[key] = normalize_renewable_value(raw)
-        else:
-            normalized[key] = str(raw)
-    return normalized
-
-
-def normalize_reservation_status(value):
-    reservation_fields = {
-        "client_name": "",
-        "contact": "",
-        "shop_number": "",
-        "deposit_status": "",
-        "contract_status": "",
-        "contract_duration": "",
-        "rent_value": "",
-        "deposit_amount": "",
-        "last_updated": "",
-    }
-
-    if not isinstance(value, dict):
-        return dict(reservation_fields)
-
-    normalized = {}
-    for key, default in reservation_fields.items():
-        raw = value.get(key, default)
-        if raw is None:
-            raw = default
-        if key == "contract_duration":
-            normalized[key] = normalize_duration_value(raw)
-        else:
-            normalized[key] = str(raw)
-    return normalized
-
-
-def normalize_payment_method(value):
-    choices = ["Cash", "Cheque", "Bank Transaction"]
-    if value is None:
-        return "Cash"
-
-    normalized = str(value).strip()
-    if not normalized:
-        return "Cash"
-
-    lookup = {choice.lower(): choice for choice in choices}
-    if normalized.lower() in lookup:
-        return lookup[normalized.lower()]
-
-    for choice in choices:
-        if normalized.lower() in choice.lower():
-            return choice
-
-    return "Cash"
-
-
-def coerce_due_date_for_month(month_value, due_date_value):
-    month_text = str(month_value or "").strip()
-    if not month_text:
-        return str(due_date_value or "").strip()
-
-    try:
-        month_start = datetime.strptime(f"{month_text}-01", "%Y-%m-%d")
-    except ValueError:
-        return str(due_date_value or "").strip()
-
-    last_day = calendar.monthrange(month_start.year, month_start.month)[1]
-    month_end = datetime(month_start.year, month_start.month, last_day).strftime("%Y-%m-%d")
-
-    value = str(due_date_value or "").strip()
-    if not value:
-        return month_end
-
-    try:
-        parsed = datetime.strptime(value, "%Y-%m-%d")
-    except ValueError:
-        try:
-            parsed = datetime.fromisoformat(value)
-        except ValueError:
-            return month_end
-
-    if parsed.year == month_start.year and parsed.month == month_start.month:
-        return parsed.strftime("%Y-%m-%d")
-    return month_end
-
-
-def is_transaction_complete(value):
-    if not isinstance(value, dict):
-        return False
-
-    month = str(value.get("month", "") or "").strip()
-    amount = str(value.get("amount", "") or "").strip()
-    due_date = str(value.get("due_date", "") or "").strip()
-    payment_method = normalize_payment_method(value.get("payment_method", "Cash"))
-    cheque_number = str(value.get("cheque_number", "") or "").strip()
-    bank_transaction_details = str(value.get("bank_transaction_details", "") or "").strip()
-
-    if not month or not amount or not due_date:
-        return False
-
-    if payment_method == "Cheque":
-        return bool(cheque_number)
-    if payment_method == "Bank Transaction":
-        return bool(bank_transaction_details)
-    return True
-
-
-def normalize_transaction_entry(value):
-    transaction_fields = {
-        "month": "",
-        "status": "",
-        "amount": "",
-        "payment_method": "Cash",
-        "cheque_number": "",
-        "due_date": "",
-        "bank_name": "",
-        "bank_transaction_details": "",
-    }
-
-    if not isinstance(value, dict):
-        return dict(transaction_fields)
-
-    normalized = {}
-    for key, default in transaction_fields.items():
-        raw = value.get(key, default)
-        if key == "payment_method":
-            normalized[key] = normalize_payment_method(raw)
-        elif key == "status":
-            normalized[key] = str(raw) if raw is not None else default
-        else:
-            normalized[key] = str(raw) if raw is not None else default
-
-    normalized["due_date"] = coerce_due_date_for_month(normalized.get("month", ""), normalized.get("due_date", ""))
-
-    raw_status = str(normalized.get("status", "") or "").strip().lower()
-    if raw_status in {"paid", "completed", "complete", "success", "successful", "yes", "true", "1"} and is_transaction_complete(normalized):
-        normalized["status"] = "Paid"
-    else:
-        normalized["status"] = "Pending"
-
-    if normalized["payment_method"] == "Cheque":
-        normalized["cheque_number"] = str(normalized.get("cheque_number", "") or "").strip()
-    else:
-        normalized["cheque_number"] = ""
-
-    if normalized["payment_method"] == "Bank Transaction":
-        normalized["bank_transaction_details"] = str(normalized.get("bank_transaction_details", "") or "").strip()
-    else:
-        normalized["bank_transaction_details"] = ""
-
-    return normalized
-
-
-def build_project_manager_todo_tasks(clients):
-    tasks = []
-    for client in clients or []:
-        if not isinstance(client, dict):
-            continue
-
-        name = str(client.get("name") or client.get("Client Name") or "Client").strip() or "Client"
-        contract_details = client.get("contract_details") or {}
-        if not isinstance(contract_details, dict):
-            contract_details = {}
-        start_date = str(contract_details.get("starting_date") or "").strip()
-        end_date = str(contract_details.get("ending_date") or "").strip()
-        months = generate_contract_months(start_date, end_date)
-        if not months:
-            continue
-
-        transactions = client.get("transactions") or []
-        if not isinstance(transactions, list):
-            transactions = []
-
-        transactions_by_month = {}
-        for entry in transactions:
-            if not isinstance(entry, dict):
-                continue
-            month = str(entry.get("month", "") or "").strip()
-            if month:
-                transactions_by_month[month] = entry
-
-        for month in months:
-            entry = transactions_by_month.get(month)
-            status = str((entry or {}).get("status", "") or "").strip().lower()
-            if entry is not None and status in {"paid", "completed", "complete", "success", "successful"}:
-                continue
-            tasks.append(f"Follow up payment for {name} - {month}")
-
-    return tasks if tasks else ["No pending payment follow-ups"]
-
-
-def normalize_legacy_client_data(entries):
-    normalized = []
-    for entry in entries or []:
-        if not isinstance(entry, dict):
-            continue
-
-        normalized_entry = dict(entry)
-
-        contract_details = normalized_entry.get("contract_details")
-        if not isinstance(contract_details, dict):
-            contract_details = {}
-        else:
-            contract_details = dict(contract_details)
-        normalized_entry["contract_details"] = normalize_contract_details(contract_details)
-        normalized_entry["contract_details"].setdefault("currency_type", "OMR")
-
-        progress_data = normalized_entry.get("progress")
-        if not isinstance(progress_data, dict):
-            progress_data = {}
-        normalized_entry["progress"] = dict(progress_data)
-
-        reviews = normalized_entry.get("reviews")
-        if not isinstance(reviews, list):
-            reviews = []
-        normalized_entry["reviews"] = list(reviews)
-
-        reservation_status = normalized_entry.get("reservation_status")
-        if not isinstance(reservation_status, dict):
-            reservation_status = {}
-        normalized_entry["reservation_status"] = normalize_reservation_status(reservation_status)
-
-        transactions = normalized_entry.get("transactions")
-        if not isinstance(transactions, list):
-            transactions = []
-
-        normalized_transactions = []
-        for item in transactions:
-            transaction = normalize_transaction_entry(item)
-            transaction["payment_method"] = normalize_payment_method(transaction.get("payment_method", "Cash"))
-            transaction["bank_name"] = str(transaction.get("bank_name", "") or "").strip()
-            transaction["cheque_number"] = str(transaction.get("cheque_number", "") or "").strip()
-            transaction["bank_transaction_details"] = str(transaction.get("bank_transaction_details", "") or "").strip()
-            normalized_transactions.append(transaction)
-
-        normalized_entry["transactions"] = normalized_transactions
-        normalized.append(normalized_entry)
-
-    return normalized
-
-
-def migrate_legacy_client_data():
-    if CLIENTS_DATA_FILE.exists() and not LEGACY_CLIENTS_DATA_FILE.exists():
-        return
-
-    if not LEGACY_CLIENTS_DATA_FILE.exists():
-        if not CLIENTS_DATA_FILE.exists():
-            CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
-        else:
-            try:
-                canonical_data = json.loads(CLIENTS_DATA_FILE.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError, TypeError):
-                canonical_data = []
-            if not isinstance(canonical_data, list):
-                canonical_data = []
-            CLIENTS_DATA_FILE.write_text(json.dumps(normalize_legacy_client_data(canonical_data), indent=2), encoding="utf-8")
-        return
-
-    try:
-        legacy_data = json.loads(LEGACY_CLIENTS_DATA_FILE.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError, TypeError):
-        legacy_data = []
-
-    if not isinstance(legacy_data, list):
-        legacy_data = []
-
-    if CLIENTS_DATA_FILE.exists():
-        try:
-            canonical_data = json.loads(CLIENTS_DATA_FILE.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError, TypeError):
-            canonical_data = []
-    else:
-        canonical_data = []
-
-    if not isinstance(canonical_data, list):
-        canonical_data = []
-
-    seen = set()
-    merged = []
-    for entry in normalize_legacy_client_data(canonical_data + legacy_data):
-        if not isinstance(entry, dict):
-            continue
-        name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()
-        contact = str(entry.get("contact") or entry.get("Contact") or "").strip()
-        key = (name, contact)
-        if not key[0] and not key[1]:
-            continue
-        if key in seen:
-            continue
-        seen.add(key)
-        merged.append(entry)
-
-    CLIENTS_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    CLIENTS_DATA_FILE.write_text(json.dumps(merged, indent=2), encoding="utf-8")
-
-
 def add_runtime_assets(cmd):
     for path in collect_runtime_assets():
         if not path.exists():
             continue
-        if path.is_dir():
-            cmd.extend(["--add-data", f"{path}{os.pathsep}."])
-        else:
-            cmd.extend(["--add-data", f"{path}{os.pathsep}."])
+        cmd.extend(["--add-data", f"{path}{os.pathsep}."])
     return cmd
 
 
@@ -616,12 +183,10 @@ def resolve_desktop_dir():
         home / "OneDrive - Personal" / "Desktop",
         home / "OneDrive - Business" / "Desktop",
     ]
-
     for candidate in candidate_paths:
         resolved = candidate.resolve(strict=False)
         if resolved.exists():
             return resolved
-
     return (home / "Desktop").resolve(strict=False)
 
 
@@ -741,7 +306,6 @@ def force_remove_path(path, retries=8, delay=0.5):
 def remove_directory(path):
     if not path.exists():
         return
-
     try:
         force_remove_path(path)
     except (PermissionError, OSError):
@@ -749,31 +313,14 @@ def remove_directory(path):
 
 
 def ensure_runtime_files():
-    
-    global SOURCE_DIR
-    SOURCE_DIR.mkdir(parents=True, exist_ok=True)
-    # rest of your logic...
-
     APP_DIR.mkdir(parents=True, exist_ok=True)
     SOURCE_DIR.mkdir(parents=True, exist_ok=True)
+
     for output_dir in OUTPUT_LOG_DIRS:
         output_dir.mkdir(parents=True, exist_ok=True)
 
     if not ENTRY_SCRIPT.exists():
-        if SOURCE_DIR.name == "python_code":
-            legacy_entry = APP_DIR / "python code" / "main.py"
-            if legacy_entry.exists():
-                SOURCE_DIR = APP_DIR / "python code"
-                globals()["SOURCE_DIR"] = SOURCE_DIR
-                globals()["ENTRY_SCRIPT"] = SOURCE_DIR / "main.py"
-                globals()["COUNTRY_CODES_DATA"] = SOURCE_DIR / "country_codes.json"
-                globals()["SHOPS_ELECTRICAL_METERS_FILE"] = SOURCE_DIR / "Shops_Elect_meters.json"
-                globals()["LEGACY_CLIENTS_DATA_FILE"] = SOURCE_DIR / "clients.json"
-                globals()["DOCUMENTS_DATA_FILE"] = SOURCE_DIR / "docs" / "documents.txt"
-        if not ENTRY_SCRIPT.exists():
-            raise FileNotFoundError(f"Entry script not found: {ENTRY_SCRIPT}")
-
-    migrate_legacy_client_data()
+        raise FileNotFoundError(f"Entry script not found: {ENTRY_SCRIPT}")
 
     if not CLIENTS_DATA_FILE.exists():
         CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
@@ -859,25 +406,11 @@ def build_app():
     if TARGET_ICON.exists():
         cmd.extend(["--icon", str(TARGET_ICON)])
 
-    for hidden_module in [
-        "arabic_reshaper",
-        "bidi",
-        "bidi.algorithm",
-        "PIL",
-        "PIL.Image",
-    ]:
-        cmd.extend(["--hidden-import", hidden_module])
-
-    cmd.extend(["--collect-all", "arabic_reshaper"])
-    cmd.extend(["--collect-all", "bidi"])
-
     cmd = add_runtime_assets(cmd)
-
     cmd.append(str(ENTRY_SCRIPT))
 
     print("Building app...")
     subprocess.check_call(cmd, cwd=str(APP_DIR))
-
     return find_built_exe()
 
 

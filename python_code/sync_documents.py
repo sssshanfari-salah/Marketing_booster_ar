@@ -5,9 +5,18 @@ import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DOCS_DIR = PROJECT_ROOT / "python code" / "docs"
+
+
+def resolve_docs_dir():
+    for candidate in (PROJECT_ROOT / "python_code" / "docs", PROJECT_ROOT / "python code" / "docs"):
+        if candidate.exists():
+            return candidate
+    return PROJECT_ROOT / "python_code" / "docs"
+
+
+DOCS_DIR = resolve_docs_dir()
 SOURCE = DOCS_DIR / "documents.txt"
-TARGET = DOCS_DIR / "documents.txt"
+TARGET = SOURCE
 
 
 def sync_once() -> bool:

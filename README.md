@@ -28,7 +28,7 @@ Manage client records, contacts, business details, and task progress in a simple
 
 ```bash
 git clone <repository-url>
-cd "python code"
+cd "python_code"
 python -m venv .venv
 ```
 

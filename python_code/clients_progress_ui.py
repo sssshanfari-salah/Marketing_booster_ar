@@ -29,10 +29,7 @@ def arabic_ui(text):
         return text
     if reshaper is None:
         return text
-
-    reshaped = reshaper.reshape(text)
-    visual = get_display(reshaped, base_dir='R')
-    return visual
+    return reshaper.reshape(text)
 
 import json
 import os
@@ -81,7 +78,25 @@ for candidate in [
 if APP_ICON is None:
     APP_ICON = Path(__file__).resolve().parent.parent / "starco_icon.ico"
 
-CURRENT_LANGUAGE = "eng"
+import translations as lang
+
+CURRENT_LANGUAGE = lang.CURRENT_LANGUAGE
+
+
+def T(key: str, **kwargs):
+    return lang.T(key, **kwargs)
+
+
+def set_language(lang_code):
+    global CURRENT_LANGUAGE
+    CURRENT_LANGUAGE = lang.set_language(lang_code)
+    return CURRENT_LANGUAGE
+
+
+def validate_translation_coverage():
+    return lang.validate_translation_coverage()
+
+
 APP_ROOT = Path(__file__).resolve().parent.parent
 USERS_FILE = APP_ROOT / "users.json"
 GUESTS_FILE = APP_ROOT / "guests.json"
@@ -394,6 +409,10 @@ def get_emoji_font_families():
     ]
 
 
+def contains_emoji(text):
+    return any(0x1F300 <= ord(ch) <= 0x1FAFF or ch in "✅⚠️📌📎📁📄📤📧📩📨📌📋📝🗂️💬💡🔍📊💼🏢🏠📍📞" for ch in str(text or ""))
+
+
 def configure_emoji_label(widget, text, *, size=10, bold=False):
     if widget is None or not hasattr(widget, "configure"):
         return False
@@ -406,6 +425,9 @@ def configure_emoji_label(widget, text, *, size=10, bold=False):
     weight = "bold" if bold else "normal"
 
     if isinstance(widget, (ttk.LabelFrame, tk.LabelFrame)):
+        return False
+
+    if not widget._emoji_prefix and not contains_emoji(text):
         return False
 
     for family in get_emoji_font_families():
@@ -430,9 +452,14 @@ def refresh_translatable_widget(widget, original_text, *, allow_label_frame=Fals
 
     emoji_prefix = getattr(widget, "_emoji_prefix", "")
     translated = T(original_text)
+    if CURRENT_LANGUAGE == "ar" and is_arabic_text(translated):
+        translated = apply_bidi_text(translated)
     rtl = CURRENT_LANGUAGE == "ar" and is_arabic_text(translated)
     updated_text = format_translated_label_text(translated, emoji_prefix=emoji_prefix, rtl=rtl)
     widget.configure(text=updated_text)
+
+    if isinstance(widget, (ttk.LabelFrame, tk.LabelFrame)):
+        return True
 
     if rtl:
         widget.configure(anchor="e", justify="right")
@@ -476,38 +503,36 @@ def apply_bidi_text(value):
     if not text:
         return ""
 
+    if not is_arabic_text(text):
+        return text
+
     normalized = text.strip()
     if not normalized:
         return text
 
-    if not is_arabic_text(normalized):
+    if any(ch in text for ch in "{}()[]<>/\\|=+*#@%$£€¥0123456789"):
         return text
 
-    if "{" in normalized or "}" in normalized:
-        return normalized
+    allowed = set(" \t\n\r" + "0123456789")
+    for ch in text:
+        if not (
+            0x0600 <= ord(ch) <= 0x06FF
+            or 0x0750 <= ord(ch) <= 0x077F
+            or 0x08A0 <= ord(ch) <= 0x08FF
+            or 0xFB50 <= ord(ch) <= 0xFDFF
+            or 0xFE70 <= ord(ch) <= 0xFEFF
+            or ch in allowed
+        ):
+            return text
 
-    placeholder_free = re.sub(r"\{[^}]*\}", " ", normalized)
-    if re.search(r"[A-Za-z]", placeholder_free):
-        return normalized
+    try:
+        display = get_display(arabic_reshaper.reshape(text))
+    except Exception:
+        return text
 
-    if arabic_reshaper is None:
-        return normalized
-
-    first_arabic_index = None
-    for idx, ch in enumerate(normalized):
-        if is_arabic_text(ch):
-            first_arabic_index = idx
-            break
-
-    if first_arabic_index is None:
-        return normalized
-
-    prefix = normalized[:first_arabic_index]
-    arabic_content = normalized[first_arabic_index:]
-    reshaped = arabic_reshaper.reshape(arabic_content)
-    if prefix:
-        return prefix + reshaped
-    return reshaped
+    if any(0xFB50 <= ord(ch) <= 0xFDFF or 0xFE70 <= ord(ch) <= 0xFEFF for ch in display):
+        return text
+    return display
 
 
 def build_all_clients_row_values(client, progress_info=None):
@@ -542,7 +567,10 @@ def build_all_clients_row_values(client, progress_info=None):
 def format_translated_label_text(value, *, emoji_prefix="", rtl=False):
     text = str(value or "")
     if not text:
-        return emoji_prefix
+        return value or ""
+
+    if CURRENT_LANGUAGE == "ar":
+        return text
 
     if rtl and is_arabic_text(text):
         return f"{text}{emoji_prefix}" if emoji_prefix else text
@@ -551,31 +579,7 @@ def format_translated_label_text(value, *, emoji_prefix="", rtl=False):
 
 def set_emoji_translated_label(widget, original_text, emoji_prefix=""):
     widget._emoji_prefix = emoji_prefix
-    translated = T(original_text)
-    is_rtl = CURRENT_LANGUAGE == "ar" and is_arabic_text(translated)
-    formatted = format_translated_label_text(translated, emoji_prefix=emoji_prefix, rtl=is_rtl)
-    widget.configure(text=formatted)
-    if is_rtl:
-        widget.configure(anchor="e", justify="right")
-        try:
-            widget.grid_configure(sticky="e")
-        except Exception:
-            pass
-        try:
-            widget.pack_configure(anchor="e", fill="x")
-        except Exception:
-            pass
-    else:
-        widget.configure(anchor="w", justify="left")
-        try:
-            widget.grid_configure(sticky="w")
-        except Exception:
-            pass
-        try:
-            widget.pack_configure(anchor="w", fill="none")
-        except Exception:
-            pass
-    configure_emoji_label(widget, formatted)
+    widget._original_text = original_text   # <--- CRITICAL FIX
 
 
 def resolve_log_output_dir(log_type="general"):
@@ -951,343 +955,6 @@ def pick_date(parent, initial_value=""):
     return popup.result
 
 
-# Translation dictionary for English and Arabic labels used across the Tkinter interface.
-TRANSLATIONS = {
-    "eng": {
-        "Tkinter could not start in this environment.": "Tkinter could not start in this environment.",
-        "Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.": "Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.",
-        "Client": "Client",
-        "Client: {client_name}": "Client: {client_name}",
-        "All Tasks": "All Tasks",
-        "Pending Tasks": "Pending Tasks",
-        "Mark Done": "Mark Done",
-        "Close": "Close",
-        "No task plan": "No task plan",
-        "There is no active task plan to update.": "There is no active task plan to update.",
-        "No task selected": "No task selected",
-        "Select a task from the pending list first.": "Select a task from the pending list first.",
-        "Client Progress Manager": "Clients Manager",
-        "Starco Commercial Complex": "Starco Commercial Complex",
-        "Welcome to Starco Commercial Complex": "Welcome to Starco Commercial Complex",
-        "Welcome to Starco Commercial Complex Arabic": "Welcome to Starco Commercial Complex",
-        "Overview": "Overview",
-        "Exit": "Exit",
-        "Client Details": "Client Details",
-        "Client Name": "Client Name",
-        "Country": "Country",
-        "Contact": "Contact Number",
-        "Business": "Business",
-        "Shop Number": "Shop Number",
-        "Address": "Address",
-        "Electrical Meter": "Electrical Meter",
-        "Email": "Email",
-        "Client Review": "Client Review",
-        "Add Review": "Add Review",
-        "Open Review Log": "Open Review Log",
-        "Add Client": "Add Client",
-        "Create Client Plan": "Create Client Plan",
-        "Save Client": "Save Client",
-        "Delete Selected Client": "Delete Selected Client",
-        "Progress Overview": "Progress Overview",
-        "Progress": "Progress",
-        "Total Tasks": "Total Tasks",
-        "Tasks": "Tasks",
-        "New task": "New task",
-        "No client selected": "No client selected",
-        "No pending tasks": "No pending tasks",
-        "No tasks yet": "No tasks yet",
-        "No client plan": "No client plan",
-        "Create a client plan first.": "Create a client plan first.",
-        "Missing client": "Missing client",
-        "Please enter a client name.": "Please enter a client name.",
-        "Missing contact": "Missing contact",
-        "Please enter the client contact number.": "Please enter the client contact number.",
-        "Missing business": "Missing business",
-        "Please enter the client business type.": "Please enter the client business type.",
-        "Missing tasks": "Missing tasks",
-        "Enter at least one task or set a total task count greater than zero.": "Enter at least one task or set a total task count greater than zero.",
-        "Review saved": "Review saved",
-        "Review saved for '{name}'.": "Review saved for '{name}'.",
-        "No review": "No review",
-        "Please type a review before saving it.": "Please type a review before saving it.",
-        "Client Reviews Log": "Client Reviews Log",
-        "Date": "Date",
-        "Review": "Review",
-        "No reviews yet": "No reviews yet",
-        "All Clients Progress": "All Clients Progress",
-        "Edit Selected Client": "Edit Selected Client",
-        "Refresh": "Refresh",
-        "Home": "Home",
-        "Delete client?": "Delete client?",
-        "Are you sure you want to delete '{client_name}' from the client list?": "Are you sure you want to delete '{client_name}' from the client list?",
-        "Client deleted": "Client deleted",
-        "'{client_name}' was removed successfully.": "'{client_name}' was removed successfully.",
-        "Client not found": "Client not found",
-        "'{client_name}' was not found in the saved client list.": "'{client_name}' was not found in the saved client list.",
-        "Saved progress only": "Saved progress only",
-        "Select a client row first.": "Select a client row first.",
-        "Select a client from the list first.": "Select a client from the list first.",
-        "Add Task": "Add Task",
-        "Tasks Details": "Tasks Details",
-        "Contract Details": "Contract Details",
-        "Preview": "Preview",
-        "Close Preview": "Close Preview",
-        "Save": "Save",
-        "Edit": "Edit",
-        "OK": "OK",
-        "Refresh Progress": "Refresh Progress",
-        "Payment Report": "Payment Report",
-        "Save Comment": "Save Comment",
-        "Share Client Info": "Share Client Info",
-        "Contract Number": "Contract Number",
-        "Starting Date": "Starting Date",
-        "Ending Date": "Ending Date",
-        "Commercial Registration Number": "Commercial Registration Number",
-        "Authorized Signature Name": "Authorized Signature Name",
-        "Rent Value": "Rent Value",
-        "Currency Type": "Currency Type",
-        "Open Issues Requiring Attention": "Open Issues Requiring Attention",
-        "All Clients": "All Clients",
-        "Open All Clients": "All Clients",
-        "Project Manager To-Do": "Project Manager To-Do",
-        "Open client payment records": "Open client payment records",
-        "Follow up payment for {client_name} - {month}": "Follow up payment for {client_name} - {month}",
-        "No pending payment follow-ups": "No pending payment follow-ups",
-        "Transactions": "Transactions",
-        "Client Transactions": "Client Transactions",
-        "Month": "Month",
-        "Status": "Status",
-        "Amount": "Amount",
-        "Payment Method": "Payment Method",
-        "Cheque Number": "Cheque Number",
-        "Due Date": "Due Date",
-        "Bank Name": "Bank Name",
-        "Reservation Status": "Reservation Status",
-        "Shop Number to Reserve": "Shop Number to Reserve",
-        "Deposit Money Received": "Deposit Money Received",
-        "Preliminary Contract Status": "Preliminary Contract Status",
-        "Deposit received": "Deposit received",
-        "Deposit not received": "Deposit not received",
-        "Completed": "Completed",
-        "Under progress": "Under progress",
-        "Add Month": "Add Month",
-        "Save Transactions": "Save Transactions",
-        "Transactions saved": "Transactions saved",
-        "Client payment transactions were updated successfully.": "Client payment transactions were updated successfully.",
-        "No payments yet": "No payments yet",
-        "Send Email": "Send Email",
-        "Save & Exit": "Save & Exit",
-        "Cancel": "Cancel",
-        "Proceed to exit": "Proceed to exit",
-        "Please enter a client name before saving.": "Please enter a client name before saving.",
-        "Please enter the client contact number before saving.": "Please enter the client contact number before saving.",
-        "Please enter the client business type before saving.": "Please enter the client business type before saving.",
-        "This client does not have an email saved yet.": "This client does not have an email saved yet.",
-        "Select or create a client before adding a review.": "Select or create a client before adding a review.",
-        "No email": "No email",
-        "Exit app": "Exit app",
-        "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.": "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.",
-        "Task Details - {client_name}": "Task Details - {client_name}",
-        "<New Client>": "<New Client>",
-        "Select an existing client first.": "Select client first.",
-        "Client saved": "Client saved",
-        "'{name}' was saved successfully.": "'{name}' was saved successfully.",
-        "No client plan": "No client plan",
-        "Select a task from the pending list.": "Select a task from the pending list.",
-        "Save Review": "Save Review",
-        "Save Task": "Save Task",
-        "Delete Tasks": "Delete Tasks",
-        "Clients name missing": "Clients name missing",
-        "Please fill the client name field first.": "Please fill the client name field first.",
-        "No review": "No review",
-        "Please type a review before saving it.": "Please type a review before saving it.",
-        "Task {i}": "Task {i}",
-        "Language": "Language",
-        "English": "English",
-        "العربية": "العربية",
-        "Print": "Print",
-        "Save Log": "Save Log",
-        "Select file path": "Select file path",
-        "Browse": "Browse",
-        "Export Client Log": "Export Client Log",
-        "Export Task Log": "Export Task Log",
-        "Export Review Log": "Export Review Log",
-        "Export Observation Log": "Export Review Log",
-        "Export Clients Log": "Export Clients Log",
-        "No printers registered on this laptop.": "No printers registered on this laptop.",
-        "Copy vCard (.vcf)": "Copy vCard (.vcf)",
-        "vCard (.vcf)": "vCard (.vcf)",
-        "Client details copied to the clipboard.": "Client details copied to the clipboard.",
-    },
-    "ar": {
-        "Tkinter could not start in this environment.": "تعذر启动 واجهة Tkinter في هذا البيئة.",
-        "Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.": "يرجى تشغيل هذا الملف من محطة Windows عادية أو من محطة VS Code، وليس من وحدة تحكم رأسية أو وضع التصحيح.",
-        "Client": "العميل",
-        "Client: {client_name}": "العميل: {client_name}",
-        "All Tasks": "جميع المهام",
-        "Pending Tasks": "المهام المعلقة",
-        "Mark Done": "تم الإنجاز",
-        "Close": "إغلاق",
-        "No task plan": "لا توجد خطة مهام",
-        "There is no active task plan to update.": "لا توجد خطة مهام نشطة لتحديثها.",
-        "No task selected": "لم يتم تحديد أي مهمة",
-        "Select a task from the pending list first.": "حدد مهمة من القائمة المعلقة أولاً.",
-        "Client Progress Manager": "مدير العملاء",
-        "Starco Commercial Complex": "مجمع ستاركو التجاري",
-        "Welcome to Starco Commercial Complex": "مرحبًا بكم في مجمع ستاركو التجاري",
-        "Welcome to Starco Commercial Complex Arabic": "أهلاً وسهلاً بكم في مجمع ستاركو التجاري",
-        "Overview": "نظرة عامة",
-        "Exit": "خروج",
-        "Client Details": "تفاصيل العميل",
-        "Client Name": "اسم العميل",
-        "Country": "الدولة",
-        "Contact": "رقم التواصل",
-        "Business": "نوع النشاط",
-        "Shop Number": "رقم المحل",
-        "Address": "العنوان",
-        "Electrical Meter": "عداد الكهرباء",
-        "Email": "البريد الإلكتروني",
-        "Client Review": "ملاحظات العميل",
-        "Add Review": "إضافة ملاحظة",
-        "Open Review Log": "فتح سجل الملاحظات",
-        "Add Client": "إضافة عميل",
-        "Create Client Plan": "إنشاء خطة العميل",
-        "Save Client": "حفظ العميل",
-        "Delete Selected Client": "حذف العميل المحدد",
-        "Progress Overview": "نظرة عامة على التقدم",
-        "Progress": "التقدم",
-        "Total Tasks": "إجمالي المهام",
-        "Tasks": "المهام",
-        "New task": "مهمة جديدة",
-        "No client selected": "لم يتم تحديد عميل",
-        "No pending tasks": "لا توجد مهام معلقة",
-        "No tasks yet": "لا توجد مهام بعد",
-        "No client plan": "لا توجد خطة عميل",
-        "Create a client plan first.": "أنشئ خطة العميل أولاً.",
-        "Missing client": "اسم العميل مفقود",
-        "Please enter a client name.": "يرجى إدخال اسم العميل.",
-        "Missing contact": "رقم التواصل مفقود",
-        "Please enter the client contact number.": "يرجى إدخال رقم التواصل الخاص بالعميل.",
-        "Missing business": "نوع النشاط مفقود",
-        "Please enter the client business type.": "يرجى إدخال نوع نشاط العميل.",
-        "Missing tasks": "المهام مفقودة",
-        "Enter at least one task or set a total task count greater than zero.": "أدخل مهمة واحدة على الأقل أو قم بتعيين إجمالي مهام أكبر من صفر.",
-        "Review saved": "تم حفظ الملاحظة",
-        "Review saved for '{name}'.": "تم حفظ الملاحظة للعميل '{name}'.",
-        "No review": "لا توجد ملاحظة",
-        "Please type a review before saving it.": "يرجى كتابة ملاحظة قبل حفظها.",
-        "Client Reviews Log": "سجل ملاحظات العملاء",
-        "Date": "التاريخ",
-        "Review": "الملاحظة",
-        "No reviews yet": "لا توجد ملاحظات بعد",
-        "All Clients Progress": "تقدم جميع العملاء",
-        "Edit Selected Client": "تعديل العميل المحدد",
-        "Refresh": "تحديث",
-        "Home": "الرئيسية",
-        "Delete client?": "حذف العميل؟",
-        "Are you sure you want to delete '{client_name}' from the client list?": "هل أنت متأكد أنك تريد حذف '{client_name}' من قائمة العملاء؟",
-        "Client deleted": "تم حذف العميل",
-        "'{client_name}' was removed successfully.": "تم حذف '{client_name}' بنجاح.",
-        "Client not found": "لم يتم العثور على العميل",
-        "'{client_name}' was not found in the saved client list.": "لم يتم العثور على '{client_name}' في قائمة العملاء المحفوظة.",
-        "Saved progress only": "تقدم محفوظ فقط",
-        "Select a client row first.": "حدد صف عميل أولاً.",
-        "Select a client from the list first.": "حدد عميلًا من القائمة أولاً.",
-        "Add Task": "إضافة مهمة",
-        "Tasks Details": "تفاصيل المهام",
-        "Contract Details": "تفاصيل العقد",
-        "Preview": "معاينة",
-        "Close Preview": "إغلاق المعاينة",
-        "Save": "حفظ",
-        "Edit": "تعديل",
-        "OK": "موافق",
-        "Refresh Progress": "تحديث التقدم",
-        "Payment Report": "تقرير الدفع",
-        "Save Comment": "حفظ التعليق",
-        "Share Client Info": "مشاركة معلومات العميل",
-        "Contract Number": "رقم العقد",
-        "Starting Date": "تاريخ البداية",
-        "Ending Date": "تاريخ النهاية",
-        "Commercial Registration Number": "رقم السجل التجاري",
-        "Authorized Signature Name": "اسم الممضي المفوض",
-        "Rent Value": "قيمة الإيجار",
-        "Currency Type": "نوع العملة",
-        "Open Issues Requiring Attention": "المشكلات المفتوحة التي تحتاج إلى عناية",
-        "All Clients": "جميع العملاء",
-        "Open All Clients": "جميع العملاء",
-        "Project Manager To-Do": "مدير المشاريع - المهام",
-        "Open client payment records": "فتح سجلات الدفع للعميل",
-        "Follow up payment for {client_name} - {month}": "متابعة الدفع لـ {client_name} - {month}",
-        "No pending payment follow-ups": "لا توجد متابعة مستحقة للدفع",
-        "Transactions": "المعاملات",
-        "Client Transactions": "معاملات العميل",
-        "Month": "الشهر",
-        "Status": "الحالة",
-        "Amount": "المبلغ",
-        "Payment Method": "طريقة الدفع",
-        "Cheque Number": "رقم الشيك",
-        "Due Date": "تاريخ الاستحقاق",
-        "Bank Name": "اسم البنك",
-        "Reservation Status": "حالة الحجز",
-        "Shop Number to Reserve": "رقم المحل المراد حجزه",
-        "Deposit Money Received": "إيداع المال المستلم",
-        "Preliminary Contract Status": "حالة العقد المبدئية",
-        "Deposit received": "تم استلام الإيداع",
-        "Deposit not received": "لم يتم استلام الإيداع",
-        "Completed": "مكتمل",
-        "Under progress": "قيد التنفيذ",
-        "Add Month": "إضافة شهر",
-        "Save Transactions": "حفظ المعاملات",
-        "Transactions saved": "تم حفظ المعاملات",
-        "Client payment transactions were updated successfully.": "تم تحديث معاملات دفع العميل بنجاح.",
-        "No payments yet": "لا توجد مدفوعات بعد",
-        "Send Email": "إرسال بريد إلكتروني",
-        "Save & Exit": "حفظ والخروج",
-        "Cancel": "إلغاء",
-        "Proceed to exit": "متابعة الخروج",
-        "Please enter a client name before saving.": "يرجى إدخال اسم العميل قبل الحفظ.",
-        "Please enter the client contact number before saving.": "يرجى إدخال رقم التواصل الخاص بالعميل قبل الحفظ.",
-        "Please enter the client business type before saving.": "يرجى إدخال نوع نشاط العميل قبل الحفظ.",
-        "This client does not have an email saved yet.": "هذا العميل لا يحتوي على بريد إلكتروني محفوظ بعد.",
-        "Select or create a client before adding a review.": "حدد عميلًا أو أنشئ عميلًا قبل إضافة ملاحظة.",
-        "No email": "لا يوجد بريد إلكتروني",
-        "Exit app": "الخروج من التطبيق",
-        "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.": "أنت تخرج من التطبيق. تأكد من حفظ جميع البيانات المدخلة، وإلا استمر في الخروج.",
-        "Task Details - {client_name}": "تفاصيل المهام - {client_name}",
-        "<New Client>": "<عميل جديد>",
-        "Select an existing client first.": "حدد العميل أولاً.",
-        "Client saved": "تم حفظ العميل",
-        "'{name}' was saved successfully.": "تم حفظ '{name}' بنجاح.",
-        "No client plan": "لا توجد خطة عميل",
-        "Select a task from the pending list.": "حدد مهمة من القائمة المعلقة.",
-        "Save Review": "حفظ الملاحظة",
-        "Save Task": "حفظ المهمة",
-        "Delete Tasks": "حذف المهام",
-        "Clients name missing": "اسم العميل مفقود",
-        "Please fill the client name field first.": "يرجى ملء حقل اسم العميل أولاً.",
-        "No review": "لا توجد مراجعة",
-        "Please type a review before saving it.": "يرجى كتابة ملاحظة قبل حفظها.",
-        "Task {i}": "المهمة {i}",
-        "Language": "اللغة",
-        "English": "English",
-        "العربية": "العربية",
-        "Print": "طباعة",
-        "Save Log": "حفظ السجل",
-        "Select file path": "اختر مسار الملف",
-        "Browse": "تصفح",
-        "Export Client Log": "تصدير سجل العميل",
-        "Export Task Log": "تصدير سجل المهام",
-        "Export Review Log": "تصدير سجل المراجعات",
-        "Export Observation Log": "تصدير سجل المراجعات",
-        "Export Clients Log": "تصدير سجل العملاء",
-        "No printers registered on this laptop.": "لا توجد طابعات مسجلة في هذا الجهاز.",
-        "Copy vCard (.vcf)": "نسخ vCard (.vcf)",
-        "vCard (.vcf)": "vCard (.vcf)",
-        "Client details copied to the clipboard.": "تم نسخ تفاصيل العميل إلى الحافظة.",
-    },
-}
-
-
 # Detect physically available printers so reports can be sent to a local Windows printer.
 def get_registered_printers():
     if win32print is None:
@@ -1345,127 +1012,7 @@ def print_report_document(title, lines):
         return False
 
 
-def set_language(lang):
-    global CURRENT_LANGUAGE
-    code = str(lang or "eng").strip().lower()
-    if code in ("ar", "arabic"):
-        CURRENT_LANGUAGE = "ar"
-    else:
-        CURRENT_LANGUAGE = "eng"
-    return CURRENT_LANGUAGE
-
-
-def refresh_window_language(widget_list):
-    if not widget_list:
-        return
-    for widget, original_text in widget_list:
-        try:
-            translated = T(original_text)
-            widget.configure(text=translated)
-        except Exception:
-            pass
-
-
-def install_language_selector(window, *, title_key=None):
-    if getattr(window, "_language_selector_installed", False):
-        return
-
-    window._language_selector_installed = True
-    window._window_title_key = title_key
-    window.translatable_labels = getattr(window, "translatable_labels", [])
-    window.translatable_buttons = getattr(window, "translatable_buttons", [])
-
-    host = getattr(window, "header_frame", None) or window
-    lang_frame = ttk.Frame(host)
-    try:
-        if host is window:
-            lang_frame.place(relx=1.0, rely=0.0, anchor="ne", x=-12, y=8)
-        else:
-            lang_frame.pack(anchor="ne", padx=(0, 10), pady=(0, 0))
-    except Exception:
-        try:
-            lang_frame.pack(anchor="ne", padx=(0, 10), pady=(6, 0))
-        except Exception:
-            pass
-
-    lang_label = ttk.Label(lang_frame, text=T("Language"), font=("Segoe UI", 9))
-    lang_label.pack(side="left", padx=(0, 4))
-    window.language_var = tk.StringVar(value=CURRENT_LANGUAGE)
-    window.language_combo = ttk.Combobox(
-        lang_frame,
-        textvariable=window.language_var,
-        state="readonly",
-        width=8,
-        values=["eng", "ar"],
-    )
-    window.language_combo.pack(side="left")
-    window.translatable_labels.append((lang_label, "Language"))
-
-    def _refresh_lang_ui():
-        for widget, original_text in getattr(window, "translatable_labels", []):
-            try:
-                refresh_translatable_widget(widget, original_text, allow_label_frame=True)
-            except Exception:
-                pass
-
-        for widget, original_text in getattr(window, "translatable_buttons", []):
-            try:
-                if widget is None or not hasattr(widget, "winfo_exists") or not widget.winfo_exists():
-                    continue
-                widget.configure(text=T(original_text))
-            except Exception:
-                pass
-
-        if title_key:
-            try:
-                window.title(T(title_key))
-            except Exception:
-                pass
-
-    def _apply_language_selection():
-        selected = window.language_var.get()
-        if selected not in {"eng", "ar"}:
-            selected = "eng"
-        set_language(selected)
-        window.language_var.set(CURRENT_LANGUAGE)
-        _refresh_lang_ui()
-
-    window._apply_language_selection = _apply_language_selection
-    window.refresh_lang_ui = _refresh_lang_ui
-    window.language_combo.bind("<<ComboboxSelected>>", lambda event: window._apply_language_selection())
-
-
-# def T(text, **kwargs):
-#     language_map = TRANSLATIONS.get(CURRENT_LANGUAGE, TRANSLATIONS["eng"])
-#     translated = language_map.get(text, text)
-#     if kwargs:
-#         return translated.format(**kwargs)
-#     return translated
-
-
-def T(key: str, **kwargs):
-    lang_map = TRANSLATIONS.get(CURRENT_LANGUAGE, TRANSLATIONS["eng"])
-    text = lang_map.get(key, key)
-
-    if kwargs:
-        text = text.format(**kwargs)
-
-    if CURRENT_LANGUAGE == "ar":
-        return arabic_ui(text)
-
-    return text
-
-
-def validate_translation_coverage():
-    english_keys = set(TRANSLATIONS.get("eng", {}).keys())
-    arabic_keys = set(TRANSLATIONS.get("ar", {}).keys())
-    missing = sorted(key for key in english_keys if key not in arabic_keys)
-    if missing:
-        raise ValueError(
-            "Missing Arabic translations for UI labels:\n" + "\n".join(f" - {key}" for key in missing[:50])
-        )
-    return None
-
+# Language selection UI was removed; translations are resolved centrally from the translations module.
 
 def build_task_log_report_text(plan=None, client_name=""):
     lines = [T("Task log"), "====================", ""]
@@ -1714,23 +1261,6 @@ class WelcomeWindow(tk.Tk):
         logout_button = ttk.Button(actions, text=T("Logout"), command=self.logout_user)
         logout_button.pack(side="left", padx=(0, 8))
 
-        todo_label = ttk.Label(profile_frame, text=T("Project Manager To-Do"), font=("Segoe UI", 11, "bold"))
-        todo_label.grid(row=1, column=0, sticky="w", pady=(6, 4))
-
-        self.todo_listbox = tk.Listbox(
-            profile_frame,
-            height=5,
-            width=60,
-            exportselection=False,
-            bg="#fffdf3",
-            relief="solid",
-            borderwidth=1,
-            font=("Segoe UI", 10),
-        )
-        self.todo_listbox.grid(row=2, column=0, sticky="nsew", pady=(0, 4))
-        profile_frame.rowconfigure(2, weight=1)
-        self.refresh_todo_list()
-
         main_frame = ttk.Frame(self, padding=(18, 4, 18, 12))
         main_frame.pack(fill="both", expand=True)
         main_frame.columnconfigure(0, weight=3)
@@ -1836,6 +1366,9 @@ class WelcomeWindow(tk.Tk):
         self.destroy()
 
     def _open_progress_panel(self):
+        if not is_registered_user_profile():
+            messagebox.showwarning(T("Access Denied"), T("Registered users only. Please log in to open the overview."))
+            return
         self.destroy()
         app = open_overview_window()
         app.focus_section("overview")
@@ -2000,15 +1533,17 @@ class WelcomeWindow(tk.Tk):
         if not self.winfo_exists():
             return
 
-        for attr in ("overview_button", "contract_button"):
+        for attr, is_restricted in (
+            ("overview_button", True),
+            ("contract_button", True),
+        ):
             widget = getattr(self, attr, None)
             if widget is None:
                 continue
             try:
                 if widget.winfo_exists():
-                    widget.configure(
-                        state="normal" if is_registered_user_profile() else "disabled"
-                    )
+                    enabled = not is_restricted or is_registered_user_profile()
+                    widget.configure(state="normal" if enabled else "disabled")
             except Exception:
                 pass
 
@@ -2090,55 +1625,6 @@ class WelcomeWindow(tk.Tk):
         welcome.protocol("WM_DELETE_WINDOW", welcome.destroy)
         welcome.mainloop()
 
-    def refresh_todo_list(self):
-        if not hasattr(self, "todo_listbox") or self.todo_listbox is None:
-            return
-        try:
-            if not self.todo_listbox.winfo_exists():
-                return
-        except Exception:
-            return
-
-        try:
-            self.todo_listbox.delete(0, tk.END)
-        except Exception:
-            return
-
-        for task in self.generate_project_manager_todo_tasks():
-            try:
-                self.todo_listbox.insert(tk.END, task)
-            except Exception:
-                break
-
-    def generate_project_manager_todo_tasks(self):
-        manager = ClientManager(resolve_clients_data_path())
-        manager.load_clients()
-        tasks = []
-        for client in manager.clients:
-            contract_details = getattr(client, "contract_details", {}) or {}
-            start_date = str(contract_details.get("starting_date") or "").strip()
-            end_date = str(contract_details.get("ending_date") or "").strip()
-            months = generate_contract_months(start_date, end_date)
-            if not months:
-                continue
-
-            transactions_by_month = {}
-            for entry in getattr(client, "transactions", []) or []:
-                month = str(entry.get("month", "") or "").strip()
-                if month:
-                    transactions_by_month[month] = entry
-
-            for month in months:
-                entry = transactions_by_month.get(month)
-                status = str((entry or {}).get("status", "") or "").strip().lower()
-                if entry is not None and status in {"paid", "completed", "complete", "success", "successful"}:
-                    continue
-                tasks.append(f"Follow up payment for {client.name} - {month}")
-
-        if not tasks:
-            tasks.append("No pending payment follow-ups")
-        return tasks
-
     def logout_user(self):
         sync_session_profile(clear=True)
         self.user_name_var.set("")
@@ -2207,7 +1693,6 @@ class RentCalculatorWindow(tk.Toplevel):
         self.title(T("Rent Calculator"))
         self.geometry("430x300")
         self.minsize(380, 260)
-        install_language_selector(self, title_key="Rent Calculator")
         self.configure(bg="#f8fafc")
 
         container = ttk.Frame(self, padding=18)
@@ -2269,7 +1754,6 @@ class LoginWindow(tk.Toplevel):
         self.geometry("420x220")
         self.minsize(340, 180)
         self.transient(master)
-        install_language_selector(self, title_key="User Login")
 
         self.user_name_var = tk.StringVar(value=(master.user_name_var.get() if master is not None and hasattr(master, "user_name_var") else ""))
         self.user_email_var = tk.StringVar(value=(master.user_email_var.get() if master is not None and hasattr(master, "user_email_var") else ""))
@@ -2369,7 +1853,6 @@ class UserRegistrationWindow(tk.Toplevel):
         self.geometry("420x220")
         self.minsize(340, 180)
         self.transient(master)
-        install_language_selector(self, title_key="User Registration")
 
         self.user_name_var = tk.StringVar(value="")
         self.user_email_var = tk.StringVar(value="")
@@ -2493,40 +1976,6 @@ class UserRegistrationWindow(tk.Toplevel):
                 self.master.focus_set()
             except Exception:
                 pass
-
-    def generate_project_manager_todo_tasks(self):
-        manager = ClientManager("clients.json")
-        manager.load_clients()
-        tasks = []
-        for client in manager.clients:
-            contract_details = getattr(client, "contract_details", {}) or {}
-            start_date = str(contract_details.get("starting_date") or "").strip()
-            end_date = str(contract_details.get("ending_date") or "").strip()
-            months = generate_contract_months(start_date, end_date)
-            if not months:
-                continue
-
-            transactions_by_month = {}
-            for entry in getattr(client, "transactions", []) or []:
-                month = str(entry.get("month", "") or "").strip()
-                if month:
-                    transactions_by_month[month] = entry
-
-            for month in months:
-                entry = transactions_by_month.get(month)
-                status = str((entry or {}).get("status", "") or "").strip().lower()
-                if entry is not None and status in {"paid", "completed", "complete", "success", "successful"}:
-                    continue
-                tasks.append(f"Follow up payment for {client.name} - {month}")
-
-        if not tasks:
-            tasks.append("No pending payment follow-ups")
-        return tasks
-
-    def refresh_todo_list(self):
-        self.todo_listbox.delete(0, tk.END)
-        for task in self.generate_project_manager_todo_tasks():
-            self.todo_listbox.insert(tk.END, task)
 
     def _open_progress_panel(self):
         self.destroy()
@@ -2670,7 +2119,6 @@ class TaskDetailsWindow(tk.Toplevel):
         self.title(T("Task Details - {client_name}", client_name=client_name))
         self.geometry("820x620")
         self.minsize(620, 420)
-        install_language_selector(self, title_key="Task Details - {client_name}")
 
         self.plan = plan
         self.master_app = master
@@ -2872,7 +2320,6 @@ class ContractDetailsWindow(tk.Toplevel):
         self.title(T("Contract Details"))
         self.geometry("680x520")
         self.minsize(500, 420)
-        install_language_selector(self, title_key="Contract Details")
         self.master_app = master
         self.manager = getattr(master, "client_manager", ClientManager("clients.json")) if master is not None else ClientManager("clients.json")
 
@@ -4403,24 +3850,13 @@ class ProgressApp(tk.Tk):
         self.translatable_labels.append((title, "Client Progress Manager"))
         title.grid(row=0, column=1, sticky="ew")
 
-        lang_frame = ttk.Frame(header)
-        lang_frame.grid(row=0, column=2, sticky="e", padx=(10, 0))
-        lang_label = ttk.Label(lang_frame, text=T("Language"))
-        lang_label.pack(side="left", padx=(0, 6))
-        self.translatable_labels.append((lang_label, "Language"))
-        self.language_var = tk.StringVar(value=CURRENT_LANGUAGE)
-        self.language_combo = ttk.Combobox(
-            lang_frame,
-            textvariable=self.language_var,
-            state="readonly",
-            width=12,
-            values=["eng", "ar"],
-        )
-        self.language_combo.pack(side="left")
-        self.language_combo.bind("<<ComboboxSelected>>", self.switch_language)
-
         header_actions = ttk.Frame(header)
         header_actions.grid(row=0, column=3, sticky="e", padx=(10, 0))
+
+        self.language_button = ttk.Button(header_actions, text=T("Language"), command=self.open_language_menu, style="Action.TButton", width=12)
+        self.language_button.pack(side="left", padx=(0, 6))
+        self.translatable_buttons.append((self.language_button, "Language"))
+
         send_email_button = ttk.Button(header_actions, text=T("Send Email"), command=self.send_email_to_client, style="Action.TButton", width=14)
         send_email_button.pack(side="left", padx=(0, 6))
         self.translatable_buttons.append((send_email_button, "Send Email"))
@@ -4441,6 +3877,7 @@ class ProgressApp(tk.Tk):
         self.translatable_buttons.append((cancel_button, "Cancel"))
 
         self.details_frame = ttk.LabelFrame(main, text=T("Client Details"), style="Section.TLabelframe")
+        set_emoji_translated_label(self.details_frame, "Client Details", "📋 ")
         self.translatable_labels.append((self.details_frame, "Client Details"))
         self.details_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", padx=(0, 6), pady=(0, 8))
         details_frame = self.details_frame
@@ -4701,6 +4138,16 @@ class ProgressApp(tk.Tk):
         self.clear_client_form()
         self.apply_access_mode()
 
+    def open_language_menu(self):
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="English", command=lambda: self.switch_language_to("eng"))
+        menu.add_command(label="العربية", command=lambda: self.switch_language_to("ar"))
+        menu.post(self.winfo_pointerx(), self.winfo_pointery())
+
+    def switch_language_to(self, lang_code):
+        set_language(lang_code)
+        self.refresh_lang_ui()
+
     def _guest_allowed_button_texts(self):
         return {
             T("All Clients"),
@@ -4743,14 +4190,6 @@ class ProgressApp(tk.Tk):
                 button.configure(state="normal")
 
         self.refresh_client_combo()
-
-    def switch_language(self, event=None):
-        selected = self.language_var.get()
-        if selected not in {"eng", "ar"}:
-            selected = "eng"
-        set_language(selected)
-        self.language_var.set(CURRENT_LANGUAGE)
-        self.refresh_lang_ui()
 
     def refresh_lang_ui(self):
         for widget, original_text in getattr(self, "translatable_labels", []):
@@ -5453,7 +4892,6 @@ class ClientDetailsWindow(tk.Toplevel):
         self.title(T("Client Details"))
         self.geometry("540x420")
         self.minsize(500, 360)
-        install_language_selector(self, title_key="Client Details")
         self.master_app = master
         self.manager = master_manager or getattr(master, "client_manager", ClientManager("clients.json"))
         self.client_name = client_name.strip() if client_name else ""
@@ -5670,7 +5108,6 @@ class ReservationStatusWindow(tk.Toplevel):
         self.title(T("Reservation Status"))
         self.geometry("500x360")
         self.minsize(420, 300)
-        install_language_selector(self, title_key="Reservation Status")
         self.master_app = master
         self.manager = getattr(master, "client_manager", ClientManager("clients.json")) if master is not None else ClientManager("clients.json")
 
@@ -5937,7 +5374,6 @@ class AllClientsProgressWindow(tk.Toplevel):
         self.title(T("All Clients Progress"))
         self.geometry("720x440")
         self.minsize(620, 360)
-        install_language_selector(self, title_key="All Clients Progress")
 
         self.manager = ClientManager("clients.json")
         self.tree = ttk.Treeview(

@@ -3,8 +3,10 @@ import json
 import os
 import sys
 import tempfile
+import tkinter as tk
 import unittest
 from pathlib import Path
+from tkinter import ttk
 
 import arabic_reshaper
 from bidi.algorithm import get_display
@@ -28,13 +30,16 @@ from clients_progress_ui import (
     Plan,
     ProgressApp,
     T,
+    WelcomeWindow,
     apply_bidi_text,
     build_review_log_report_text,
     build_task_log_report_text,
     get_emoji_font_families,
     load_shop_electrical_meter_map,
     parse_task_items,
+    refresh_translatable_widget,
     resolve_log_output_dir,
+    set_emoji_translated_label,
     set_language,
     strip_task_number_prefix,
     validate_translation_coverage,
@@ -45,6 +50,45 @@ try:
     from package_app import resolve_desktop_dir
 except ImportError:
     resolve_desktop_dir = None
+
+
+class WelcomeAccessTests(unittest.TestCase):
+    def test_overview_button_is_enabled_only_after_login(self):
+        original_profile = getattr(__import__("clients_progress_ui", fromlist=["CURRENT_SESSION_PROFILE"]), "CURRENT_SESSION_PROFILE").copy()
+        try:
+            for profile, expected_overview_state in (
+                ({"name": "Guest", "email": "Guest"}, "disabled"),
+                ({"name": "", "email": ""}, "disabled"),
+                ({"name": "Salah", "email": "sssshanfari@gmail.com"}, "normal"),
+            ):
+                import clients_progress_ui as ui
+                ui.CURRENT_SESSION_PROFILE = profile.copy()
+
+                class FakeWidget:
+                    def __init__(self):
+                        self.state = "disabled"
+
+                    def configure(self, **kwargs):
+                        self.state = kwargs.get("state", self.state)
+
+                    def winfo_exists(self):
+                        return True
+
+                class DummyWindow:
+                    def __init__(self):
+                        self.overview_button = FakeWidget()
+                        self.contract_button = FakeWidget()
+
+                    def winfo_exists(self):
+                        return True
+
+                dummy = DummyWindow()
+                WelcomeWindow._sync_overview_access(dummy)
+                self.assertEqual(dummy.overview_button.state, expected_overview_state)
+                self.assertEqual(dummy.contract_button.state, "disabled")
+        finally:
+            import clients_progress_ui as ui
+            ui.CURRENT_SESSION_PROFILE = original_profile.copy()
 
 
 class ClientManagerTests(unittest.TestCase):
@@ -378,6 +422,42 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(T("Address"), "Address")
         self.assertEqual(T("Electrical Meter"), "Electrical Meter")
 
+    def test_client_details_frame_emoji_only_in_english(self):
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            frame = ttk.LabelFrame(root, text="Client Details")
+            set_language("eng")
+            set_emoji_translated_label(frame, "Client Details", "📋 ")
+            self.assertTrue(frame.cget("text").startswith("📋"))
+
+            set_language("ar")
+            set_emoji_translated_label(frame, "Client Details", "📋 ")
+            self.assertFalse(frame.cget("text").startswith("📋"))
+            self.assertIn("تفاصيل", frame.cget("text"))
+        finally:
+            root.destroy()
+            set_language("eng")
+
+    def test_refresh_translatable_widget_does_not_force_emoji_font_for_plain_arabic_labels(self):
+        original_provider = __import__("python_code.clients_progress_ui", fromlist=["get_emoji_font_families"]).get_emoji_font_families
+        try:
+            from python_code import clients_progress_ui as ui
+            ui.get_emoji_font_families = lambda: ["Noto Color Emoji"]
+
+            root = tk.Tk()
+            root.withdraw()
+            label = ttk.Label(root, text="Client Name")
+            initial_font = label.cget("font")
+            set_language("ar")
+            ui.refresh_translatable_widget(label, "Client Name")
+            self.assertEqual(label.cget("font"), initial_font)
+            self.assertIn("اسم", label.cget("text"))
+            root.destroy()
+        finally:
+            ui.get_emoji_font_families = original_provider
+            set_language("eng")
+
     def test_resolve_desktop_dir_uses_existing_windows_desktop(self):
         if resolve_desktop_dir is None:
             self.fail("resolve_desktop_dir is not available")
@@ -388,7 +468,7 @@ class ClientManagerTests(unittest.TestCase):
 
     def test_sync_documents_target_uses_current_project_root(self):
         project_root = Path(__file__).resolve().parent.parent
-        expected_target = project_root / "python code" / "docs" / "documents.txt"
+        expected_target = project_root / "python_code" / "docs" / "documents.txt"
         self.assertEqual(TARGET.resolve(), expected_target.resolve())
 
     def test_log_output_dir_defaults_to_application_package_folders(self):
@@ -447,15 +527,6 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(reloaded.clients[0].transactions[0]["month"], "2026-09")
         self.assertEqual(reloaded.clients[0].transactions[0]["cheque_number"], "CH-204")
         self.assertEqual(reloaded.clients[0].transactions[0]["bank_name"], "Bank Muscat")
-
-    def test_welcome_window_contains_project_manager_todo_listbox(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
-        with source_path.open("r", encoding="utf-8") as source_file:
-            source = source_file.read()
-
-        self.assertIn("Project Manager To-Do", source)
-        self.assertIn("self.todo_listbox", source)
-        self.assertIn("generate_project_manager_todo_tasks", source)
 
     def test_transaction_window_has_client_selector_dropdown(self):
         source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"

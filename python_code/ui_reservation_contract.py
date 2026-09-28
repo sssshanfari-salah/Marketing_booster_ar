@@ -20,10 +20,9 @@ from clients_management import (
 )
 
 try:
-    from clients_progress_ui import T, install_language_selector, pick_date
+    from clients_progress_ui import T, pick_date
 except ImportError:
     from translations import T
-    install_language_selector = None
     pick_date = None
 
 APP_ICON = None
@@ -66,8 +65,6 @@ class ShopReservationForm(tk.Tk):
         self.geometry("980x760")
         self.minsize(920, 680)
         self.configure(bg="#f3f6fb")
-        if install_language_selector is not None:
-            install_language_selector(self, title_key="Advanced Shop Reservation Form - Starco Commercial Complex")
 
         try:
             self.iconbitmap(str(APP_ICON))
