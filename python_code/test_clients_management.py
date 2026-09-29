@@ -63,7 +63,7 @@ class WelcomeAccessTests(unittest.TestCase):
         self.assertEqual(ui.T("Guest"), "ضيف")
         self.assertEqual(ui.set_language("eng"), "eng")
 
-    def test_successful_welcome_login_opens_overview(self):
+    def test_successful_welcome_login_updates_status_without_opening_overview(self):
         import clients_progress_ui as ui
 
         class DummyVar:
@@ -79,9 +79,10 @@ class WelcomeAccessTests(unittest.TestCase):
         dummy = type("DummyWelcome", (), {
             "user_name_var": DummyVar("Alice"),
             "user_email_var": DummyVar("alice@example.com"),
+            "login_status_var": DummyVar(""),
             "destroy": lambda self: None,
-            "_refresh_login_status": lambda self: None,
             "guest_mode": False,
+            "_refresh_login_status": lambda self: getattr(self, "login_status_var").set(f"Logged in as {self.user_name_var.get()}") if getattr(self, "user_name_var").get() else None,
         })()
 
         with mock.patch.object(ui, "verify_registered_user", return_value=True), \
@@ -89,15 +90,13 @@ class WelcomeAccessTests(unittest.TestCase):
              mock.patch.object(ui, "set_current_session_profile"), \
              mock.patch.object(ui, "messagebox") as mock_msgbox, \
              mock.patch.object(ui, "open_overview_window") as mock_open_overview:
-            mock_app = mock.Mock()
-            mock_open_overview.return_value = mock_app
             ui.WelcomeWindow.login_user(dummy)
 
         mock_msgbox.showinfo.assert_called_once()
-        mock_open_overview.assert_called_once_with(force_new=True)
-        mock_app.focus_section.assert_called_once_with("overview")
+        self.assertEqual(dummy.login_status_var.get(), "Logged in as Alice")
+        mock_open_overview.assert_not_called()
 
-    def test_successful_relogin_opens_a_fresh_overview(self):
+    def test_successful_relogin_keeps_welcome_open_and_updates_status(self):
         import clients_progress_ui as ui
 
         class DummyVar:
@@ -113,9 +112,10 @@ class WelcomeAccessTests(unittest.TestCase):
         dummy = type("DummyWelcome", (), {
             "user_name_var": DummyVar("Alice"),
             "user_email_var": DummyVar("alice@example.com"),
+            "login_status_var": DummyVar(""),
             "destroy": lambda self: None,
-            "_refresh_login_status": lambda self: None,
             "guest_mode": False,
+            "_refresh_login_status": lambda self: getattr(self, "login_status_var").set(f"Logged in as {self.user_name_var.get()}") if getattr(self, "user_name_var").get() else None,
         })()
 
         with mock.patch.object(ui, "verify_registered_user", return_value=True), \
@@ -123,22 +123,19 @@ class WelcomeAccessTests(unittest.TestCase):
              mock.patch.object(ui, "set_current_session_profile"), \
              mock.patch.object(ui, "messagebox"), \
              mock.patch.object(ui, "open_overview_window") as mock_open_overview:
-            mock_app = mock.Mock()
-            mock_open_overview.return_value = mock_app
             ui.WelcomeWindow.login_user(dummy)
             ui.WelcomeWindow.login_user(dummy)
 
-        self.assertEqual(mock_open_overview.call_count, 2)
-        self.assertTrue(all(call.kwargs.get("force_new") is True for call in mock_open_overview.call_args_list))
-        self.assertEqual(mock_app.focus_section.call_count, 2)
+        self.assertEqual(mock_open_overview.call_count, 0)
+        self.assertEqual(dummy.login_status_var.get(), "Logged in as Alice")
 
-    def test_overview_button_is_enabled_only_after_login(self):
+    def test_overview_button_is_enabled_for_all_welcome_users(self):
         original_profile = getattr(__import__("clients_progress_ui", fromlist=["CURRENT_SESSION_PROFILE"]), "CURRENT_SESSION_PROFILE").copy()
         try:
-            for profile, expected_overview_state in (
-                ({"name": "Guest", "email": "Guest"}, "disabled"),
-                ({"name": "", "email": ""}, "disabled"),
-                ({"name": "Salah", "email": "sssshanfari@gmail.com"}, "normal"),
+            for profile in (
+                {"name": "Guest", "email": "Guest"},
+                {"name": "", "email": ""},
+                {"name": "Salah", "email": "sssshanfari@gmail.com"},
             ):
                 import clients_progress_ui as ui
                 ui.CURRENT_SESSION_PROFILE = profile.copy()
@@ -163,11 +160,78 @@ class WelcomeAccessTests(unittest.TestCase):
 
                 dummy = DummyWindow()
                 WelcomeWindow._sync_overview_access(dummy)
-                self.assertEqual(dummy.overview_button.state, expected_overview_state)
-                self.assertEqual(dummy.contract_button.state, "disabled")
+                self.assertEqual(dummy.overview_button.state, "normal")
+                self.assertEqual(dummy.contract_button.state, "disabled" if not ui.is_registered_user_profile(profile) else "normal")
         finally:
             import clients_progress_ui as ui
             ui.CURRENT_SESSION_PROFILE = original_profile.copy()
+
+    def test_default_session_starts_as_guest(self):
+        import clients_progress_ui as ui
+
+        original = ui.CURRENT_SESSION_PROFILE.copy()
+        try:
+            ui.sync_session_profile(clear=True)
+            self.assertEqual(ui.ensure_default_guest_session(), {"name": "Guest", "email": "Guest"})
+            self.assertTrue(ui.is_guest_profile(ui.CURRENT_SESSION_PROFILE))
+        finally:
+            ui.CURRENT_SESSION_PROFILE = original
+
+    def test_closing_registration_window_keeps_previous_user(self):
+        import clients_progress_ui as ui
+
+        class DummyVar:
+            def __init__(self, value=""):
+                self.value = value
+            def get(self):
+                return self.value
+            def set(self, value):
+                self.value = value
+
+        dummy = type("DummyWelcome", (), {
+            "user_name_var": DummyVar("Alice"),
+            "user_email_var": DummyVar("alice@example.com"),
+            "login_status_var": DummyVar(""),
+            "_refresh_login_status": lambda self: self.login_status_var.set(f"Logged in as: {self.user_name_var.get()}"),
+            "guest_mode": False,
+        })()
+
+        with mock.patch.object(ui, "UserRegistrationWindow") as mock_registration, \
+             mock.patch.object(ui, "load_user_profile", return_value={"name": "Salah", "email": "salah@example.com"}):
+            instance = mock_registration.return_value
+            instance.grab_set.return_value = None
+            instance.wait_window.return_value = None
+            ui.WelcomeWindow.open_registration_window(dummy)
+
+        self.assertEqual(dummy.user_name_var.get(), "Alice")
+        self.assertEqual(dummy.user_email_var.get(), "alice@example.com")
+        self.assertEqual(dummy.login_status_var.get(), "Logged in as: Alice")
+
+    def test_switching_between_welcome_and_overview_closes_the_other_window(self):
+        import clients_progress_ui as ui
+
+        welcome_window = mock.Mock()
+        overview_window = mock.Mock()
+        welcome_window.winfo_exists.return_value = True
+        overview_window.winfo_exists.return_value = True
+
+        ui._ACTIVE_WELCOME_WINDOW = welcome_window
+        ui._ACTIVE_PROGRESS_APP = overview_window
+
+        ui.open_overview_window(force_new=True)
+
+        welcome_window.destroy.assert_called_once()
+        self.assertIsNone(ui._ACTIVE_WELCOME_WINDOW)
+        self.assertIsNotNone(ui._ACTIVE_PROGRESS_APP)
+
+        new_welcome = mock.Mock()
+        new_welcome.winfo_exists.return_value = True
+        with mock.patch.object(ui, "WelcomeWindow", return_value=new_welcome):
+            ui.open_welcome_home(force_new=True)
+
+        overview_window.destroy.assert_called_once()
+        self.assertIsNone(ui._ACTIVE_PROGRESS_APP)
+        self.assertIsNotNone(ui._ACTIVE_WELCOME_WINDOW)
 
 
 class ClientManagerTests(unittest.TestCase):

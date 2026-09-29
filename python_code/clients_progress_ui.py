@@ -270,6 +270,12 @@ def is_guest_login_credentials(user_name, email_account):
     return name == "guest" and email == "guest"
 
 
+def ensure_default_guest_session():
+    if not str(CURRENT_SESSION_PROFILE.get("name") or "").strip() and not str(CURRENT_SESSION_PROFILE.get("email") or "").strip():
+        sync_session_profile(user_name="Guest", user_email="Guest")
+    return CURRENT_SESSION_PROFILE
+
+
 def sync_session_profile(profile=None, user_name=None, user_email=None, *, clear=False):
     if clear:
         CURRENT_SESSION_PROFILE["name"] = ""
@@ -1387,10 +1393,22 @@ def build_startup_splash():
 
 # Keep a single global app instance so the overview window can be reused instead of reopening repeatedly.
 _ACTIVE_PROGRESS_APP = None
+_ACTIVE_WELCOME_WINDOW = None
+
+
+def close_welcome_window():
+    global _ACTIVE_WELCOME_WINDOW
+    if _ACTIVE_WELCOME_WINDOW is not None:
+        try:
+            if _ACTIVE_WELCOME_WINDOW.winfo_exists():
+                _ACTIVE_WELCOME_WINDOW.destroy()
+        except Exception:
+            pass
+        _ACTIVE_WELCOME_WINDOW = None
 
 
 def open_overview_window(force_new=False):
-    global _ACTIVE_PROGRESS_APP
+    global _ACTIVE_PROGRESS_APP, _ACTIVE_WELCOME_WINDOW
 
     if force_new and _ACTIVE_PROGRESS_APP is not None:
         try:
@@ -1416,36 +1434,129 @@ def open_overview_window(force_new=False):
         except Exception:
             pass
 
+    if _ACTIVE_WELCOME_WINDOW is not None:
+        try:
+            if _ACTIVE_WELCOME_WINDOW.winfo_exists():
+                _ACTIVE_WELCOME_WINDOW.destroy()
+        except Exception:
+            pass
+        _ACTIVE_WELCOME_WINDOW = None
+
     app = ProgressApp()
     _ACTIVE_PROGRESS_APP = app
     return app
 
 
-def open_welcome_home():
+def open_welcome_home(force_new=False):
+    global _ACTIVE_PROGRESS_APP, _ACTIVE_WELCOME_WINDOW
+
+    if force_new and _ACTIVE_WELCOME_WINDOW is not None:
+        try:
+            if _ACTIVE_WELCOME_WINDOW.winfo_exists():
+                _ACTIVE_WELCOME_WINDOW.destroy()
+        except Exception:
+            pass
+        _ACTIVE_WELCOME_WINDOW = None
+
+    if _ACTIVE_WELCOME_WINDOW is not None:
+        try:
+            if _ACTIVE_WELCOME_WINDOW.winfo_exists():
+                welcome = _ACTIVE_WELCOME_WINDOW
+                try:
+                    welcome.deiconify()
+                    welcome.lift()
+                    welcome.focus_set()
+                except Exception:
+                    pass
+                return welcome
+        except Exception:
+            pass
+
+    if _ACTIVE_PROGRESS_APP is not None:
+        try:
+            if _ACTIVE_PROGRESS_APP.winfo_exists():
+                _ACTIVE_PROGRESS_APP.destroy()
+        except Exception:
+            pass
+        _ACTIVE_PROGRESS_APP = None
+
     welcome = WelcomeWindow()
-    welcome.protocol("WM_DELETE_WINDOW", welcome.destroy)
-    welcome.mainloop()
+    _ACTIVE_WELCOME_WINDOW = welcome
+    welcome.protocol("WM_DELETE_WINDOW", close_welcome_window)
+    return welcome
+
+
+def close_popup_and_return(window):
+    if window is None:
+        return
+
+    parent = getattr(window, "previous_window", None)
+    if parent is None and getattr(window, "master", None) is not None:
+        parent = window.master
+
+    try:
+        window.destroy()
+    except Exception:
+        pass
+
+    if parent is not None:
+        try:
+            if hasattr(parent, "winfo_exists") and parent.winfo_exists():
+                parent.deiconify()
+                parent.lift()
+                parent.focus_set()
+        except Exception:
+            pass
 
 
 # Landing screen with navigation to the main client overview and payment-transaction sections.
 class WelcomeWindow(tk.Tk):
     def __init__(self):
+        global _ACTIVE_WELCOME_WINDOW
         super().__init__()
+        ensure_default_guest_session()
+        _ACTIVE_WELCOME_WINDOW = self
         self.title(T("Starco Commercial Complex"))
-        self.geometry("760x520")
-        self.minsize(620, 420)
+        self.geometry("900x620")
+        self.minsize(760, 520)
         self.configure(bg="#eef2ff")
 
+        self.style = ttk.Style(self)
+        self.style.theme_use("clam")
+        self.option_add("*Font", "{Segoe UI} 9")
+        self.style.configure(".", font=("{Segoe UI}", 9))
+        self.style.configure(
+            "Action.TButton",
+            padding=(12, 8),
+            font=("{Segoe UI}", 9, "bold"),
+            foreground="#111827",
+            background="#dbeafe",
+            borderwidth=1,
+            relief="raised",
+        )
+        self.style.map(
+            "Action.TButton",
+            background=[("active", "#bfdbfe"), ("pressed", "#93c5fd")],
+            foreground=[("active", "#111827"), ("pressed", "#111827")],
+            relief=[("pressed", "sunken"), ("active", "raised")],
+        )
+
         current_profile = CURRENT_SESSION_PROFILE.copy()
-        self.user_name_var = tk.StringVar(value=current_profile.get("name", ""))
-        self.user_email_var = tk.StringVar(value=current_profile.get("email", ""))
+        self.user_name_var = tk.StringVar(value=current_profile.get("name", "Guest"))
+        self.user_email_var = tk.StringVar(value=current_profile.get("email", "Guest"))
         self.login_status_var = tk.StringVar(value="")
         self.guest_mode = True
 
-        header = ttk.Frame(self, padding=(28, 22, 28, 12))
-        header.pack(fill="x")
+        shell = ttk.Frame(self, padding=(20, 18, 20, 14))
+        shell.pack(fill="both", expand=True)
+        shell.columnconfigure(0, weight=3)
+        shell.columnconfigure(1, weight=2)
+        shell.rowconfigure(2, weight=1)
 
-        logo_label = tk.Label(header, bg="#eef2ff", fg="#f5c451", font=("Segoe UI", 18, "bold"))
+        header = ttk.Frame(shell, padding=(18, 10, 18, 8))
+        header.grid(row=0, column=0, columnspan=2, sticky="ew")
+
+        logo_label = tk.Label(header, bg="#eef2ff", fg="#f5c451", font=("{Segoe UI}", 18, "bold"))
         logo_label.pack(anchor="center")
         if APP_ICON is not None and APP_ICON.exists():
             try:
@@ -1465,7 +1576,7 @@ class WelcomeWindow(tk.Tk):
         title = ttk.Label(
             header,
             text=T("Welcome to Starco Commercial Complex"),
-            font=("Segoe UI", 18, "bold"),
+            font=("{Segoe UI}", 18, "bold"),
             foreground="#111827",
         )
         title.pack(anchor="center", pady=(8, 0))
@@ -1473,7 +1584,7 @@ class WelcomeWindow(tk.Tk):
         self.login_status_label = tk.Label(
             header,
             textvariable=self.login_status_var,
-            font=("Segoe UI", 10, "bold"),
+            font=("{Segoe UI}", 10, "bold"),
             fg="#ecfeff",
             bg="#0f766e",
             padx=12,
@@ -1487,97 +1598,106 @@ class WelcomeWindow(tk.Tk):
         subtitle = ttk.Label(
             header,
             text=T("Welcome to Starco Commercial Complex Arabic"),
-            font=("Segoe UI", 12),
+            font=("{Segoe UI}", 12),
             foreground="#374151",
         )
-        subtitle.pack(anchor="center", pady=(0, 4))
+        subtitle.pack(anchor="center", pady=(0, 2))
 
         self._refresh_login_status()
 
-        profile_frame = ttk.Frame(self, padding=(16, 10))
-        profile_frame.pack(fill="x", padx=24, pady=(0, 10))
-        profile_frame.columnconfigure(0, weight=1)
+        actions = ttk.Frame(shell, padding=(0, 0, 0, 8))
+        actions.grid(row=1, column=0, columnspan=2, sticky="ew")
+        actions.columnconfigure(0, weight=1)
+        access_buttons = ttk.Frame(actions)
+        access_buttons.pack(fill="x")
 
-        actions = ttk.Frame(profile_frame)
-        actions.grid(row=0, column=0, sticky="e", pady=(0, 8))
-        ttk.Button(actions, text=T("Guest"), command=self.use_guest_profile).pack(side="left", padx=(0, 8))
-        ttk.Button(actions, text=T("Register"), command=self.open_registration_window).pack(side="left", padx=(0, 8))
-        ttk.Button(actions, text=T("Login"), command=self.open_login_window).pack(side="left", padx=(0, 8))
-        ttk.Button(actions, text=T("Logout"), command=self.logout_user).pack(side="left", padx=(0, 8))
+        guest_button = ttk.Button(access_buttons, text=T("Guest"), command=self.use_guest_profile, style="Action.TButton")
+        guest_button.pack(side="left", padx=(0, 8))
+        register_button = ttk.Button(access_buttons, text=T("Register"), command=self.open_registration_window, style="Action.TButton")
+        register_button.pack(side="left", padx=(0, 8))
+        login_button = ttk.Button(access_buttons, text=T("Login"), command=self.open_login_window, style="Action.TButton")
+        login_button.pack(side="left", padx=(0, 8))
+        logout_button = ttk.Button(access_buttons, text=T("Logout"), command=self.logout_user, style="Action.TButton")
+        logout_button.pack(side="left")
 
-        todo_label = ttk.Label(profile_frame, text=T("Project Manager To-Do"), font=("Segoe UI", 11, "bold"))
-        todo_label.grid(row=1, column=0, sticky="w", pady=(10, 6))
+        content = ttk.Frame(shell)
+        content.grid(row=2, column=0, columnspan=2, sticky="nsew", pady=(4, 8))
+        content.columnconfigure(0, weight=3)
+        content.columnconfigure(1, weight=2)
+        content.rowconfigure(0, weight=1)
+
+        todo_card = ttk.LabelFrame(content, text=T("Project Manager To-Do"), padding=(12, 10))
+        todo_card.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        todo_card.columnconfigure(0, weight=1)
+        todo_card.rowconfigure(0, weight=1)
 
         self.todo_listbox = tk.Listbox(
-            profile_frame,
-            height=7,
-            width=60,
+            todo_card,
+            height=10,
+            width=46,
             exportselection=False,
             bg="#fffdf3",
             relief="solid",
             borderwidth=1,
-            font=("Segoe UI", 10),
+            font=("{Segoe UI}", 10),
         )
-        self.todo_listbox.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
-        profile_frame.rowconfigure(2, weight=1)
+        self.todo_listbox.grid(row=0, column=0, sticky="nsew")
+        todo_card.rowconfigure(0, weight=1)
         self.refresh_todo_list()
 
-        main_frame = ttk.Frame(self, padding=(24, 8, 24, 18))
-        main_frame.pack(fill="both", expand=True)
-        main_frame.columnconfigure(0, weight=3)
-        main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(0, weight=0)
-        main_frame.rowconfigure(1, weight=1)
+        action_card = ttk.LabelFrame(content, text=T("Quick Actions"), padding=(12, 10))
+        action_card.grid(row=0, column=1, sticky="nsew")
+        action_card.columnconfigure(0, weight=1)
+        action_card.columnconfigure(1, weight=1)
 
         self.overview_button = ttk.Button(
-            main_frame,
+            action_card,
             text=T("Overview"),
             command=self._open_progress_panel,
             style="Action.TButton",
-            width=22,
-            state="disabled",
+            width=16,
         )
-        self.overview_button.grid(row=0, column=0, padx=(12, 8), pady=(20, 10), sticky="nsew")
+        self.overview_button.grid(row=0, column=0, sticky="ew", padx=(0, 6), pady=(0, 8))
 
         self.transactions_button = ttk.Button(
-            main_frame,
+            action_card,
             text=T("Transactions"),
             command=self._open_transactions_panel,
             style="Action.TButton",
-            width=18,
+            width=16,
         )
-        self.transactions_button.grid(row=0, column=1, padx=(8, 12), pady=(20, 10), sticky="nsew")
+        self.transactions_button.grid(row=0, column=1, sticky="ew", padx=(6, 0), pady=(0, 8))
 
         self.rent_calculator_button = ttk.Button(
-            main_frame,
+            action_card,
             text=T("Rent Calculator"),
             command=self.open_rent_calculator_window,
             style="Action.TButton",
-            width=22,
+            width=16,
         )
-        self.rent_calculator_button.grid(row=1, column=0, padx=(12, 8), pady=(6, 10), sticky="nsew")
+        self.rent_calculator_button.grid(row=1, column=0, sticky="ew", padx=(0, 6), pady=(0, 8))
 
         self.contract_button = ttk.Button(
-            main_frame,
+            action_card,
             text=T("Reservation Contract"),
             command=self.open_reservation_contract_form,
             style="Action.TButton",
-            width=22,
             state="disabled",
+            width=16,
         )
-        self.contract_button.grid(row=1, column=1, padx=(8, 12), pady=(6, 10), sticky="nsew")
+        self.contract_button.grid(row=1, column=1, sticky="ew", padx=(6, 0), pady=(0, 10))
 
-        self.transactions_hint = ttk.Label(
-            main_frame,
-            text=T("Open client payment records"),
-            font=("Segoe UI", 10),
-            foreground="#374151",
-            wraplength=150,
+        self.payment_report_button = ttk.Button(
+            action_card,
+            text=T("Payment Report"),
+            command=self.open_payment_report_window,
+            style="Action.TButton",
+            width=18,
         )
-        self.transactions_hint.grid(row=2, column=0, columnspan=2, sticky="n", padx=(8, 12), pady=(0, 0))
+        self.payment_report_button.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
 
-        contract_frame = ttk.LabelFrame(main_frame, text=T("Saved Reservation Contracts"), padding=(12, 10))
-        contract_frame.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=(12, 12), pady=(8, 0))
+        contract_frame = ttk.LabelFrame(shell, text=T("Saved Reservation Contracts"), padding=(12, 10))
+        contract_frame.grid(row=3, column=0, columnspan=2, sticky="nsew")
         contract_frame.columnconfigure(0, weight=1)
 
         search_row = ttk.Frame(contract_frame)
@@ -1594,24 +1714,33 @@ class WelcomeWindow(tk.Tk):
             bg="#f8fafc",
             relief="solid",
             borderwidth=1,
-            font=("Segoe UI", 9),
+            font=("{Segoe UI}", 9),
         )
         self.saved_contract_listbox.pack(fill="both", expand=True)
         self.saved_contract_lookup = {}
 
         action_row = ttk.Frame(contract_frame)
         action_row.pack(fill="x", pady=(8, 0))
-        ttk.Button(action_row, text=T("Preview"), command=self.preview_selected_saved_contract).pack(side="left", padx=(0, 8))
-        ttk.Button(action_row, text=T("Print"), command=self.print_selected_saved_contract).pack(side="left")
+        ttk.Button(action_row, text=T("Preview"), command=self.preview_selected_saved_contract, style="Action.TButton").pack(side="left", padx=(0, 8))
+        ttk.Button(action_row, text=T("Print"), command=self.print_selected_saved_contract, style="Action.TButton").pack(side="left")
 
         self._refresh_saved_contract_list()
-        self.refresh_todo_list()
 
-        footer = ttk.Frame(self, padding=(0, 0, 24, 18))
+        footer = ttk.Frame(self, padding=(0, 0, 18, 12))
         footer.pack(fill="x")
         exit_button = ttk.Button(footer, text=T("Exit"), command=self.exit_app, style="Action.TButton", width=14)
         exit_button.pack(anchor="center")
-        self.protocol("WM_DELETE_WINDOW", self.exit_app)
+        self.protocol("WM_DELETE_WINDOW", self.close_welcome_window)
+
+    def close_welcome_window(self):
+        global _ACTIVE_WELCOME_WINDOW
+        if _ACTIVE_WELCOME_WINDOW is self:
+            _ACTIVE_WELCOME_WINDOW = None
+        self.destroy()
+        try:
+            self.quit()
+        except Exception:
+            pass
 
     def exit_app(self):
         sync_session_profile(clear=True)
@@ -1619,7 +1748,7 @@ class WelcomeWindow(tk.Tk):
         self.user_email_var.set("")
         self.login_status_var.set("")
         self.guest_mode = True
-        self.destroy()
+        self.close_welcome_window()
 
     def _open_progress_panel(self):
         self.destroy()
@@ -1737,6 +1866,14 @@ class WelcomeWindow(tk.Tk):
         calculator.grab_set()
         calculator.wait_window()
 
+    def open_payment_report_window(self):
+        if is_guest_profile(CURRENT_SESSION_PROFILE):
+            messagebox.showwarning(T("Access Denied"), T("Guest users cannot open payment reports. Overview is read-only."))
+            return
+        report_window = ClientPaymentReportWindow(self)
+        report_window.grab_set()
+        report_window.wait_window()
+
     def open_login_window(self):
         login_window = LoginWindow(self)
         login_window.grab_set()
@@ -1744,14 +1881,24 @@ class WelcomeWindow(tk.Tk):
         self._refresh_login_status()
 
     def open_registration_window(self):
+        previous_profile = {
+            "name": (self.user_name_var.get() or CURRENT_SESSION_PROFILE.get("name") or "").strip(),
+            "email": (self.user_email_var.get() or CURRENT_SESSION_PROFILE.get("email") or "").strip(),
+        }
+
         registration = UserRegistrationWindow(self)
         registration.grab_set()
         registration.wait_window()
-        current = load_user_profile()
-        if current.get("name"):
-            self.user_name_var.set(current["name"])
-        if current.get("email"):
-            self.user_email_var.set(current["email"])
+
+        if previous_profile["name"] or previous_profile["email"]:
+            self.user_name_var.set(previous_profile["name"])
+            self.user_email_var.set(previous_profile["email"])
+            set_current_session_profile(user_name=previous_profile["name"], user_email=previous_profile["email"])
+        else:
+            self.user_name_var.set("Guest")
+            self.user_email_var.set("Guest")
+            set_current_session_profile(user_name="Guest", user_email="Guest")
+
         self._refresh_login_status()
 
     def use_guest_profile(self):
@@ -1786,13 +1933,19 @@ class WelcomeWindow(tk.Tk):
         if not self.winfo_exists():
             return
 
-        for attr in ("overview_button", "contract_button"):
-            widget = getattr(self, attr, None)
-            if widget is None:
-                continue
+        overview_widget = getattr(self, "overview_button", None)
+        if overview_widget is not None:
             try:
-                if widget.winfo_exists():
-                    widget.configure(
+                if overview_widget.winfo_exists():
+                    overview_widget.configure(state="normal")
+            except Exception:
+                pass
+
+        contract_widget = getattr(self, "contract_button", None)
+        if contract_widget is not None:
+            try:
+                if contract_widget.winfo_exists():
+                    contract_widget.configure(
                         state="normal" if is_registered_user_profile() else "disabled"
                     )
             except Exception:
@@ -1813,7 +1966,7 @@ class WelcomeWindow(tk.Tk):
             self.user_email_var.set(profile["email"])
             if is_registered_user_profile(profile):
                 self.guest_mode = False
-                self.login_status_var.set(T("Logged in as {user_name}", user_name=profile["name"]))
+                self.login_status_var.set(T("Logged in as: {user_name}", user_name=profile["name"]))
                 self._sync_overview_access()
                 return
 
@@ -1846,16 +1999,6 @@ class WelcomeWindow(tk.Tk):
             set_current_session_profile(user_name=user_name, user_email=user_email)
             self._refresh_login_status()
             messagebox.showinfo(T("Login"), T("Guest read-only access enabled. Overview is view-only."))
-            self.destroy()
-            app = open_overview_window(force_new=True)
-            try:
-                app.deiconify()
-                app.lift()
-                app.focus_set()
-            except Exception:
-                pass
-            if hasattr(app, "focus_section"):
-                app.focus_section("overview")
             return
 
         if not verify_registered_user(user_name, user_email):
@@ -1877,16 +2020,6 @@ class WelcomeWindow(tk.Tk):
         self.user_email_var.set(user_email)
         self._refresh_login_status()
         messagebox.showinfo(T("Login"), T("Login successful. Access granted to the app."))
-        self.destroy()
-        app = open_overview_window(force_new=True)
-        try:
-            app.deiconify()
-            app.lift()
-            app.focus_set()
-        except Exception:
-            pass
-        if hasattr(app, "focus_section"):
-            app.focus_section("overview")
 
     def refresh_todo_list(self):
         if not hasattr(self, "todo_listbox") or self.todo_listbox is None:
@@ -2012,10 +2145,12 @@ class WelcomeWindow(tk.Tk):
 class RentCalculatorWindow(tk.Toplevel):
     def __init__(self, master=None):
         super().__init__(master)
+        self.previous_window = master
         self.title(T("Rent Calculator"))
         self.geometry("430x300")
         self.minsize(380, 260)
         self.configure(bg="#f8fafc")
+        self.protocol("WM_DELETE_WINDOW", self.go_back)
 
         container = ttk.Frame(self, padding=18)
         container.pack(fill="both", expand=True)
@@ -2040,8 +2175,11 @@ class RentCalculatorWindow(tk.Toplevel):
         self.remaining_rent_var = tk.StringVar(value="0.00")
         ttk.Label(container, textvariable=self.remaining_rent_var, font=("Segoe UI", 11, "bold"), foreground="#0f172a").pack(anchor="w")
 
-        ttk.Button(container, text=T("Close"), command=self.destroy).pack(anchor="e", pady=(16, 0))
+        ttk.Button(container, text=T("Back"), command=self.go_back).pack(anchor="e", pady=(16, 0))
         self.calculate()
+
+    def go_back(self):
+        close_popup_and_return(self)
 
     def _load_clients(self):
         manager = ClientManager(resolve_clients_data_path())
@@ -2072,10 +2210,12 @@ class RentCalculatorWindow(tk.Toplevel):
 class LoginWindow(tk.Toplevel):
     def __init__(self, master=None):
         super().__init__(master)
+        self.previous_window = master
         self.title(T("User Login"))
         self.geometry("420x220")
         self.minsize(340, 180)
         self.transient(master)
+        self.protocol("WM_DELETE_WINDOW", self.go_back)
 
         self.user_name_var = tk.StringVar(value=(master.user_name_var.get() if master is not None and hasattr(master, "user_name_var") else ""))
         self.user_email_var = tk.StringVar(value=(master.user_email_var.get() if master is not None and hasattr(master, "user_email_var") else ""))
@@ -2094,19 +2234,17 @@ class LoginWindow(tk.Toplevel):
         actions.grid(row=2, column=0, columnspan=2, sticky="e", pady=(12, 0))
         ttk.Button(actions, text=T("Login"), command=self.login_user).pack(side="left", padx=(0, 8))
         ttk.Button(actions, text=T("Reset"), command=self.reset_fields).pack(side="left", padx=(0, 8))
-        ttk.Button(actions, text=T("Cansel"), command=self.close_to_welcome).pack(side="left")
+        ttk.Button(actions, text=T("Back"), command=self.go_back).pack(side="left")
+
+    def go_back(self):
+        close_popup_and_return(self)
 
     def reset_fields(self):
         self.user_name_var.set("")
         self.user_email_var.set("")
 
     def close_to_welcome(self):
-        self.destroy()
-        if self.master is not None and hasattr(self.master, "focus_set"):
-            try:
-                self.master.focus_set()
-            except Exception:
-                pass
+        self.go_back()
 
     def login_user(self):
         user_name = self.user_name_var.get().strip()
@@ -2125,20 +2263,6 @@ class LoginWindow(tk.Toplevel):
             if self.master is not None and hasattr(self.master, "_apply_logged_in_user"):
                 self.master._apply_logged_in_user(user_name, user_email)
             self.destroy()
-            if self.master is not None and hasattr(self.master, "destroy"):
-                try:
-                    self.master.destroy()
-                except Exception:
-                    pass
-            app = open_overview_window(force_new=True)
-            try:
-                app.deiconify()
-                app.lift()
-                app.focus_set()
-            except Exception:
-                pass
-            if hasattr(app, "focus_section"):
-                app.focus_section("overview")
             messagebox.showinfo(T("Login"), T("Guest read-only access enabled. Overview is view-only."))
             return
 
@@ -2155,30 +2279,18 @@ class LoginWindow(tk.Toplevel):
         if self.master is not None and hasattr(self.master, "_apply_logged_in_user"):
             self.master._apply_logged_in_user(user_name, user_email)
         self.destroy()
-        if self.master is not None and hasattr(self.master, "destroy"):
-            try:
-                self.master.destroy()
-            except Exception:
-                pass
-        app = open_overview_window(force_new=True)
-        try:
-            app.deiconify()
-            app.lift()
-            app.focus_set()
-        except Exception:
-            pass
-        if hasattr(app, "focus_section"):
-            app.focus_section("overview")
         messagebox.showinfo(T("Login"), T("Login successful. Access granted to the app."))
 
 
 class UserRegistrationWindow(tk.Toplevel):
     def __init__(self, master=None):
         super().__init__(master)
+        self.previous_window = master
         self.title(T("User Registration"))
         self.geometry("420x220")
         self.minsize(340, 180)
         self.transient(master)
+        self.protocol("WM_DELETE_WINDOW", self.go_back)
 
         self.user_name_var = tk.StringVar(value="")
         self.user_email_var = tk.StringVar(value="")
@@ -2204,7 +2316,7 @@ class UserRegistrationWindow(tk.Toplevel):
         self.save_user_button = ttk.Button(actions, text=T("Save User"), command=self.register_user, state="disabled")
         self.save_user_button.pack(side="left", padx=(0, 8))
         ttk.Button(actions, text=T("Reset"), command=self.reset_fields).pack(side="left", padx=(0, 8))
-        ttk.Button(actions, text=T("Cansel"), command=self.close_to_login).pack(side="left")
+        ttk.Button(actions, text=T("Back"), command=self.go_back).pack(side="left")
 
         self.user_name_var.trace_add("write", lambda *_: self.update_registration_state())
         self.user_email_var.trace_add("write", lambda *_: self.update_registration_state())
@@ -2260,13 +2372,11 @@ class UserRegistrationWindow(tk.Toplevel):
         self.confirm_edit_button.configure(state="disabled")
         self.save_user_button.configure(state="disabled")
 
+    def go_back(self):
+        close_popup_and_return(self)
+
     def close_to_login(self):
-        self.destroy()
-        if self.master is not None and hasattr(self.master, "focus_set"):
-            try:
-                self.master.focus_set()
-            except Exception:
-                pass
+        self.go_back()
 
     def register_user(self):
         user_name = self.user_name_var.get().strip()
@@ -2826,10 +2936,12 @@ class ClientLogPreviewWindow(tk.Toplevel):
 class ClientPaymentReportWindow(tk.Toplevel):
     def __init__(self, master=None, client_name=""):
         super().__init__(master)
+        self.previous_window = master
         self.title(T("Client Payment Report"))
         self.geometry("900x620")
         self.minsize(720, 420)
         self.master_app = master
+        self.protocol("WM_DELETE_WINDOW", self.go_back)
         self.client_name = str(client_name or "").strip()
         self.manager = getattr(master, "client_manager", ClientManager("clients.json")) if master is not None else ClientManager("clients.json")
         self.manager.load_clients()
@@ -2842,25 +2954,73 @@ class ClientPaymentReportWindow(tk.Toplevel):
 
         main = ttk.Frame(self, padding=12)
         main.pack(fill="both", expand=True)
+        main.columnconfigure(1, weight=1)
 
-        contract_status_label = ttk.Label(
+        selector_row = ttk.Frame(main)
+        selector_row.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        selector_row.columnconfigure(1, weight=1)
+
+        ttk.Label(selector_row, text=T("Client Name")).pack(side="left", padx=(0, 8))
+        self.client_selector_var = tk.StringVar(value=self.client_name or T("<New Client>"))
+        self.client_selector = ttk.Combobox(
+            selector_row,
+            textvariable=self.client_selector_var,
+            values=self._client_combo_values(),
+            state="normal",
+            width=44,
+        )
+        self.client_selector.pack(side="left", fill="x", expand=True)
+        self.client_selector.bind("<<ComboboxSelected>>", self._handle_client_selection)
+        self.client_selector_var.trace_add("write", self._handle_client_selection)
+
+        self.contract_status_label = ttk.Label(
             main,
             text=f"{T('Contract Period Status')}: {self._contract_status_text()}",
             font=("Segoe UI", 10, "bold"),
             anchor="w",
         )
-        contract_status_label.pack(fill="x", pady=(0, 8))
+        self.contract_status_label.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 8))
 
-        text_widget = tk.Text(main, wrap="word", font=("Segoe UI", 10), padx=10, pady=10)
-        text_widget.pack(fill="both", expand=True)
-        text_widget.insert("1.0", self.build_report_text())
-        text_widget.configure(state="disabled")
+        self.text_widget = tk.Text(main, wrap="word", font=("Segoe UI", 10), padx=10, pady=10)
+        self.text_widget.grid(row=2, column=0, columnspan=2, sticky="nsew")
+        self._refresh_report_view()
 
         button_row = ttk.Frame(main)
-        button_row.pack(fill="x", pady=(8, 0))
+        button_row.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(8, 0))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Save Log"), command=self.save_report).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Close"), command=self.destroy).pack(side="left")
+        ttk.Button(button_row, text=T("Back"), command=self.go_back).pack(side="left")
+        main.rowconfigure(2, weight=1)
+
+    def go_back(self):
+        close_popup_and_return(self)
+
+    def _client_combo_values(self):
+        self.manager.load_clients()
+        names = sorted({str(client.name).strip() for client in self.manager.clients if getattr(client, "name", "").strip()})
+        return [T("<New Client>")] + names
+
+    def _handle_client_selection(self, *_args):
+        self._sync_selected_client()
+        self._refresh_report_view()
+
+    def _sync_selected_client(self):
+        raw_name = str(self.client_selector_var.get() or "").strip()
+        if not raw_name or raw_name == T("<New Client>"):
+            self.client_name = ""
+            self.client = None
+            return
+
+        self.client_name = raw_name
+        self.client = self._find_client(raw_name)
+
+    def _refresh_report_view(self):
+        self._sync_selected_client()
+        self.contract_status_label.configure(text=f"{T('Contract Period Status')}: {self._contract_status_text()}")
+        self.text_widget.configure(state="normal")
+        self.text_widget.delete("1.0", tk.END)
+        self.text_widget.insert("1.0", self.build_report_text())
+        self.text_widget.configure(state="disabled")
 
     def _find_client(self, client_name):
         if not client_name:
@@ -3013,10 +3173,13 @@ class ClientTransactionsWindow(tk.Toplevel):
         controls.pack(fill="x", pady=(8, 0))
         ttk.Button(controls, text=T("Add Month"), command=self.add_transaction_row).pack(side="left", padx=(0, 8))
         ttk.Button(controls, text=T("Save Transactions"), command=self.save_transactions).pack(side="left", padx=(0, 8))
-        ttk.Button(controls, text=T("Home"), command=self.go_home).pack(side="left", padx=(0, 8))
-        ttk.Button(controls, text=T("Close"), command=self.destroy).pack(side="left")
+        ttk.Button(controls, text=T("Back"), command=self.go_back).pack(side="left", padx=(0, 8))
+        ttk.Button(controls, text=T("Home"), command=self.go_home).pack(side="left")
 
         self.refresh_view()
+
+    def go_back(self):
+        close_popup_and_return(self)
 
     def _list_client_names(self):
         self.manager.load_clients()
@@ -4135,10 +4298,16 @@ class ProgressApp(tk.Tk):
         self.build_ui()
 
     def close_overview_window(self):
-        global _ACTIVE_PROGRESS_APP
+        global _ACTIVE_PROGRESS_APP, _ACTIVE_WELCOME_WINDOW
         if _ACTIVE_PROGRESS_APP is self:
             _ACTIVE_PROGRESS_APP = None
         self.destroy()
+        if _ACTIVE_WELCOME_WINDOW is None:
+            try:
+                welcome = open_welcome_home()
+                welcome.focus_set()
+            except Exception:
+                pass
 
     def build_ui(self):
         self.style.configure("Section.TLabelframe", padding=(10, 8), relief="groove")
