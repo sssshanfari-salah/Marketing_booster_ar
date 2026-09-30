@@ -352,12 +352,38 @@ def normalize_legacy_client_data(records):
             continue
 
         normalized = dict(item)
-        contract_details = normalized.get("contract_details")
-        if not isinstance(contract_details, dict):
+        contract_details = None
+        for key in ("contract_details", "contractDetails", "Contract Details"):
+            candidate = normalized.get(key)
+            if isinstance(candidate, dict):
+                contract_details = dict(candidate)
+                break
+
+        if contract_details is None:
             contract_details = {}
-        contract_details = dict(contract_details)
-        contract_details.setdefault("currency_type", "OMR")
-        normalized["contract_details"] = contract_details
+        else:
+            contract_details = dict(contract_details)
+
+        default_contract = {
+            "contract_number": "",
+            "starting_date": "",
+            "ending_date": "",
+            "commercial_registration_number": "",
+            "authorized_signature_name": "",
+            "rent_value": "",
+            "currency_type": "OMR",
+            "open_issues": "",
+            "duration_years": "",
+            "renewable": "",
+            "first_party": "",
+            "second_party": "",
+        }
+        merged_contract = {**default_contract, **contract_details}
+        merged_contract["currency_type"] = str(merged_contract.get("currency_type") or "").strip() or "OMR"
+        normalized["contract_details"] = merged_contract
+
+        for legacy_key in ("contractDetails", "Contract Details"):
+            normalized.pop(legacy_key, None)
 
         transactions = normalized.get("transactions")
         if isinstance(transactions, list):

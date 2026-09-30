@@ -193,7 +193,19 @@ class ShopReservationForm(tk.Tk):
         return matches[-1]
 
     def prefill_from_saved_client(self):
+        """
+        Clean, unified version of prefill logic.
+        Loads:
+        - main contract fields
+        - payment fields
+        - multi-shop entries (new structure)
+        """
+
         data = self.saved_client_data or {}
+
+        # ---------------------------------------------------------
+        # If no saved data → fill defaults
+        # ---------------------------------------------------------
         if not data:
             default_contact = ""
             self.main_vars["lessor"].set("")
@@ -212,15 +224,14 @@ class ShopReservationForm(tk.Tk):
             self.payment_vars["holder"].set("Khalid Salim Said Al Shanfari")
             return
 
+        # ---------------------------------------------------------
+        # MAIN CLIENT FIELDS
+        # ---------------------------------------------------------
         client_name = str(data.get("name") or data.get("Client Name") or "").strip()
         contact = str(data.get("contact") or data.get("Contact") or "").strip()
         business = str(data.get("business") or data.get("Business") or "").strip()
         email = str(data.get("email") or data.get("Email") or "").strip()
         address = str(data.get("address") or data.get("Address") or "").strip()
-        shop_number = str(data.get("shop_number") or data.get("Shop Number") or "").strip()
-        electrical_meter = str(data.get("electrical_meter") or data.get("notes") or "").strip()
-        contract_details = data.get("contract_details") if isinstance(data.get("contract_details"), dict) else {}
-        reservation_status = data.get("reservation_status") if isinstance(data.get("reservation_status"), dict) else {}
 
         self.main_vars["lessor"].set(client_name)
         self.main_vars["lessor contact"].set(contact)
@@ -228,7 +239,20 @@ class ShopReservationForm(tk.Tk):
         self.main_vars["email"].set(email)
         self.main_vars["address"].set(address)
         self.main_vars["lessee"].set("Khalid Salim Said")
-        self.main_vars["date"].set(normalize_python_date(contract_details.get("starting_date") or datetime.now().strftime("%d-%m-%Y")))
+
+        # ---------------------------------------------------------
+        # CONTRACT DETAILS
+        # ---------------------------------------------------------
+        contract_details = data.get("contract_details", {})
+        reservation_status = data.get("reservation_status", {})
+
+        # Date
+        starting_date = normalize_python_date(
+            contract_details.get("starting_date") or datetime.now().strftime("%d-%m-%Y")
+        )
+        self.main_vars["date"].set(starting_date)
+
+        # Duration
         duration_value = normalize_duration_value(
             contract_details.get("duration_years")
             or contract_details.get("Municipal Contract Duration")
@@ -238,9 +262,13 @@ class ShopReservationForm(tk.Tk):
         )
         self.main_vars["duration"].set(duration_value)
 
+        # Renewable
         renewable_value = normalize_renewable_value(contract_details.get("renewable") or "Yes")
         self.renew_var.set(renewable_value)
 
+        # ---------------------------------------------------------
+        # PAYMENT FIELDS
+        # ---------------------------------------------------------
         rent_value = str(
             contract_details.get("rent_value")
             or contract_details.get("monthly_rent")
@@ -248,6 +276,7 @@ class ShopReservationForm(tk.Tk):
             or reservation_status.get("rent_value")
             or ""
         ).strip()
+
         deposit_value = str(
             contract_details.get("security_deposit")
             or contract_details.get("deposit")
@@ -260,25 +289,33 @@ class ShopReservationForm(tk.Tk):
         self.payment_vars["bank"].set("01041108028002")
         self.payment_vars["holder"].set("Khalid Salim Said Al Shanfari")
 
-        if shop_number:
-            self.shop_var.set(shop_number)
-            if not electrical_meter:
-                electrical_meter = resolve_shop_electrical_meter(shop_number)
-            self.elec_var.set(electrical_meter)
-            self.add_shop(shop_number=shop_number, elec_value=electrical_meter, silent=True)
+        # ---------------------------------------------------------
+        # MULTI-SHOP LOADING (NEW CLEAN LOGIC)
+        # ---------------------------------------------------------
+        shops_list = data.get("shops", [])
 
-        shops = self.saved_client_data.get("shops", []) if isinstance(self.saved_client_data, dict) else []
-        for entry in shops:
+        # Clear existing rows first (if any)
+        for item in self.shop_tree.get_children():
+            self.shop_tree.delete(item)
+
+        # Load each shop entry
+        for entry in shops_list:
             if not isinstance(entry, dict):
                 continue
-            shop = str(entry.get("Shop") or entry.get("shop") or entry.get("shop_number") or "").strip()
-            meter = str(entry.get("Elec meter") or entry.get("Elec Meter") or entry.get("electrical_meter") or "").strip()
-            if shop and meter:
-                self.add_shop(shop, meter, silent=True)
-            elif shop:
-                meter = resolve_shop_electrical_meter(shop)
-                self.elec_var.set(meter)
 
+            shop = str(entry.get("Shop") or "").strip()
+            meter = str(entry.get("Elec meter") or "").strip()
+
+            if shop:
+                # Auto-fill meter if missing
+                if not meter:
+                    meter = resolve_shop_electrical_meter(shop)
+
+                self.add_shop(shop, meter, silent=True)
+
+        # ---------------------------------------------------------
+        # CONTACT FIELD (ensure correct binding)
+        # ---------------------------------------------------------
         if contact:
             self.main_vars.setdefault("lessor contact", tk.StringVar(value=contact))
             self.main_vars["lessor contact"].set(contact)

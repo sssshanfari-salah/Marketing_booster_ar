@@ -869,6 +869,24 @@ class ClientManagerTests(unittest.TestCase):
         migrated = package_app.normalize_legacy_client_data(legacy_records)
         self.assertEqual(migrated[0]["contract_details"]["currency_type"], "OMR")
 
+    def test_package_app_handles_blank_legacy_currency_aliases(self):
+        import package_app
+
+        legacy_records = [{
+            "name": "Legacy Client",
+            "contact": "+96890000000",
+            "business": "Retail",
+            "contractDetails": {
+                "contract_number": "CN-200",
+                "rent_value": "420",
+                "currency_type": "",
+            },
+        }]
+
+        migrated = package_app.normalize_legacy_client_data(legacy_records)
+        self.assertEqual(migrated[0]["contract_details"]["currency_type"], "OMR")
+        self.assertEqual(migrated[0]["contract_details"]["contract_number"], "CN-200")
+
     def test_emoji_font_families_include_windows_emoji_support(self):
         families = get_emoji_font_families()
         self.assertIn("Segoe UI Emoji", families)
