@@ -82,7 +82,7 @@ class WelcomeAccessTests(unittest.TestCase):
             "login_status_var": DummyVar(""),
             "destroy": lambda self: None,
             "guest_mode": False,
-            "_refresh_login_status": lambda self: getattr(self, "login_status_var").set(f"Logged in as {self.user_name_var.get()}") if getattr(self, "user_name_var").get() else None,
+            "_refresh_login_status": lambda self: getattr(self, "login_status_var").set(f"Logged in as: {self.user_name_var.get()}") if getattr(self, "user_name_var").get() else None,
         })()
 
         with mock.patch.object(ui, "verify_registered_user", return_value=True), \
@@ -93,7 +93,7 @@ class WelcomeAccessTests(unittest.TestCase):
             ui.WelcomeWindow.login_user(dummy)
 
         mock_msgbox.showinfo.assert_called_once()
-        self.assertEqual(dummy.login_status_var.get(), "Logged in as Alice")
+        self.assertEqual(dummy.login_status_var.get(), "Logged in as: Alice")
         mock_open_overview.assert_not_called()
 
     def test_successful_relogin_keeps_welcome_open_and_updates_status(self):
@@ -115,7 +115,7 @@ class WelcomeAccessTests(unittest.TestCase):
             "login_status_var": DummyVar(""),
             "destroy": lambda self: None,
             "guest_mode": False,
-            "_refresh_login_status": lambda self: getattr(self, "login_status_var").set(f"Logged in as {self.user_name_var.get()}") if getattr(self, "user_name_var").get() else None,
+            "_refresh_login_status": lambda self: getattr(self, "login_status_var").set(f"Logged in as: {self.user_name_var.get()}") if getattr(self, "user_name_var").get() else None,
         })()
 
         with mock.patch.object(ui, "verify_registered_user", return_value=True), \
@@ -127,7 +127,7 @@ class WelcomeAccessTests(unittest.TestCase):
             ui.WelcomeWindow.login_user(dummy)
 
         self.assertEqual(mock_open_overview.call_count, 0)
-        self.assertEqual(dummy.login_status_var.get(), "Logged in as Alice")
+        self.assertEqual(dummy.login_status_var.get(), "Logged in as: Alice")
 
     def test_overview_button_is_enabled_for_all_welcome_users(self):
         original_profile = getattr(__import__("clients_progress_ui", fromlist=["CURRENT_SESSION_PROFILE"]), "CURRENT_SESSION_PROFILE").copy()
@@ -206,6 +206,56 @@ class WelcomeAccessTests(unittest.TestCase):
         self.assertEqual(dummy.user_name_var.get(), "Alice")
         self.assertEqual(dummy.user_email_var.get(), "alice@example.com")
         self.assertEqual(dummy.login_status_var.get(), "Logged in as: Alice")
+
+    def test_register_user_updates_active_session_profile(self):
+        import clients_progress_ui as ui
+
+        class DummyVar:
+            def __init__(self, value=""):
+                self.value = value
+            def get(self):
+                return self.value
+            def set(self, value):
+                self.value = value
+
+        master = type("DummyMaster", (), {
+            "user_name_var": DummyVar(""),
+            "user_email_var": DummyVar(""),
+            "_refresh_login_status": lambda self: None,
+        })()
+
+        registration = object.__new__(ui.UserRegistrationWindow)
+        registration.master = master
+        registration.user_name_var = DummyVar("Alice")
+        registration.user_email_var = DummyVar("alice@example.com")
+        registration.destroy = lambda: None
+        registration.focus_set = lambda: None
+        registration.registration_status_var = DummyVar("")
+
+        with mock.patch.object(ui, "user_registeration", return_value={"name": "Alice", "email": "alice@example.com"}), \
+             mock.patch.object(ui, "set_current_session_profile") as mock_set_profile, \
+             mock.patch.object(ui, "messagebox") as mock_msgbox:
+            ui.UserRegistrationWindow.register_user(registration)
+
+        mock_set_profile.assert_called_once_with(user_name="Alice", user_email="alice@example.com")
+        mock_msgbox.showinfo.assert_called_once()
+
+    def test_reopening_welcome_refreshes_login_state(self):
+        import clients_progress_ui as ui
+
+        welcome_window = mock.Mock()
+        welcome_window.winfo_exists.return_value = True
+        welcome_window._refresh_login_status = mock.Mock()
+
+        ui._ACTIVE_WELCOME_WINDOW = welcome_window
+        ui._ACTIVE_PROGRESS_APP = mock.Mock()
+
+        ui.open_welcome_home(force_new=False)
+
+        welcome_window._refresh_login_status.assert_called_once()
+        welcome_window.deiconify.assert_called_once()
+        welcome_window.lift.assert_called_once()
+        welcome_window.focus_set.assert_called_once()
 
     def test_switching_between_welcome_and_overview_closes_the_other_window(self):
         import clients_progress_ui as ui
@@ -895,6 +945,66 @@ class ClientManagerTests(unittest.TestCase):
             self.assertNotIn("12", cleaned_payload)
         finally:
             temp_dir.cleanup()
+
+    def test_reservation_status_button_opens_contract_form_instead_of_popup(self):
+        import clients_progress_ui as ui
+
+        dummy = object.__new__(ui.ProgressApp)
+        dummy.client_name_var = type("DummyVar", (), {"get": lambda self: "Ali"})()
+        dummy.contact_var = type("DummyVar", (), {"get": lambda self: "+96891234567"})()
+        dummy.shop_number_var = type("DummyVar", (), {"get": lambda self: "12"})()
+        dummy.electrical_meter_var = type("DummyVar", (), {"get": lambda self: "28609687"})()
+
+        with mock.patch.object(ui, "ShopReservationForm") as mock_form, \
+             mock.patch.object(ui, "is_registered_user_profile", return_value=True), \
+             mock.patch.object(ui, "is_guest_profile", return_value=False), \
+             mock.patch.object(ui, "CURRENT_SESSION_PROFILE", {"name": "Salah", "email": "salah@example.com"}):
+            ui.ProgressApp.open_reservation_status_window(dummy)
+
+        mock_form.assert_called_once_with(client_name="Ali")
+
+    def test_contract_form_prefills_client_details_and_auto_syncs_shop_meter(self):
+        module_path = Path(__file__).resolve().parent / "ui_reservation_contract.py"
+        spec = importlib.util.spec_from_file_location("ui_reservation_contract_module_prefill", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        form = object.__new__(module.ShopReservationForm)
+        form.saved_client_data = {
+            "name": "Ali",
+            "contact": "+96891234567",
+            "business": "Retail",
+            "email": "ali@example.com",
+            "address": "Muscat",
+            "shop_number": "12",
+            "electrical_meter": "28609687",
+        }
+        form.client_name = "Ali"
+        form.main_vars = {
+            "lessor": tk.StringVar(),
+            "lessor contact": tk.StringVar(),
+            "lessee": tk.StringVar(),
+            "lessee contact": tk.StringVar(),
+            "date": tk.StringVar(),
+            "duration": tk.StringVar(),
+            "business": tk.StringVar(),
+            "email": tk.StringVar(),
+            "address": tk.StringVar(),
+        }
+        form.renew_var = tk.StringVar(value="Yes")
+        form.shop_var = tk.StringVar()
+        form.elec_var = tk.StringVar()
+        form.payment_vars = {"rent": tk.StringVar(), "deposit": tk.StringVar(), "bank": tk.StringVar(), "holder": tk.StringVar()}
+
+        form.prefill_from_saved_client()
+
+        self.assertEqual(form.main_vars["lessor"].get(), "Ali")
+        self.assertEqual(form.main_vars["lessor contact"].get(), "+96891234567")
+        self.assertEqual(form.main_vars["business"].get(), "Retail")
+        self.assertEqual(form.main_vars["email"].get(), "ali@example.com")
+        self.assertEqual(form.main_vars["address"].get(), "Muscat")
+        self.assertEqual(form.shop_var.get(), "12")
+        self.assertEqual(form.elec_var.get(), "28609687")
 
 
 if __name__ == "__main__":

@@ -467,66 +467,11 @@ def resolve_log_output_dir(log_type="general"):
 
 
 def load_shop_electrical_meter_map():
-    meters_path = Path(__file__).resolve().parent / "Shops_Elect_meters.json"
-    mapping = {
-        "1": "28600022",
-        "2": "28602713",
-        "3": "28602714",
-        "4": "28602710",
-        "5": "28602692",
-        "6": "28602712",
-        "7": "28602709",
-        "8": "28602711",
-        "9": "28609691",
-        "10": "28609681",
-        "11": "28609682",
-        "12": "28609687",
-        "13": "28609683",
-        "14": "28609688",
-        "15": "28609689",
-        "16": "28609684",
-        "17": "28609685",
-        "18": "28609690",
-        "19": "28609692",
-        "20": "28609693",
-        "21": "28609694",
-        "22": "28609695",
-        "23": "28609696",
-        "24": "28609697",
-        "25": "28609698",
-        "26": "28609699",
-        "27": "28609700",
-        "28": "28609701",
-        "29": "28609702",
-        "30": "28609703",
-        "31": "28609704",
-        "32": "28609705",
-        "33": "28609706",
-        "34": "28609707",
-        "35": "28609708",
-        "36": "28609709",
-        "Office": "28609686",
-    }
-    if not meters_path.exists():
-        return mapping
-
     try:
-        with meters_path.open("r", encoding="utf-8") as infile:
-            entries = json.load(infile)
-    except (json.JSONDecodeError, OSError, TypeError):
-        return mapping
-
-    if not isinstance(entries, list):
-        return mapping
-
-    for item in entries:
-        if not isinstance(item, dict):
-            continue
-        shop_value = str(item.get("Shop") or item.get("shop") or item.get("shop_number") or "").strip()
-        meter_value = str(item.get("Elec meter") or item.get("Elec Meter") or item.get("electrical_meter") or item.get("meter") or "").strip()
-        if shop_value and meter_value:
-            mapping[shop_value] = meter_value
-    return mapping
+        from shops_conversion_to_dic import shop_meter_map as shared_shop_meter_map
+        return dict(shared_shop_meter_map)
+    except Exception:
+        return {}
 
 
 def resolve_shop_electrical_meter(shop_number):
@@ -727,11 +672,17 @@ class DatePickerPopup(tk.Toplevel):
         self.current_year = datetime.today().year
         self.current_month = datetime.today().month
         if initial_value:
-            try:
-                initial_dt = datetime.strptime(initial_value, "%Y-%m-%d")
-                self.current_year = initial_dt.year
-                self.current_month = initial_dt.month
-            except ValueError:
+            parsed = False
+            for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y %H:%M:%S"):
+                try:
+                    initial_dt = datetime.strptime(initial_value, fmt)
+                    self.current_year = initial_dt.year
+                    self.current_month = initial_dt.month
+                    parsed = True
+                    break
+                except ValueError:
+                    continue
+            if not parsed:
                 try:
                     initial_dt = datetime.fromisoformat(initial_value)
                     self.current_year = initial_dt.year
@@ -770,7 +721,7 @@ class DatePickerPopup(tk.Toplevel):
 
     def _confirm(self):
         if not self.result:
-            self.result = datetime(self.current_year, self.current_month, 1).strftime("%Y-%m-%d")
+            self.result = datetime(self.current_year, self.current_month, 1).strftime("%d-%m-%Y")
         self.destroy()
 
     def _select_day(self, row, col):
@@ -778,7 +729,7 @@ class DatePickerPopup(tk.Toplevel):
         text = button.cget("text")
         if not text:
             return
-        self.result = datetime(self.current_year, self.current_month, int(text)).strftime("%Y-%m-%d")
+        self.result = datetime(self.current_year, self.current_month, int(text)).strftime("%d-%m-%Y")
         self.destroy()
 
     def prev_month(self):
@@ -1468,6 +1419,11 @@ def open_welcome_home(force_new=False):
                     welcome.focus_set()
                 except Exception:
                     pass
+                try:
+                    if hasattr(welcome, "_refresh_login_status"):
+                        welcome._refresh_login_status()
+                except Exception:
+                    pass
                 return welcome
         except Exception:
             pass
@@ -1682,10 +1638,9 @@ class WelcomeWindow(tk.Tk):
             text=T("Reservation Contract"),
             command=self.open_reservation_contract_form,
             style="Action.TButton",
-            state="disabled",
             width=16,
         )
-        self.contract_button.grid(row=1, column=1, sticky="ew", padx=(6, 0), pady=(0, 10))
+        self.contract_button.grid(row=1, column=1, sticky="ew", padx=(6, 0), pady=(0, 8))
 
         self.payment_report_button = ttk.Button(
             action_card,
@@ -1971,7 +1926,7 @@ class WelcomeWindow(tk.Tk):
                 return
 
             self.guest_mode = True
-            self.login_status_var.set("Guest user selected")
+            self.login_status_var.set(T("Logged in as: {user_name}", user_name=profile["name"] or "Guest"))
             self._sync_overview_access()
             return
 
@@ -2397,6 +2352,8 @@ class UserRegistrationWindow(tk.Toplevel):
         if not profile.get("name") or not profile.get("email"):
             messagebox.showwarning(T("User Registration"), T("Please enter a valid user name and email address."))
             return
+
+        set_current_session_profile(user_name=profile.get("name", ""), user_email=profile.get("email", ""))
 
         if self.master is not None and hasattr(self.master, "user_name_var"):
             self.master.user_name_var.set(profile.get("name", ""))
@@ -3035,13 +2992,13 @@ class ClientPaymentReportWindow(tk.Toplevel):
         contract_details = self.client.contract_details or {}
         contract_start = str(contract_details.get("starting_date") or "").strip()
         contract_end = str(contract_details.get("ending_date") or "").strip()
-        current_date = datetime.now().strftime("%Y-%m-%d")
+        current_date = datetime.now().strftime("%d-%m-%Y")
         status = "Active"
         if contract_start and contract_end:
             try:
-                start_dt = datetime.strptime(contract_start, "%Y-%m-%d")
-                end_dt = datetime.strptime(contract_end, "%Y-%m-%d")
-                today_dt = datetime.strptime(current_date, "%Y-%m-%d")
+                start_dt = datetime.strptime(contract_start, "%d-%m-%Y")
+                end_dt = datetime.strptime(contract_end, "%d-%m-%Y")
+                today_dt = datetime.strptime(current_date, "%d-%m-%Y")
                 if today_dt < start_dt:
                     status = "Not Started"
                 elif today_dt > end_dt:
@@ -3484,22 +3441,23 @@ class ClientTransactionsWindow(tk.Toplevel):
             return str(due_date_value or "").strip()
 
         last_day = calendar.monthrange(month_start.year, month_start.month)[1]
-        month_end = datetime(month_start.year, month_start.month, last_day).strftime("%Y-%m-%d")
+        month_end = datetime(month_start.year, month_start.month, last_day).strftime("%d-%m-%Y")
 
         value = str(due_date_value or "").strip()
         if not value:
             return month_end
 
         try:
-            parsed = datetime.strptime(value, "%Y-%m-%d")
+            parsed = datetime.strptime(value, "%d-%m-%Y")
         except ValueError:
             try:
                 parsed = datetime.fromisoformat(value)
+                parsed = parsed if parsed else datetime.strptime(value, "%Y-%m-%d")
             except ValueError:
                 return month_end
 
         if parsed.year == month_start.year and parsed.month == month_start.month:
-            return parsed.strftime("%Y-%m-%d")
+            return parsed.strftime("%d-%m-%Y")
         return month_end
 
     def _get_previous_month(self, month_value):
@@ -4288,6 +4246,7 @@ class ProgressApp(tk.Tk):
         self.electrical_meter_var = tk.StringVar(value="")
         self.email_var = tk.StringVar(value="")
         self.review_var = tk.StringVar(value="")
+        self.selected_shops = []
         self.total_tasks_var = tk.StringVar(value="0")
         self.new_task_var = tk.StringVar()
 
@@ -4779,6 +4738,7 @@ class ProgressApp(tk.Tk):
 
     def clear_client_form(self):
         self.plan = None
+        self.selected_shops = []
         self.client_name_var.set("")
         self.country_name_var.set(DEFAULT_COUNTRY)
         self.contact_var.set("")
@@ -5201,9 +5161,29 @@ class ProgressApp(tk.Tk):
         shop_number = str(self.shop_number_var.get()).strip()
         if not shop_number:
             return
-        meter_value = load_shop_electrical_meter_map().get(shop_number)
+
+        try:
+            from shops_conversion_to_dic import shop_meter_map, validate_shop
+        except ImportError:
+            shop_meter_map = load_shop_electrical_meter_map()
+            validate_shop = None
+
+        if validate_shop is not None:
+            valid, msg = validate_shop(shop_number, self.selected_shops)
+            if not valid:
+                messagebox.showerror(T("Error"), T(msg))
+                self.shop_number_var.set("")
+                return
+
+        meter_value = shop_meter_map.get(shop_number, "")
+        if not meter_value:
+            meter_value = load_shop_electrical_meter_map().get(shop_number, "")
+
         if meter_value:
             self.electrical_meter_var.set(str(meter_value))
+
+        if shop_number and not any(str(item.get("Shop", "")).strip() == shop_number for item in self.selected_shops):
+            self.selected_shops.append({"Shop": shop_number, "Elec meter": str(meter_value or "")})
 
     def save_current_client(self):
         if self._require_registered_user_for_changes(T("Save client")):
@@ -5424,7 +5404,33 @@ class ProgressApp(tk.Tk):
         if not is_registered_user_profile() or is_guest_profile(CURRENT_SESSION_PROFILE):
             messagebox.showwarning(T("Access Denied"), T("Registered users only. Guest access is limited to clients, reviews, tasks and payment reports."))
             return
-        ReservationStatusWindow(self)
+
+        client_name = str(self.client_name_var.get() or "").strip()
+        if client_name in {"", T("<New Client>")}:
+            client_name = ""
+
+        try:
+            from ui_reservation_contract import ShopReservationForm
+        except ImportError:
+            messagebox.showerror(T("Form unavailable"), T("The reservation contract form could not be loaded."))
+            return
+
+        client_obj = None
+        if client_name:
+            self.client_manager.load_clients()
+            client_obj = next((entry for entry in self.client_manager.clients if entry.name.strip().lower() == client_name.lower()), None)
+
+        client_data = {
+            "name": client_name or "",
+            "shops": [
+                {"Shop": str(item.get("Shop", "")).strip(), "Elec meter": str(item.get("Elec meter", "")).strip()}
+                for item in self.selected_shops
+                if str(item.get("Shop", "")).strip()
+            ],
+        }
+        form = ShopReservationForm(client_name=client_name or None, client_data=client_data, client_obj=client_obj)
+        form.grab_set()
+        form.wait_window()
 
 
 class ClientDetailsWindow(tk.Toplevel):

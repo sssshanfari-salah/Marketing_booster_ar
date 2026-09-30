@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -21,8 +22,59 @@ ENTRY_SCRIPT = SOURCE_DIR / "main.py"
 DIST_DIR = APP_DIR / "dist"
 BUILD_DIR = APP_DIR / "build"
 APP_NAME = "marketing_booster_ar"
+
+
+def build_default_shop_meter_catalog():
+    return [
+        {"Shop": "1", "Elec meter": "28600022"},
+        {"Shop": "2", "Elec meter": "28602713"},
+        {"Shop": "3", "Elec meter": "28602714"},
+        {"Shop": "4", "Elec meter": "28602710"},
+        {"Shop": "5", "Elec meter": "28602692"},
+        {"Shop": "6", "Elec meter": "28602712"},
+        {"Shop": "7", "Elec meter": "28602709"},
+        {"Shop": "8", "Elec meter": "28602711"},
+        {"Shop": "9", "Elec meter": "28609691"},
+        {"Shop": "10", "Elec meter": "28609681"},
+        {"Shop": "11", "Elec meter": "28609682"},
+        {"Shop": "12", "Elec meter": "28609687"},
+        {"Shop": "13", "Elec meter": "28609683"},
+        {"Shop": "14", "Elec meter": "28609688"},
+        {"Shop": "15", "Elec meter": "28609689"},
+        {"Shop": "16", "Elec meter": "28609684"},
+        {"Shop": "17", "Elec meter": "28609685"},
+        {"Shop": "18", "Elec meter": "28609690"},
+        {"Shop": "19", "Elec meter": "28609692"},
+        {"Shop": "20", "Elec meter": "28609693"},
+        {"Shop": "21", "Elec meter": "28609694"},
+        {"Shop": "22", "Elec meter": "28609695"},
+        {"Shop": "23", "Elec meter": "28609696"},
+        {"Shop": "24", "Elec meter": "28609697"},
+        {"Shop": "25", "Elec meter": "28609698"},
+        {"Shop": "26", "Elec meter": "28609699"},
+        {"Shop": "27", "Elec meter": "28609700"},
+        {"Shop": "28", "Elec meter": "28609701"},
+        {"Shop": "29", "Elec meter": "28609702"},
+        {"Shop": "30", "Elec meter": "28609703"},
+        {"Shop": "31", "Elec meter": "28609704"},
+        {"Shop": "32", "Elec meter": "28609705"},
+        {"Shop": "33", "Elec meter": "28609706"},
+        {"Shop": "34", "Elec meter": "28609707"},
+        {"Shop": "35", "Elec meter": "28609708"},
+        {"Shop": "36", "Elec meter": "28609709"},
+        {"Shop": "Office", "Elec meter": "28609686"},
+    ]
+
+
+DEFAULT_SHOP_METER_CATALOG = build_default_shop_meter_catalog()
 APP_DISPLAY_NAME = "Clients Manager"
 SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
+PYTHON_SOURCE_FILES = sorted(
+    path
+    for path in SOURCE_DIR.glob("*.py")
+    if path.name not in {"test_clients_management.py", "tmp_debug.py", "verify_language_fix.py", "verify_ui.py"}
+)
+PROJECT_SOURCE_MODULES = list(PYTHON_SOURCE_FILES)
 
 
 def resolve_target_icon():
@@ -42,6 +94,8 @@ TARGET_ICON = resolve_target_icon()
 COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
 SHOPS_ELECTRICAL_METERS_FILE = SOURCE_DIR / "Shops_Elect_meters.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
+USERS_DATA_FILE = APP_DIR / "users.json"
+GUESTS_DATA_FILE = APP_DIR / "guests.json"
 LEGACY_CLIENTS_DATA_FILE = LEGACY_SOURCE_DIR / "clients.json"
 DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
 SUPPORTING_DOCUMENTS_DIR = APP_DIR / "supporting_documents"
@@ -66,6 +120,8 @@ LEGACY_DISPLAY_NAMES = ["Marketing Booster", "Marketing Booster AR", "Clients Ma
 RUNTIME_DATA_FILES = [
     TARGET_ICON,
     CLIENTS_DATA_FILE,
+    USERS_DATA_FILE,
+    GUESTS_DATA_FILE,
     COUNTRY_CODES_DATA,
     SHOPS_ELECTRICAL_METERS_FILE,
     DOCUMENTS_DATA_FILE,
@@ -79,12 +135,10 @@ RUNTIME_DATA_FILES = [path for path in RUNTIME_DATA_FILES if path is not None an
 def validate_runtime_asset_catalog():
     required_paths = [
         ENTRY_SCRIPT,
-        SOURCE_DIR / "main.py",
-        SOURCE_DIR / "clients_management.py",
-        SOURCE_DIR / "clients_progress_ui.py",
-        SOURCE_DIR / "translations.py",
-        SOURCE_DIR / "ui_reservation_contract.py",
+        *PROJECT_SOURCE_MODULES,
         CLIENTS_DATA_FILE,
+        USERS_DATA_FILE,
+        GUESTS_DATA_FILE,
         COUNTRY_CODES_DATA,
         SHOPS_ELECTRICAL_METERS_FILE,
         DOCUMENTS_DATA_FILE,
@@ -119,6 +173,8 @@ def validate_runtime_asset_catalog():
         "def T(text, **kwargs):",
         "def validate_translation_coverage():",
         "CURRENT_LANGUAGE = \"eng\"",
+        "def ensure_default_guest_session():",
+        "Logged in as: {user_name}",
         "Client Details",
     ]
 
@@ -145,6 +201,8 @@ def validate_runtime_asset_catalog():
         "CURRENT_LANGUAGE = lang.CURRENT_LANGUAGE",
         "def T(key: str, **kwargs)",
         "def set_language(lang_code)",
+        '"Guest user selected"',
+        '"Logged in as {user_name}"',
     ]
 
     missing_markers = [marker for marker in ui_markers if marker not in ui_content]
@@ -392,8 +450,31 @@ def ensure_runtime_files():
     if not ENTRY_SCRIPT.exists():
         raise FileNotFoundError(f"Entry script not found: {ENTRY_SCRIPT}")
 
-    if not CLIENTS_DATA_FILE.exists():
-        CLIENTS_DATA_FILE.write_text("[]", encoding="utf-8")
+    def ensure_json_file(path, default_content, parser_ok=lambda payload: True):
+        if not path.exists():
+            path.write_text(default_content, encoding="utf-8")
+            return
+
+        try:
+            content = path.read_text(encoding="utf-8")
+            payload = json.loads(content) if content.strip() else None
+        except (ValueError, TypeError):
+            payload = None
+
+        if payload is None or not parser_ok(payload):
+            path.write_text(default_content, encoding="utf-8")
+
+    ensure_json_file(CLIENTS_DATA_FILE, "[]", lambda payload: isinstance(payload, list))
+    ensure_json_file(
+        USERS_DATA_FILE,
+        json.dumps({"users": []}, ensure_ascii=False, indent=2),
+        lambda payload: isinstance(payload, dict) and isinstance(payload.get("users", []), list),
+    )
+    ensure_json_file(
+        GUESTS_DATA_FILE,
+        json.dumps({"guests": []}, ensure_ascii=False, indent=2),
+        lambda payload: isinstance(payload, dict) and isinstance(payload.get("guests", []), list),
+    )
 
     CLIENTS_ROOT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -402,8 +483,11 @@ def ensure_runtime_files():
         COUNTRY_CODES_DATA.write_text("[]", encoding="utf-8")
 
     SHOPS_ELECTRICAL_METERS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if not SHOPS_ELECTRICAL_METERS_FILE.exists():
-        SHOPS_ELECTRICAL_METERS_FILE.write_text("[]", encoding="utf-8")
+    if not SHOPS_ELECTRICAL_METERS_FILE.exists() or SHOPS_ELECTRICAL_METERS_FILE.stat().st_size == 0:
+        SHOPS_ELECTRICAL_METERS_FILE.write_text(
+            json.dumps(DEFAULT_SHOP_METER_CATALOG, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     DOCUMENTS_DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
     if not DOCUMENTS_DATA_FILE.exists():

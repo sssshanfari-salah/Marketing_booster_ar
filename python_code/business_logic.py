@@ -98,25 +98,29 @@ def load_country_codes():
 
 
 def load_shop_electrical_meter_map():
-    meters_path = Path(__file__).resolve().parent / "Shops_Elect_meters.json"
-    mapping = {}
-    if not meters_path.exists():
-        return mapping
     try:
-        with meters_path.open("r", encoding="utf-8") as handle:
-            entries = json.load(handle)
-    except (json.JSONDecodeError, OSError, TypeError):
+        from shops_conversion_to_dic import shop_meter_map as shared_mapping
+        return dict(shared_mapping)
+    except Exception:
+        meters_path = Path(__file__).resolve().parent / "Shops_Elect_meters.json"
+        mapping = {}
+        if not meters_path.exists():
+            return mapping
+        try:
+            with meters_path.open("r", encoding="utf-8") as handle:
+                entries = json.load(handle)
+        except (json.JSONDecodeError, OSError, TypeError):
+            return mapping
+        if not isinstance(entries, list):
+            return mapping
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            shop_value = str(item.get("Shop") or item.get("shop") or item.get("shop_number") or "").strip()
+            meter_value = str(item.get("Elec meter") or item.get("Elec Meter") or item.get("electrical_meter") or item.get("meter") or "").strip()
+            if shop_value and meter_value:
+                mapping[shop_value] = meter_value
         return mapping
-    if not isinstance(entries, list):
-        return mapping
-    for item in entries:
-        if not isinstance(item, dict):
-            continue
-        shop_value = str(item.get("Shop") or item.get("shop") or item.get("shop_number") or "").strip()
-        meter_value = str(item.get("Elec meter") or item.get("Elec Meter") or item.get("electrical_meter") or item.get("meter") or "").strip()
-        if shop_value and meter_value:
-            mapping[shop_value] = meter_value
-    return mapping
 
 
 def parse_task_items(raw_value, fallback_total=0):
@@ -212,7 +216,7 @@ def generate_contract_months(start_date=None, end_date=None):
     def parse_date(value):
         if not value:
             return None
-        for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y"):
+        for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d"):
             try:
                 return datetime.strptime(value, fmt)
             except ValueError:

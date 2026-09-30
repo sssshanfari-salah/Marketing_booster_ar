@@ -166,7 +166,7 @@ def generate_contract_months(start_date=None, end_date=None):
     def parse_date(value):
         if not value:
             return None
-        for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y"):
+        for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d"):
             try:
                 return datetime.strptime(value, fmt)
             except ValueError:
@@ -558,7 +558,7 @@ class ClientManager:
             return False
 
         client.reviews.append({
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "date": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
             "review": review,
             "comment": "",
         })
@@ -836,13 +836,13 @@ def build_client_payment_report_text(client_name, client_manager=None):
     contract_details = client.contract_details or {}
     contract_start = str(contract_details.get("starting_date") or "").strip()
     contract_end = str(contract_details.get("ending_date") or "").strip()
-    current_date = datetime.now().strftime("%Y-%m-%d")
+    current_date = datetime.now().strftime("%d-%m-%Y")
     contract_status = "Active"
     if contract_start and contract_end:
         try:
-            start_dt = datetime.strptime(contract_start, "%Y-%m-%d")
-            end_dt = datetime.strptime(contract_end, "%Y-%m-%d")
-            today_dt = datetime.strptime(current_date, "%Y-%m-%d")
+            start_dt = datetime.strptime(contract_start, "%d-%m-%Y")
+            end_dt = datetime.strptime(contract_end, "%d-%m-%Y")
+            today_dt = datetime.strptime(current_date, "%d-%m-%Y")
             if today_dt < start_dt:
                 contract_status = "Not Started"
             elif today_dt > end_dt:

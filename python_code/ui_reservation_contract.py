@@ -15,15 +15,35 @@ from clients_management import (
     normalize_duration_value,
     normalize_renewable_value,
     normalize_reservation_status,
-    normalize_shop_value,
     resolve_clients_data_path,
 )
+from clients_progress_ui import pick_date
+from shops_conversion_to_dic import shop_meter_map
+from translations import T
 
-try:
-    from clients_progress_ui import T, pick_date
-except ImportError:
-    from translations import T
-    pick_date = None
+
+def normalize_python_date(value):
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return ""
+
+    for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(raw_value, fmt).strftime("%d-%m-%Y")
+        except ValueError:
+            continue
+
+    try:
+        return datetime.fromisoformat(raw_value).strftime("%d-%m-%Y")
+    except ValueError:
+        return raw_value
+
+
+def resolve_shop_electrical_meter(shop_number):
+    shop_value = str(shop_number or "").strip()
+    if not shop_value:
+        return ""
+    return str(shop_meter_map.get(shop_value, "")).strip()
 
 APP_ICON = None
 for candidate in [
@@ -59,7 +79,7 @@ class ShopReservationForm(tk.Tk):
 
         return True, ""
 
-    def __init__(self, client_name=None, client_data=None):
+    def __init__(self, client_name=None, client_data=None, client_obj=None):
         super().__init__()
         self.title(T("Advanced Shop Reservation Form - Starco Commercial Complex"))
         self.geometry("980x760")
@@ -71,8 +91,24 @@ class ShopReservationForm(tk.Tk):
         except tk.TclError:
             pass
 
-        self.saved_client_data = client_data or self.load_saved_client_data(client_name)
-        self.client_name = str(client_name or self.saved_client_data.get("name") or "").strip()
+        if isinstance(client_data, dict):
+            self.saved_client_data = dict(client_data)
+        elif client_obj is not None:
+            if hasattr(client_obj, "to_dict"):
+                self.saved_client_data = dict(client_obj.to_dict())
+            elif isinstance(client_obj, dict):
+                self.saved_client_data = dict(client_obj)
+            else:
+                self.saved_client_data = {}
+        else:
+            self.saved_client_data = self.load_saved_client_data(client_name) or {}
+
+        self.client_name = str(
+            client_name
+            or self.saved_client_data.get("name")
+            or self.saved_client_data.get("Client Name")
+            or ""
+        ).strip()
         self.client_manager = ClientManager(resolve_clients_data_path())
 
         style = ttk.Style(self)
@@ -162,9 +198,12 @@ class ShopReservationForm(tk.Tk):
             default_contact = ""
             self.main_vars["lessor"].set("")
             self.main_vars["lessor contact"].set(default_contact)
+            self.main_vars["business"].set("")
+            self.main_vars["email"].set("")
+            self.main_vars["address"].set("")
             self.main_vars["lessee"].set("Khalid Salim Said")
             self.main_vars["lessee contact"].set(default_contact)
-            self.main_vars["date"].set(datetime.now().strftime("%d/%m/%Y"))
+            self.main_vars["date"].set(datetime.now().strftime("%d-%m-%Y"))
             self.main_vars["duration"].set("")
             self.renew_var.set("Yes")
             self.payment_vars["rent"].set("")
@@ -175,14 +214,21 @@ class ShopReservationForm(tk.Tk):
 
         client_name = str(data.get("name") or data.get("Client Name") or "").strip()
         contact = str(data.get("contact") or data.get("Contact") or "").strip()
+        business = str(data.get("business") or data.get("Business") or "").strip()
+        email = str(data.get("email") or data.get("Email") or "").strip()
+        address = str(data.get("address") or data.get("Address") or "").strip()
         shop_number = str(data.get("shop_number") or data.get("Shop Number") or "").strip()
         electrical_meter = str(data.get("electrical_meter") or data.get("notes") or "").strip()
         contract_details = data.get("contract_details") if isinstance(data.get("contract_details"), dict) else {}
         reservation_status = data.get("reservation_status") if isinstance(data.get("reservation_status"), dict) else {}
 
         self.main_vars["lessor"].set(client_name)
+        self.main_vars["lessor contact"].set(contact)
+        self.main_vars["business"].set(business)
+        self.main_vars["email"].set(email)
+        self.main_vars["address"].set(address)
         self.main_vars["lessee"].set("Khalid Salim Said")
-        self.main_vars["date"].set(str(contract_details.get("starting_date") or datetime.now().strftime("%d/%m/%Y")).strip())
+        self.main_vars["date"].set(normalize_python_date(contract_details.get("starting_date") or datetime.now().strftime("%d-%m-%Y")))
         duration_value = normalize_duration_value(
             contract_details.get("duration_years")
             or contract_details.get("Municipal Contract Duration")
@@ -216,8 +262,22 @@ class ShopReservationForm(tk.Tk):
 
         if shop_number:
             self.shop_var.set(shop_number)
+            if not electrical_meter:
+                electrical_meter = resolve_shop_electrical_meter(shop_number)
             self.elec_var.set(electrical_meter)
             self.add_shop(shop_number=shop_number, elec_value=electrical_meter, silent=True)
+
+        shops = self.saved_client_data.get("shops", []) if isinstance(self.saved_client_data, dict) else []
+        for entry in shops:
+            if not isinstance(entry, dict):
+                continue
+            shop = str(entry.get("Shop") or entry.get("shop") or entry.get("shop_number") or "").strip()
+            meter = str(entry.get("Elec meter") or entry.get("Elec Meter") or entry.get("electrical_meter") or "").strip()
+            if shop and meter:
+                self.add_shop(shop, meter, silent=True)
+            elif shop:
+                meter = resolve_shop_electrical_meter(shop)
+                self.elec_var.set(meter)
 
         if contact:
             self.main_vars.setdefault("lessor contact", tk.StringVar(value=contact))
@@ -228,6 +288,9 @@ class ShopReservationForm(tk.Tk):
             (T("Date"), "date"),
             (T("First Party (Lessor)"), "lessor"),
             (T("Contact Number"), "lessor contact"),
+            (T("Business"), "business"),
+            (T("Email"), "email"),
+            (T("Address"), "address"),
             (T("Second Party (Lessee)"), "lessee"),
             (T("Contact Number"), "lessee contact"),
             (T("Municipal Contract Duration (Years)"), "duration"),
@@ -267,7 +330,7 @@ class ShopReservationForm(tk.Tk):
         current = str(var.get() or "").strip()
         selected = pick_date(self, current)
         if selected:
-            var.set(selected)
+            var.set(normalize_python_date(selected))
 
     def create_shops_tab(self):
         card = ttk.Frame(self.shops_tab, padding=16)
@@ -292,6 +355,8 @@ class ShopReservationForm(tk.Tk):
         self.shop_var = tk.StringVar()
         self.elec_var = tk.StringVar()
 
+        self.shop_var.trace_add("write", self._sync_meter_from_shop_number)
+
         ttk.Entry(form_frame, textvariable=self.shop_var, width=22).grid(row=1, column=0, padx=(0, 8), sticky="ew")
         ttk.Entry(form_frame, textvariable=self.elec_var, width=22).grid(row=1, column=1, padx=(0, 8), sticky="ew")
         ttk.Button(form_frame, text=T("Add Shop"), command=self.add_shop, width=16).grid(row=1, column=2, sticky="ew")
@@ -299,6 +364,14 @@ class ShopReservationForm(tk.Tk):
         form_frame.columnconfigure(0, weight=1)
         form_frame.columnconfigure(1, weight=1)
         form_frame.columnconfigure(2, weight=0)
+
+    def _sync_meter_from_shop_number(self, *args):
+        shop_number = str(self.shop_var.get() or "").strip()
+        if not shop_number:
+            return
+        meter_value = resolve_shop_electrical_meter(shop_number)
+        if meter_value:
+            self.elec_var.set(meter_value)
 
     def _on_shop_selection_changed(self, event=None):
         selected = self.shop_tree.selection()
@@ -427,7 +500,9 @@ class ShopReservationForm(tk.Tk):
 
         if primary_shop and primary_shop in shop_numbers:
             return f"{primary_shop}_{len(shop_numbers)}shops"
-        return normalize_shop_value(shop_numbers).replace(", ", "_").replace(" ", "_").replace("/", "_").replace("\\", "_")
+
+        normalized = "_".join(str(shop).strip() for shop in shop_numbers if str(shop).strip())
+        return normalized.replace("/", "_").replace("\\", "_").replace(" ", "_")
 
     def _get_contract_as_text(self):
         shops = []
@@ -535,7 +610,7 @@ class ShopReservationForm(tk.Tk):
         base_details = normalize_contract_details({})
         data = {
             "contract_number": base_details.get("contract_number", ""),
-            "starting_date": self.main_vars["date"].get().strip(),
+            "starting_date": normalize_python_date(self.main_vars["date"].get()),
             "ending_date": "",
             "commercial_registration_number": "",
             "authorized_signature_name": self.main_vars["lessee"].get().strip(),
@@ -582,11 +657,14 @@ class ShopReservationForm(tk.Tk):
 
         contract_details = self._get_contract_details()
         contact_value = self._get_field_value("lessor contact")
+        business_value = self._get_field_value("business")
+        email_value = self._get_field_value("email")
+        address_value = self._get_field_value("address")
         reservation_status = normalize_reservation_status(
             {
                 "client_name": self.main_vars["lessor"].get().strip(),
                 "contact": contact_value.strip(),
-                "shop_number": normalize_shop_value(shop_numbers),
+                "shop_number": shop_numbers,
                 "deposit_status": "Deposite recieved" if str(self.payment_vars["deposit"].get().strip() or "0") not in {"", "0", "0.0"} else "Deposite not recieved",
                 "contract_status": "completed" if str(self.payment_vars["deposit"].get().strip() or "0") not in {"", "0", "0.0"} else "under progress",
                 "contract_duration": normalize_duration_value(self.main_vars["duration"].get()),
@@ -611,12 +689,12 @@ class ShopReservationForm(tk.Tk):
             client = Client(
                 target_name or "Unnamed Client",
                 contact_value.strip() or "",
-                "Reserved",
-                email="",
-                shop_number=normalize_shop_value(all_shop_numbers),
-                address="",
-                electrical_meter=normalize_shop_value(all_electricity),
-                notes=normalize_shop_value(all_electricity),
+                business_value.strip() or "Reserved",
+                email=email_value.strip(),
+                shop_number=all_shop_numbers,
+                address=address_value.strip(),
+                electrical_meter=all_electricity,
+                notes=all_electricity,
                 contract_details=contract_details,
                 reservation_status=reservation_status,
             )
@@ -627,9 +705,12 @@ class ShopReservationForm(tk.Tk):
                 contact_value.strip() or client.contact,
                 DEFAULT_CONTACT_COUNTRY_CODE,
             )
-            client.shop_number = normalize_shop_value(all_shop_numbers) or client.shop_number
-            client.electrical_meter = normalize_shop_value(all_electricity) or client.electrical_meter
-            client.notes = client.electrical_meter
+            client.business = business_value.strip() or client.business
+            client.email = email_value.strip() or client.email
+            client.address = address_value.strip() or client.address
+            client.shop_number = all_shop_numbers
+            client.electrical_meter = all_electricity
+            client.notes = all_electricity
             client.contract_details = contract_details
             client.reservation_status = reservation_status
 
