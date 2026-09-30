@@ -17,11 +17,23 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 try:
-    import arabic_reshaper
-except ModuleNotFoundError:
-    arabic_reshaper = None
-
-from bidi.algorithm import get_display
+    from ui_utils import (
+        apply_bidi_text,
+        configure_emoji_label,
+        get_emoji_font_families,
+        is_arabic_text,
+        refresh_translatable_widget,
+        set_emoji_translated_label,
+    )
+except ImportError:  # pragma: no cover - script execution fallback
+    from ui_utils import (
+        apply_bidi_text,
+        configure_emoji_label,
+        get_emoji_font_families,
+        is_arabic_text,
+        refresh_translatable_widget,
+        set_emoji_translated_label,
+    )
 
 try:
     import win32print
@@ -59,343 +71,72 @@ if APP_ICON is None:
 
 CURRENT_LANGUAGE = "eng"
 APP_ROOT = Path(__file__).resolve().parent.parent
-USERS_FILE = APP_ROOT / "users.json"
-GUESTS_FILE = APP_ROOT / "guests.json"
-LEGACY_USER_PROFILE_FILE = APP_ROOT / "user_profile.json"
 
-CURRENT_SESSION_PROFILE = {"name": "", "email": ""}
+try:
+    from .ui_session import (
+        APP_ROOT as SESSION_APP_ROOT,
+        CURRENT_SESSION_PROFILE,
+        GUESTS_FILE,
+        LEGACY_USER_PROFILE_FILE,
+        USERS_FILE,
+        _normalize_guest_record,
+        _normalize_user_record,
+        _read_json_file,
+        _write_json_file,
+        append_report_footer,
+        build_report_issuer_footer,
+        ensure_default_guest_session,
+        is_admin_registration_allowed,
+        is_guest_login_credentials,
+        is_guest_profile,
+        is_registered_user_profile,
+        is_registration_submission_allowed,
+        load_guest_profiles,
+        load_registered_users,
+        load_user_profile,
+        save_guest_profile,
+        save_user_profile,
+        set_current_session_profile,
+        sync_session_profile,
+        user_registeration,
+        user_registration,
+        verify_registered_user,
+    )
+except ImportError:  # pragma: no cover - script execution fallback
+    from ui_session import (
+        APP_ROOT as SESSION_APP_ROOT,
+        CURRENT_SESSION_PROFILE,
+        GUESTS_FILE,
+        LEGACY_USER_PROFILE_FILE,
+        USERS_FILE,
+        _normalize_guest_record,
+        _normalize_user_record,
+        _read_json_file,
+        _write_json_file,
+        append_report_footer,
+        build_report_issuer_footer,
+        ensure_default_guest_session,
+        is_admin_registration_allowed,
+        is_guest_login_credentials,
+        is_guest_profile,
+        is_registered_user_profile,
+        is_registration_submission_allowed,
+        load_guest_profiles,
+        load_registered_users,
+        load_user_profile,
+        save_guest_profile,
+        save_user_profile,
+        set_current_session_profile,
+        sync_session_profile,
+        user_registeration,
+        user_registration,
+        verify_registered_user,
+    )
 
+APP_ROOT = SESSION_APP_ROOT
 COUNTRY_CODES_PATH = Path(__file__).resolve().parent / "country_codes.json"
 
 
-def _normalize_user_record(payload):
-    if not isinstance(payload, dict):
-        return {"name": "", "email": ""}
-    return {
-        "name": str(payload.get("name") or payload.get("user_name") or payload.get("user") or "").strip(),
-        "email": str(payload.get("email") or payload.get("email_account") or "").strip(),
-    }
-
-
-def _read_json_file(file_path):
-    if not file_path.exists():
-        return None
-    try:
-        return json.loads(file_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError, TypeError):
-        return None
-
-
-def _write_json_file(file_path, payload):
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = file_path.with_suffix(file_path.suffix + ".tmp")
-    with temp_path.open("w", encoding="utf-8") as outfile:
-        json.dump(payload, outfile, ensure_ascii=False, indent=2)
-        outfile.flush()
-        os.fsync(outfile.fileno())
-    os.replace(temp_path, file_path)
-
-
-def load_registered_users():
-    payload = _read_json_file(USERS_FILE)
-
-    if isinstance(payload, dict):
-        users = payload.get("users") if isinstance(payload.get("users"), list) else payload.get("registered_users")
-        if isinstance(users, list):
-            return [_normalize_user_record(item) for item in users if isinstance(item, dict)]
-        single_user = _normalize_user_record(payload)
-        if single_user["name"] or single_user["email"]:
-            return [single_user]
-        return []
-
-    if isinstance(payload, list):
-        return [_normalize_user_record(item) for item in payload if isinstance(item, dict)]
-
-    return []
-
-
-def verify_registered_user(user_name, email_account):
-    name = str(user_name or "").strip()
-    email = str(email_account or "").strip().lower()
-    if not name or not email:
-        return False
-
-    normalized_name = name.lower()
-    for user in load_registered_users():
-        user_name_value = str(user.get("name", "") or "").strip().lower()
-        user_email_value = str(user.get("email", "") or "").strip().lower()
-        if user_name_value == normalized_name and user_email_value == email:
-            return True
-    return False
-
-
-def is_admin_registration_allowed(user_name, email_account):
-    name = str(user_name or "").strip().lower()
-    email = str(email_account or "").strip().lower()
-    return name == "admin" and email == "admin"
-
-
-def is_registration_submission_allowed(user_name, email_account):
-    name = str(user_name or "").strip()
-    email = str(email_account or "").strip()
-    if not name or not email:
-        return False
-    return True
-
-
-def load_user_profile():
-    for file_path in (USERS_FILE, LEGACY_USER_PROFILE_FILE):
-        payload = _read_json_file(file_path)
-        if payload is None:
-            continue
-
-        if isinstance(payload, dict):
-            if isinstance(payload.get("users"), list):
-                for item in payload["users"]:
-                    if isinstance(item, dict):
-                        profile = _normalize_user_record(item)
-                        if profile["name"] or profile["email"]:
-                            return profile
-            profile = _normalize_user_record(payload)
-            if profile["name"] or profile["email"]:
-                return profile
-
-        if isinstance(payload, list):
-            for item in payload:
-                if isinstance(item, dict):
-                    profile = _normalize_user_record(item)
-                    if profile["name"] or profile["email"]:
-                        return profile
-
-    return {"name": "", "email": ""}
-
-
-def user_registeration(user_name, email_account):
-    profile = {
-        "name": str(user_name or "").strip(),
-        "email": str(email_account or "").strip(),
-    }
-
-    if not is_registration_submission_allowed(profile["name"], profile["email"]):
-        return {"name": "", "email": ""}
-
-    users = load_registered_users()
-
-    if profile["name"] or profile["email"]:
-        existing_index = next(
-            (index for index, item in enumerate(users) if item.get("name", "").strip().lower() == profile["name"].lower() and item.get("email", "").strip().lower() == profile["email"].lower()),
-            None,
-        )
-        if existing_index is not None:
-            users[existing_index] = profile
-        else:
-            users.append(profile)
-
-    _write_json_file(USERS_FILE, {"users": users})
-    return profile
-
-
-def user_registration(user_name, email_account):
-    return user_registeration(user_name, email_account)
-
-
-def save_user_profile(name, email):
-    return user_registeration(name, email)
-
-
-def _normalize_guest_record(payload):
-    if not isinstance(payload, dict):
-        return {"name": "", "email": ""}
-    return {
-        "name": str(payload.get("name") or payload.get("guest_name") or "").strip(),
-        "email": str(payload.get("email") or payload.get("guest_email") or "").strip(),
-    }
-
-
-def load_guest_profiles():
-    payload = _read_json_file(GUESTS_FILE)
-
-    if isinstance(payload, dict):
-        guests = payload.get("guests") if isinstance(payload.get("guests"), list) else []
-        if isinstance(guests, list):
-            return [_normalize_guest_record(item) for item in guests if isinstance(item, dict)]
-        single_guest = _normalize_guest_record(payload)
-        if single_guest["name"] or single_guest["email"]:
-            return [single_guest]
-        return []
-
-    if isinstance(payload, list):
-        return [_normalize_guest_record(item) for item in payload if isinstance(item, dict)]
-
-    return []
-
-
-def save_guest_profile(name, email):
-    profile = {
-        "name": str(name or "").strip() or "Guest",
-        "email": str(email or "").strip() or "Guest",
-    }
-    guests = load_guest_profiles()
-
-    existing_index = next(
-        (
-            index
-            for index, item in enumerate(guests)
-            if item.get("name", "").strip().lower() == profile["name"].lower()
-            and item.get("email", "").strip().lower() == profile["email"].lower()
-        ),
-        None,
-    )
-    if existing_index is not None:
-        guests[existing_index] = profile
-    else:
-        guests.append(profile)
-
-    _write_json_file(GUESTS_FILE, {"guests": guests})
-    return profile
-
-
-def is_guest_profile(profile=None):
-    if profile is None:
-        profile = CURRENT_SESSION_PROFILE
-
-    user_name = str(profile.get("name") or "").strip().lower()
-    user_email = str(profile.get("email") or "").strip().lower()
-    return user_name == "guest" and user_email == "guest"
-
-
-def is_guest_login_credentials(user_name, email_account):
-    name = str(user_name or "").strip().lower()
-    email = str(email_account or "").strip().lower()
-    return name == "guest" and email == "guest"
-
-
-def ensure_default_guest_session():
-    if not str(CURRENT_SESSION_PROFILE.get("name") or "").strip() and not str(CURRENT_SESSION_PROFILE.get("email") or "").strip():
-        sync_session_profile(user_name="Guest", user_email="Guest")
-    return CURRENT_SESSION_PROFILE
-
-
-def sync_session_profile(profile=None, user_name=None, user_email=None, *, clear=False):
-    if clear:
-        CURRENT_SESSION_PROFILE["name"] = ""
-        CURRENT_SESSION_PROFILE["email"] = ""
-        return CURRENT_SESSION_PROFILE
-
-    if isinstance(profile, dict):
-        CURRENT_SESSION_PROFILE["name"] = str(profile.get("name") or "").strip()
-        CURRENT_SESSION_PROFILE["email"] = str(profile.get("email") or "").strip()
-        return CURRENT_SESSION_PROFILE
-
-    if isinstance(profile, str):
-        if user_name is not None and user_email is None:
-            user_email = user_name
-        user_name = profile
-        user_email = user_email or ""
-
-    CURRENT_SESSION_PROFILE["name"] = str(user_name or "").strip()
-    CURRENT_SESSION_PROFILE["email"] = str(user_email or "").strip()
-    return CURRENT_SESSION_PROFILE
-
-
-def set_current_session_profile(profile=None, user_name=None, user_email=None):
-    return sync_session_profile(profile=profile, user_name=user_name, user_email=user_email)
-
-
-def is_registered_user_profile(profile=None):
-    if profile is None:
-        profile = CURRENT_SESSION_PROFILE
-
-    if not isinstance(profile, dict):
-        profile = {"name": "", "email": ""}
-
-    user_name = str(profile.get("name") or "").strip()
-    user_email = str(profile.get("email") or "").strip()
-    if not user_name or not user_email:
-        return False
-    return verify_registered_user(user_name, user_email)
-
-
-def build_report_issuer_footer():
-    profile = CURRENT_SESSION_PROFILE.copy()
-    if not profile.get("name") and not profile.get("email"):
-        profile = load_user_profile()
-    if not is_registered_user_profile(profile):
-        user_name = "Guest"
-    else:
-        user_name = profile.get("name") or "System"
-    return T("Report issued by: {user_name}", user_name=user_name)
-
-
-def append_report_footer(lines):
-    footer = build_report_issuer_footer()
-    content = [str(item) for item in lines]
-    if not content:
-        return [footer]
-    if content[-1].strip() == footer:
-        return content
-    return content + ["", footer]
-
-COUNTRY_CODES_PATH = Path(__file__).resolve().parent / "country_codes.json"
-
-
-def get_emoji_font_families():
-    return [
-        "Segoe UI Emoji",
-        "Segoe UI Symbol",
-        "Apple Color Emoji",
-        "Noto Color Emoji",
-        "Twemoji",
-        "Segoe UI",
-        "Arial Unicode MS",
-    ]
-
-
-def configure_emoji_label(widget, text, *, size=10, bold=False):
-    widget.configure(text=text)
-    widget._emoji_prefix = getattr(widget, "_emoji_prefix", "")
-    weight = "bold" if bold else "normal"
-    for family in get_emoji_font_families():
-        try:
-            widget.configure(font=(family, size, weight))
-            return True
-        except tk.TclError:
-            continue
-    return False
-
-
-def is_arabic_text(value):
-    text = str(value or "")
-    return any(
-        0x0600 <= ord(ch) <= 0x06FF
-        or 0x0750 <= ord(ch) <= 0x077F
-        or 0x08A0 <= ord(ch) <= 0x08FF
-        or 0xFB50 <= ord(ch) <= 0xFDFF
-        or 0xFE70 <= ord(ch) <= 0xFEFF
-        for ch in text
-    )
-
-
-def apply_bidi_text(value):
-    text = str(value or "")
-    if not text:
-        return ""
-    if not is_arabic_text(text):
-        return text
-
-    normalized = text.strip()
-    if not normalized:
-        return text
-
-    placeholder_free = re.sub(r"\{[^}]*\}", " ", normalized)
-    if re.search(r"[A-Za-z]", placeholder_free):
-        return normalized
-
-    if arabic_reshaper is None:
-        return normalized
-
-    reshaped = arabic_reshaper.reshape(normalized)
-    return get_display(reshaped)
 
 
 def build_all_clients_row_values(client, progress_info=None):
@@ -425,34 +166,6 @@ def build_all_clients_row_values(client, progress_info=None):
         f"{progress}%",
         f"{len(pending_tasks)} / {len(all_tasks)}",
     )
-
-
-def set_emoji_translated_label(widget, original_text, emoji_prefix=""):
-    widget._emoji_prefix = emoji_prefix
-    translated = T(original_text)
-    formatted = f"{emoji_prefix}{translated}"
-    widget.configure(text=formatted)
-    configure_emoji_label(widget, formatted)
-
-
-def refresh_translatable_widget(widget, original_text, emoji_prefix="", *, size=10, bold=False):
-    if widget is None:
-        return
-
-    translated = T(original_text)
-    if emoji_prefix:
-        formatted = f"{emoji_prefix}{translated}"
-        widget._emoji_prefix = emoji_prefix
-        widget.configure(text=formatted)
-        if is_arabic_text(translated):
-            return
-        configure_emoji_label(widget, formatted, size=size, bold=bold)
-        return
-
-    widget.configure(text=translated)
-    if is_arabic_text(translated):
-        return
-    configure_emoji_label(widget, translated, size=size, bold=bold)
 
 
 def resolve_log_output_dir(log_type="general"):

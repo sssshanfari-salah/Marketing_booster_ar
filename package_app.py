@@ -158,24 +158,36 @@ def validate_runtime_asset_catalog():
         )
 
     ui_file = SOURCE_DIR / "clients_progress_ui.py"
+    ui_utils_file = SOURCE_DIR / "ui_utils.py"
+    session_file = SOURCE_DIR / "ui_session.py"
     action_file = SOURCE_DIR / "ui_client_actions.py"
     translation_file = SOURCE_DIR / "translations.py"
+
     ui_content = ui_file.read_text(encoding="utf-8") if ui_file.exists() else ""
+    ui_utils_content = ui_utils_file.read_text(encoding="utf-8") if ui_utils_file.exists() else ""
+    session_content = session_file.read_text(encoding="utf-8") if session_file.exists() else ""
     action_content = action_file.read_text(encoding="utf-8") if action_file.exists() else ""
     translation_content = translation_file.read_text(encoding="utf-8") if translation_file.exists() else ""
 
     ui_markers = [
-        "def refresh_translatable_widget",
-        "def set_emoji_translated_label",
-        "def is_arabic_text",
-        "def apply_bidi_text",
         "def set_language(lang):",
         "def T(text, **kwargs):",
         "def validate_translation_coverage():",
         "CURRENT_LANGUAGE = \"eng\"",
-        "def ensure_default_guest_session():",
         "Logged in as: {user_name}",
         "Client Details",
+    ]
+
+    ui_utils_markers = [
+        "def refresh_translatable_widget",
+        "def set_emoji_translated_label",
+        "def is_arabic_text",
+        "def apply_bidi_text",
+    ]
+
+    session_markers = [
+        "def ensure_default_guest_session():",
+        "CURRENT_SESSION_PROFILE",
     ]
 
     action_markers = [
@@ -205,25 +217,41 @@ def validate_runtime_asset_catalog():
         '"Logged in as {user_name}"',
     ]
 
-    missing_markers = [marker for marker in ui_markers if marker not in ui_content]
-    missing_action_markers = [marker for marker in action_markers if marker not in action_content]
-    missing_translation_markers = [marker for marker in translation_markers if marker not in translation_content]
-    stale_markers = [marker for marker in stale_ui_markers if marker in ui_content]
-    all_missing = missing_markers + missing_action_markers + missing_translation_markers
+    missing_by_file = []
+    file_marker_sets = [
+        (ui_file, ui_markers),
+        (ui_utils_file, ui_utils_markers),
+        (session_file, session_markers),
+        (action_file, action_markers),
+        (translation_file, translation_markers),
+    ]
+    for file_path, markers in file_marker_sets:
+        if not file_path.exists():
+            missing_by_file.extend(f"{file_path.name}: missing file")
+            continue
+        content = {
+            ui_file: ui_content,
+            ui_utils_file: ui_utils_content,
+            session_file: session_content,
+            action_file: action_content,
+            translation_file: translation_content,
+        }[file_path]
+        for marker in markers:
+            if marker not in content:
+                missing_by_file.append(f"{file_path.name}: {marker}")
 
-    # The project currently uses a direct translation helper module and a canonical UI
-    # implementation, so the packaging check must validate the active contract rather
-    # than the legacy duplicate-language pattern.
+    stale_markers = [marker for marker in stale_ui_markers if marker in ui_content]
+
     if stale_markers:
         details = "\n".join(f" - {marker}" for marker in stale_markers)
         raise RuntimeError(
             "Packaging aborted: stale duplicated language logic remains in the UI module.\n"
             f"Conflicting markers:\n{details}"
         )
-    if all_missing:
-        details = "\n".join(f" - {marker}" for marker in all_missing)
+    if missing_by_file:
+        details = "\n".join(f" - {marker}" for marker in missing_by_file)
         raise RuntimeError(
-            "Packaging aborted: the app UI, action mixin, and translation modules do not contain the expected language and RTL behavior.\n"
+            "Packaging aborted: the active app modules do not contain the expected language and RTL behavior.\n"
             f"Missing markers:\n{details}"
         )
 

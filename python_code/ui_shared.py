@@ -22,10 +22,10 @@ class BaseWindow:
 
 
 class WelcomeWindow(tk.Tk, BaseWindow):
-    """Compatibility wrapper for the canonical welcome window in clients_progress_ui."""
+    """Compatibility wrapper for the dashboard window implementation."""
 
     def __new__(cls, *args, **kwargs):
-        from clients_progress_ui import WelcomeWindow as CanonicalWelcomeWindow
+        from ui_dashboard import WelcomeWindow as CanonicalWelcomeWindow
         return CanonicalWelcomeWindow(*args, **kwargs)
 
     def __init__(self, *args, **kwargs):
@@ -33,10 +33,10 @@ class WelcomeWindow(tk.Tk, BaseWindow):
 
 
 class ProgressApp(tk.Tk):
-    """Compatibility wrapper for the canonical overview window in clients_progress_ui."""
+    """Compatibility wrapper for the dashboard app implementation."""
 
     def __new__(cls, *args, **kwargs):
-        from clients_progress_ui import ProgressApp as CanonicalProgressApp
+        from ui_dashboard import ProgressApp as CanonicalProgressApp
         return CanonicalProgressApp(*args, **kwargs)
 
     def __init__(self, *args, **kwargs):
@@ -44,22 +44,22 @@ class ProgressApp(tk.Tk):
 
 
 def build_startup_splash():
-    from clients_progress_ui import build_startup_splash as canonical_build_startup_splash
+    from ui_dashboard import build_startup_splash as canonical_build_startup_splash
     return canonical_build_startup_splash()
 
 
 def open_overview_window():
-    from clients_progress_ui import open_overview_window as canonical_open_overview_window
+    from ui_dashboard import open_overview_window as canonical_open_overview_window
     return canonical_open_overview_window()
 
 
-def open_welcome_home():
-    from clients_progress_ui import open_welcome_home as canonical_open_welcome_home
-    return canonical_open_welcome_home()
+def open_welcome_home(force_new=False):
+    from ui_dashboard import open_welcome_home as canonical_open_welcome_home
+    return canonical_open_welcome_home(force_new=force_new)
 
 
 def safe_main():
-    from clients_progress_ui import safe_main as canonical_safe_main
+    from ui_dashboard import safe_main as canonical_safe_main
     return canonical_safe_main()
 
 

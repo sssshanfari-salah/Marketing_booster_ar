@@ -1,13 +1,17 @@
-# Application entry point.
-# This file prepares the runtime path and starts the user interface for the client manager.
-import argparse
-import sys
-from pathlib import Path
+"""Application entry point for the client management desktop app.
 
-# Ensure the source folder is importable when the app is launched from its project directory.
-SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+The bootstrap is intentionally small so the runtime path setup is centralized in
+project_paths.py instead of being duplicated across the project.
+"""
+
+import argparse
+
+try:
+    from .project_paths import ensure_source_on_path
+except ImportError:  # pragma: no cover - script execution fallback
+    from project_paths import ensure_source_on_path
+
+ensure_source_on_path()
 
 
 def launch_reservation_form():
@@ -33,12 +37,11 @@ def main(argv=None):
         launch_reservation_form()
         return 0
 
-    from clients_progress_ui import safe_main
+    from ui_dashboard import safe_main
 
     safe_main()
     return 0
 
 
-# Launch the main UI when the script is executed directly.
 if __name__ == "__main__":
     raise SystemExit(main())
