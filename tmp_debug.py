@@ -9,9 +9,6 @@ root = pathlib.Path(__file__).resolve().parent
 
 
 def resolve_ui_path():
-    for candidate in (root / 'python_code' / 'clients_progress_ui.py', root / 'python code' / 'clients_progress_ui.py'):
-        if candidate.exists():
-            return candidate
     return root / 'python_code' / 'clients_progress_ui.py'
 
 

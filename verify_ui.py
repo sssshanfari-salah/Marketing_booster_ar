@@ -7,9 +7,6 @@ ROOT = Path(__file__).resolve().parent
 
 
 def resolve_ui_file():
-    for candidate in (ROOT / "python_code" / "clients_progress_ui.py", ROOT / "python code" / "clients_progress_ui.py"):
-        if candidate.exists():
-            return candidate
     return ROOT / "python_code" / "clients_progress_ui.py"
 
 
@@ -20,7 +17,7 @@ source = UI_FILE.read_text(encoding="utf-8")
 ast.parse(source)
 print("UI syntax OK")
 
-PYTHON_DIR = ROOT / "python_code" if (ROOT / "python_code").exists() else ROOT / "python code"
+PYTHON_DIR = ROOT / "python_code"
 sys.path.insert(0, str(PYTHON_DIR))
 import clients_progress_ui as ui
 

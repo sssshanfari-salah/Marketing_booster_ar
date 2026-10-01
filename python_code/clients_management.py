@@ -245,7 +245,6 @@ def resolve_clients_data_path(project_root=None):
     project_root = Path(project_root).resolve()
     canonical_file = project_root / "clients.json"
     legacy_files = [
-        project_root / "python code" / "clients.json",
         project_root / "python_code" / "clients.json",
         Path.cwd() / "clients.json",
         Path(sys.executable).resolve().parent / "clients.json",

@@ -8,9 +8,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def resolve_docs_dir():
-    for candidate in (PROJECT_ROOT / "python_code" / "docs", PROJECT_ROOT / "python code" / "docs"):
-        if candidate.exists():
-            return candidate
     return PROJECT_ROOT / "python_code" / "docs"
 
 

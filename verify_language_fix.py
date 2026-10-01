@@ -9,13 +9,6 @@ base = pathlib.Path(__file__).resolve().parent
 
 
 def resolve_ui_module_path():
-    candidates = [
-        base / 'python_code' / 'clients_progress_ui.py',
-        base / 'python code' / 'clients_progress_ui.py',
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
     return base / 'python_code' / 'clients_progress_ui.py'
 
 

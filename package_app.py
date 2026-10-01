@@ -10,14 +10,10 @@ APP_DIR = Path(__file__).resolve().parent
 
 
 def resolve_source_dir():
-    for candidate in (APP_DIR / "python_code", APP_DIR / "python code"):
-        if candidate.exists():
-            return candidate
     return APP_DIR / "python_code"
 
 
 SOURCE_DIR = resolve_source_dir()
-LEGACY_SOURCE_DIR = APP_DIR / "python code"
 ENTRY_SCRIPT = SOURCE_DIR / "main.py"
 DIST_DIR = APP_DIR / "dist"
 BUILD_DIR = APP_DIR / "build"
@@ -96,7 +92,6 @@ SHOPS_ELECTRICAL_METERS_FILE = SOURCE_DIR / "Shops_Elect_meters.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
 USERS_DATA_FILE = APP_DIR / "users.json"
 GUESTS_DATA_FILE = APP_DIR / "guests.json"
-LEGACY_CLIENTS_DATA_FILE = LEGACY_SOURCE_DIR / "clients.json"
 DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
 SUPPORTING_DOCUMENTS_DIR = APP_DIR / "supporting_documents"
 STARCO_RENT_CONTRACT = SUPPORTING_DOCUMENTS_DIR / "starco_rent_contract_1.pdf"
@@ -145,9 +140,6 @@ def validate_runtime_asset_catalog():
         SUPPORTING_DOCUMENTS_DIR,
         *REQUIRED_RUNTIME_DIRECTORIES,
     ]
-
-    if LEGACY_CLIENTS_DATA_FILE.exists():
-        required_paths.append(LEGACY_CLIENTS_DATA_FILE)
 
     missing_paths = [str(path) for path in required_paths if path is not None and not path.exists()]
     if missing_paths:
@@ -217,27 +209,37 @@ def validate_runtime_asset_catalog():
         '"Logged in as {user_name}"',
     ]
 
-    missing_by_file = []
-    file_marker_sets = [
+    required_file_sets = [
         (ui_file, ui_markers),
-        (ui_utils_file, ui_utils_markers),
-        (session_file, session_markers),
         (action_file, action_markers),
         (translation_file, translation_markers),
     ]
-    for file_path, markers in file_marker_sets:
+    optional_file_sets = [
+        (ui_utils_file, ui_utils_markers),
+        (session_file, session_markers),
+    ]
+    file_contents = {
+        ui_file: ui_content,
+        ui_utils_file: ui_utils_content,
+        session_file: session_content,
+        action_file: action_content,
+        translation_file: translation_content,
+    }
+
+    missing_by_file = []
+    for file_path, markers in required_file_sets:
         if not file_path.exists():
-            missing_by_file.extend(f"{file_path.name}: missing file")
+            missing_by_file.append(f"{file_path.name}: missing file")
             continue
-        content = {
-            ui_file: ui_content,
-            ui_utils_file: ui_utils_content,
-            session_file: session_content,
-            action_file: action_content,
-            translation_file: translation_content,
-        }[file_path]
         for marker in markers:
-            if marker not in content:
+            if marker not in file_contents[file_path]:
+                missing_by_file.append(f"{file_path.name}: {marker}")
+
+    for file_path, markers in optional_file_sets:
+        if not file_path.exists():
+            continue
+        for marker in markers:
+            if marker not in file_contents[file_path]:
                 missing_by_file.append(f"{file_path.name}: {marker}")
 
     stale_markers = [marker for marker in stale_ui_markers if marker in ui_content]
@@ -609,6 +611,38 @@ def build_app():
         str(BUILD_DIR),
         "--specpath",
         str(APP_DIR),
+        "--hidden-import",
+        "tkinter",
+        "--hidden-import",
+        "tkinter.ttk",
+        "--hidden-import",
+        "tkinter.messagebox",
+        "--hidden-import",
+        "tkinter.filedialog",
+        "--hidden-import",
+        "tkinter.simpledialog",
+        "--hidden-import",
+        "webbrowser",
+        "--hidden-import",
+        "bidi",
+        "--hidden-import",
+        "bidi.algorithm",
+        "--hidden-import",
+        "arabic_reshaper",
+        "--hidden-import",
+        "PIL",
+        "--hidden-import",
+        "PIL.Image",
+        "--hidden-import",
+        "PIL.ImageTk",
+        "--collect-all",
+        "tkinter",
+        "--collect-all",
+        "bidi",
+        "--collect-all",
+        "arabic_reshaper",
+        "--collect-all",
+        "PIL",
     ]
 
     if TARGET_ICON.exists():
