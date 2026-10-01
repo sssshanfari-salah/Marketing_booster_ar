@@ -14,7 +14,7 @@ def resolve_source_dir():
 
 
 SOURCE_DIR = resolve_source_dir()
-ENTRY_SCRIPT = SOURCE_DIR / "main.py"
+ENTRY_SCRIPT = SOURCE_DIR / "app" / "main.py"
 DIST_DIR = APP_DIR / "dist"
 BUILD_DIR = APP_DIR / "build"
 APP_NAME = "marketing_booster_ar"
@@ -67,8 +67,11 @@ APP_DISPLAY_NAME = "Clients Manager"
 SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
 PYTHON_SOURCE_FILES = sorted(
     path
-    for path in SOURCE_DIR.glob("*.py")
+    for path in SOURCE_DIR.rglob("*.py")
     if path.name not in {"test_clients_management.py", "tmp_debug.py", "verify_language_fix.py", "verify_ui.py"}
+    and "__pycache__" not in path.parts
+    and "build" not in path.parts
+    and "dist" not in path.parts
 )
 PROJECT_SOURCE_MODULES = list(PYTHON_SOURCE_FILES)
 
@@ -87,12 +90,12 @@ def resolve_target_icon():
 
 
 TARGET_ICON = resolve_target_icon()
-COUNTRY_CODES_DATA = SOURCE_DIR / "country_codes.json"
-SHOPS_ELECTRICAL_METERS_FILE = SOURCE_DIR / "Shops_Elect_meters.json"
+COUNTRY_CODES_DATA = SOURCE_DIR / "config" / "country_codes.json"
+SHOPS_ELECTRICAL_METERS_FILE = SOURCE_DIR / "config" / "Shops_Elect_meters.json"
 CLIENTS_DATA_FILE = APP_DIR / "clients.json"
 USERS_DATA_FILE = APP_DIR / "users.json"
 GUESTS_DATA_FILE = APP_DIR / "guests.json"
-DOCUMENTS_DATA_FILE = SOURCE_DIR / "docs" / "documents.txt"
+DOCUMENTS_DATA_FILE = SOURCE_DIR / "config" / "docs" / "documents.txt"
 SUPPORTING_DOCUMENTS_DIR = APP_DIR / "supporting_documents"
 STARCO_RENT_CONTRACT = SUPPORTING_DOCUMENTS_DIR / "starco_rent_contract_1.pdf"
 APPLICATION_OUTPUTS_DIR = APP_DIR / "application_outputs"
@@ -105,7 +108,8 @@ PROJECT_RUNTIME_DIRECTORIES = [
     APP_DIR / "supporting_documents",
     APP_DIR / "starco icon",
     SOURCE_DIR,
-    SOURCE_DIR / "docs",
+    SOURCE_DIR / "config",
+    SOURCE_DIR / "config" / "docs",
     CLIENTS_ROOT_DIR,
     *OUTPUT_LOG_DIRS,
 ]
@@ -149,11 +153,11 @@ def validate_runtime_asset_catalog():
             f"{details}"
         )
 
-    ui_file = SOURCE_DIR / "clients_progress_ui.py"
-    ui_utils_file = SOURCE_DIR / "ui_utils.py"
-    session_file = SOURCE_DIR / "ui_session.py"
-    action_file = SOURCE_DIR / "ui_client_actions.py"
-    translation_file = SOURCE_DIR / "translations.py"
+    ui_file = SOURCE_DIR / "ui" / "dashboard.py"
+    ui_utils_file = SOURCE_DIR / "ui" / "utils.py"
+    session_file = SOURCE_DIR / "ui" / "session.py"
+    action_file = SOURCE_DIR / "ui" / "client_actions.py"
+    translation_file = SOURCE_DIR / "config" / "translations.py"
 
     ui_content = ui_file.read_text(encoding="utf-8") if ui_file.exists() else ""
     ui_utils_content = ui_utils_file.read_text(encoding="utf-8") if ui_utils_file.exists() else ""
@@ -185,7 +189,7 @@ def validate_runtime_asset_catalog():
     action_markers = [
         "class ClientManagementMixin",
         "def switch_language(self, event=None):",
-        "import translations as lang",
+        "from config import translations as lang",
         "lang.set_language(selected)",
         "self.language_var.set(lang.CURRENT_LANGUAGE)",
         "self.refresh_lang_ui()",

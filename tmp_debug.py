@@ -1,32 +1,19 @@
-import importlib.util
-import pathlib
-import tkinter as tk
-from tkinter import ttk
+"""Smoke-check the current package layout without referencing legacy flat-module names."""
 
-import python_code.translations as translations
+from __future__ import annotations
 
-root = pathlib.Path(__file__).resolve().parent
+import sys
+from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-def resolve_ui_path():
-    return root / 'python_code' / 'clients_progress_ui.py'
+import python_code.app.main as app_main
+import python_code.ui.dashboard as dashboard
+import python_code.config.translations as translations
 
-
-p = resolve_ui_path()
-spec = importlib.util.spec_from_file_location('ui', p)
-ui = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(ui)
-
-translations.set_language('ar')
-root_window = tk.Tk()
-root_window.withdraw()
-label = ttk.Label(root_window, text='Client Name')
-label.pack()
-print('initial>', repr(label.cget('text')))
-print('before refresh>', repr(label.cget('text')))
-res = ui.refresh_translatable_widget(label, 'Client Name')
-print('res>', res)
-print('after refresh>', repr(label.cget('text')))
-print('anchor>', label.cget('anchor'))
-print('justify>', label.cget('justify'))
-root_window.destroy()
+print("tmp_debug OK")
+print(app_main.main.__name__)
+print(dashboard.__name__)
+print(translations.T("Client Name"))

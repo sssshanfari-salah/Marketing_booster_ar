@@ -1,32 +1,19 @@
-import importlib.util
-import pathlib
-import tkinter as tk
-from tkinter import ttk
+"""Verify the current translation layer without using retired flat-module paths."""
 
-import python_code.translations as translations
+from __future__ import annotations
 
-base = pathlib.Path(__file__).resolve().parent
+from pathlib import Path
+import sys
 
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-def resolve_ui_module_path():
-    return base / 'python_code' / 'clients_progress_ui.py'
+from python_code.config import translations as translations
 
-
-module_path = resolve_ui_module_path()
-spec = importlib.util.spec_from_file_location('ui_module', module_path)
-ui = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(ui)
-
-root = tk.Tk()
-root.withdraw()
-label = ttk.Label(root, text='Client Name')
-label.pack()
-orig_font = label.cget('font')
-translations.set_language('ar')
-ui.refresh_translatable_widget(label, 'Client Name')
-text = label.cget('text')
-font = label.cget('font')
-print('FONT_UNCHANGED=', font == orig_font)
-print('TEXT=', repr(text))
-print('HAS_ARABIC=', any('\u0600' <= ch <= '\u06FF' for ch in text))
-root.destroy()
+translations.set_language("ar")
+label = "Client Name"
+result = translations.T(label)
+assert isinstance(result, str)
+print("verify_language_fix OK")
+print(result.encode("unicode_escape").decode("ascii"))

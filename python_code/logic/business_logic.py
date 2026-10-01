@@ -6,8 +6,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from clients_management import Client
-from translations import T
+from logic.clients_management import Client
+from config.translations import T
 
 
 def normalize_country_code(code):
@@ -99,7 +99,7 @@ def load_country_codes():
 
 def load_shop_electrical_meter_map():
     try:
-        from shops_conversion_to_dic import shop_meter_map as shared_mapping
+        from logic.shops_conversion_to_dic import shop_meter_map as shared_mapping
         return dict(shared_mapping)
     except Exception:
         meters_path = Path(__file__).resolve().parent / "Shops_Elect_meters.json"

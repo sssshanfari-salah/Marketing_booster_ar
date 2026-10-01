@@ -17,7 +17,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 try:
-    from ui_utils import (
+    from ui.utils import (
         apply_bidi_text,
         configure_emoji_label,
         get_emoji_font_families,
@@ -26,7 +26,7 @@ try:
         set_emoji_translated_label,
     )
 except ImportError:  # pragma: no cover - script execution fallback
-    from ui_utils import (
+    from ui.utils import (
         apply_bidi_text,
         configure_emoji_label,
         get_emoji_font_families,
@@ -46,7 +46,7 @@ except ImportError:
     Image = None
     ImageTk = None
 
-from clients_management import (
+from logic.clients_management import (
     Client,
     ClientManager,
     build_client_payment_report_text,
@@ -73,7 +73,7 @@ CURRENT_LANGUAGE = "eng"
 APP_ROOT = Path(__file__).resolve().parent.parent
 
 try:
-    from .ui_session import (
+    from .session import (
         APP_ROOT as SESSION_APP_ROOT,
         CURRENT_SESSION_PROFILE,
         GUESTS_FILE,
@@ -103,7 +103,7 @@ try:
         verify_registered_user,
     )
 except ImportError:  # pragma: no cover - script execution fallback
-    from ui_session import (
+    from ui.session import (
         APP_ROOT as SESSION_APP_ROOT,
         CURRENT_SESSION_PROFILE,
         GUESTS_FILE,
@@ -181,7 +181,7 @@ def resolve_log_output_dir(log_type="general"):
 
 def load_shop_electrical_meter_map():
     try:
-        from shops_conversion_to_dic import shop_meter_map as shared_shop_meter_map
+        from logic.shops_conversion_to_dic import shop_meter_map as shared_shop_meter_map
         return dict(shared_shop_meter_map)
     except Exception:
         return {}
@@ -1588,7 +1588,7 @@ class WelcomeWindow(tk.Tk):
             return
 
         try:
-            from ui_reservation_contract import ShopReservationForm
+            from ui.reservation_contract import ShopReservationForm
         except ImportError:
             messagebox.showerror(T("Form unavailable"), T("The reservation contract form could not be loaded."))
             return
@@ -4876,7 +4876,7 @@ class ProgressApp(tk.Tk):
             return
 
         try:
-            from shops_conversion_to_dic import shop_meter_map, validate_shop
+            from logic.shops_conversion_to_dic import shop_meter_map, validate_shop
         except ImportError:
             shop_meter_map = load_shop_electrical_meter_map()
             validate_shop = None
@@ -5123,7 +5123,7 @@ class ProgressApp(tk.Tk):
             client_name = ""
 
         try:
-            from ui_reservation_contract import ShopReservationForm
+            from ui.reservation_contract import ShopReservationForm
         except ImportError:
             messagebox.showerror(T("Form unavailable"), T("The reservation contract form could not be loaded."))
             return

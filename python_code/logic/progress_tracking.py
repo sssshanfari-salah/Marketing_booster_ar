@@ -1,4 +1,4 @@
-from clients_management import Client
+from logic.clients_management import Client
 
 
 class plan:

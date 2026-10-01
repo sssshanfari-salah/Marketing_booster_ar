@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from clients_management import (
+from python_code.logic.clients_management import (
     Client,
     ClientManager,
     build_clients_report_text,
@@ -27,7 +27,7 @@ from clients_management import (
     normalize_reservation_status,
     normalize_shop_value,
 )
-from clients_progress_ui import (
+from python_code.ui.dashboard import (
     Plan,
     ProgressApp,
     T,
@@ -45,7 +45,7 @@ from clients_progress_ui import (
     strip_task_number_prefix,
     validate_translation_coverage,
 )
-from sync_documents import TARGET
+from python_code.logic.sync_documents import TARGET
 
 try:
     from package_app import resolve_desktop_dir
@@ -55,7 +55,7 @@ except ImportError:
 
 class WelcomeAccessTests(unittest.TestCase):
     def test_translation_helpers_are_exposed(self):
-        import clients_progress_ui as ui
+        from python_code.ui import dashboard as ui
         self.assertTrue(callable(ui.T))
         self.assertTrue(callable(ui.set_language))
         self.assertEqual(ui.T("Guest"), "Guest")
@@ -64,7 +64,7 @@ class WelcomeAccessTests(unittest.TestCase):
         self.assertEqual(ui.set_language("eng"), "eng")
 
     def test_successful_welcome_login_updates_status_without_opening_overview(self):
-        import clients_progress_ui as ui
+        from python_code.ui import dashboard as ui
 
         class DummyVar:
             def __init__(self, value=""):
@@ -97,7 +97,7 @@ class WelcomeAccessTests(unittest.TestCase):
         mock_open_overview.assert_not_called()
 
     def test_successful_relogin_keeps_welcome_open_and_updates_status(self):
-        import clients_progress_ui as ui
+        from python_code.ui import dashboard as ui
 
         class DummyVar:
             def __init__(self, value=""):
@@ -130,14 +130,14 @@ class WelcomeAccessTests(unittest.TestCase):
         self.assertEqual(dummy.login_status_var.get(), "Logged in as: Alice")
 
     def test_overview_button_is_enabled_for_all_welcome_users(self):
-        original_profile = getattr(__import__("clients_progress_ui", fromlist=["CURRENT_SESSION_PROFILE"]), "CURRENT_SESSION_PROFILE").copy()
+        original_profile = getattr(__import__("python_code.ui.dashboard", fromlist=["CURRENT_SESSION_PROFILE"]), "CURRENT_SESSION_PROFILE").copy()
         try:
             for profile in (
                 {"name": "Guest", "email": "Guest"},
                 {"name": "", "email": ""},
                 {"name": "Salah", "email": "sssshanfari@gmail.com"},
             ):
-                import clients_progress_ui as ui
+                from python_code.ui import dashboard as ui
                 ui.CURRENT_SESSION_PROFILE = profile.copy()
 
                 class FakeWidget:
@@ -163,11 +163,11 @@ class WelcomeAccessTests(unittest.TestCase):
                 self.assertEqual(dummy.overview_button.state, "normal")
                 self.assertEqual(dummy.contract_button.state, "disabled" if not ui.is_registered_user_profile(profile) else "normal")
         finally:
-            import clients_progress_ui as ui
+            from python_code.ui import dashboard as ui
             ui.CURRENT_SESSION_PROFILE = original_profile.copy()
 
     def test_default_session_starts_as_guest(self):
-        import clients_progress_ui as ui
+        from python_code.ui import dashboard as ui
 
         original = ui.CURRENT_SESSION_PROFILE.copy()
         try:
@@ -178,7 +178,7 @@ class WelcomeAccessTests(unittest.TestCase):
             ui.CURRENT_SESSION_PROFILE = original
 
     def test_closing_registration_window_keeps_previous_user(self):
-        import clients_progress_ui as ui
+        from python_code.ui import dashboard as ui
 
         class DummyVar:
             def __init__(self, value=""):
@@ -208,7 +208,7 @@ class WelcomeAccessTests(unittest.TestCase):
         self.assertEqual(dummy.login_status_var.get(), "Logged in as: Alice")
 
     def test_register_user_updates_active_session_profile(self):
-        import clients_progress_ui as ui
+        from python_code.ui import dashboard as ui
 
         class DummyVar:
             def __init__(self, value=""):
@@ -241,7 +241,7 @@ class WelcomeAccessTests(unittest.TestCase):
         mock_msgbox.showinfo.assert_called_once()
 
     def test_reopening_welcome_refreshes_login_state(self):
-        import clients_progress_ui as ui
+        from python_code.ui import dashboard as ui
 
         welcome_window = mock.Mock()
         welcome_window.winfo_exists.return_value = True
@@ -258,7 +258,7 @@ class WelcomeAccessTests(unittest.TestCase):
         welcome_window.focus_set.assert_called_once()
 
     def test_switching_between_welcome_and_overview_closes_the_other_window(self):
-        import clients_progress_ui as ui
+        from python_code.ui import dashboard as ui
 
         welcome_window = mock.Mock()
         overview_window = mock.Mock()
@@ -633,9 +633,9 @@ class ClientManagerTests(unittest.TestCase):
             set_language("eng")
 
     def test_refresh_translatable_widget_does_not_force_emoji_font_for_plain_arabic_labels(self):
-        original_provider = __import__("python_code.clients_progress_ui", fromlist=["get_emoji_font_families"]).get_emoji_font_families
+        original_provider = __import__("python_code.ui.dashboard", fromlist=["get_emoji_font_families"]).get_emoji_font_families
         try:
-            from python_code import clients_progress_ui as ui
+            from python_code.ui import dashboard as ui
             ui.get_emoji_font_families = lambda: ["Noto Color Emoji"]
 
             root = tk.Tk()
@@ -680,7 +680,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIsNone(validate_translation_coverage())
 
     def test_task_listboxes_include_horizontal_scrollbars(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -690,7 +690,7 @@ class ClientManagerTests(unittest.TestCase):
     def test_contract_details_task_button_and_window_fields_are_present(self):
         self.assertTrue(hasattr(ProgressApp, "open_contract_details_window"))
 
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -722,7 +722,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(reloaded.clients[0].transactions[0]["bank_name"], "Bank Muscat")
 
     def test_transaction_window_has_client_selector_dropdown(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -731,7 +731,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("self._switch_client_for_transactions", source)
 
     def test_transaction_status_uses_checkbox_and_completion_popup(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -743,7 +743,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("state=\"disabled\"", source)
 
     def test_transaction_completion_popup_requires_valid_saved_row(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -757,7 +757,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("showinfo", source)
 
     def test_previous_month_must_be_paid_before_next_month_completion(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -766,7 +766,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("Outstanding payment", source)
 
     def test_payment_follow_up_actions_are_generated_from_pending_months(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -775,7 +775,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("self.plan.pending_tasks", source)
 
     def test_due_date_matches_selected_month(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -784,7 +784,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("normalized = self._coerce_due_date_for_month", source)
 
     def test_transaction_row_edits_and_payment_preview_are_available(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -795,7 +795,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("text_widget.insert(\"1.0\", self.build_report_text())", source)
 
     def test_transaction_due_date_picker_and_next_month_logic_are_present(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -805,7 +805,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("if self.month_options[-1] in existing_months:", source)
 
     def test_payment_report_includes_contract_period_and_transaction_details(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -845,7 +845,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("Need legal review", reloaded.clients[0].contract_details["open_issues"])
 
     def test_contract_details_include_default_oman_currency_selection(self):
-        source_path = Path(__file__).resolve().parent / "clients_progress_ui.py"
+        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -904,7 +904,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("starco_icon.ico", icon_path.name)
 
     def test_reservation_ui_module_integrates_with_project_app(self):
-        module_path = Path(__file__).resolve().parent / "ui_reservation_contract.py"
+        module_path = Path(__file__).resolve().parent / "ui" / "reservation_contract.py"
         self.assertTrue(module_path.exists(), "Reservation UI module is missing or not named as a Python file.")
 
         spec = importlib.util.spec_from_file_location("ui_reservation_contract_module", module_path)
@@ -930,7 +930,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(reloaded.clients[0].reservation_status["contract_status"], "completed")
 
     def test_reservation_shop_validation_rejects_blank_numeric_and_duplicate_entries(self):
-        module_path = Path(__file__).resolve().parent / "ui_reservation_contract.py"
+        module_path = Path(__file__).resolve().parent / "ui" / "reservation_contract.py"
         spec = importlib.util.spec_from_file_location("ui_reservation_contract_module_validation", module_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -945,7 +945,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("already exists", message.lower())
 
     def test_reservation_preview_falls_back_when_mapped_contract_file_is_missing(self):
-        module_path = Path(__file__).resolve().parent / "ui_reservation_contract.py"
+        module_path = Path(__file__).resolve().parent / "ui" / "reservation_contract.py"
         spec = importlib.util.spec_from_file_location("ui_reservation_contract_module_preview", module_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -965,7 +965,7 @@ class ClientManagerTests(unittest.TestCase):
             temp_dir.cleanup()
 
     def test_reservation_status_button_opens_contract_form_instead_of_popup(self):
-        import clients_progress_ui as ui
+        from python_code.ui import dashboard as ui
 
         dummy = object.__new__(ui.ProgressApp)
         dummy.client_name_var = type("DummyVar", (), {"get": lambda self: "Ali"})()
@@ -982,7 +982,7 @@ class ClientManagerTests(unittest.TestCase):
         mock_form.assert_called_once_with(client_name="Ali")
 
     def test_contract_form_prefills_client_details_and_auto_syncs_shop_meter(self):
-        module_path = Path(__file__).resolve().parent / "ui_reservation_contract.py"
+        module_path = Path(__file__).resolve().parent / "ui" / "reservation_contract.py"
         spec = importlib.util.spec_from_file_location("ui_reservation_contract_module_prefill", module_path)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)

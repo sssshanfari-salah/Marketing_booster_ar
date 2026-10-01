@@ -1,13 +1,13 @@
 from tkinter import messagebox
 
-from clients_management import (
+from logic.clients_management import (
     Client,
     DEFAULT_CONTACT_COUNTRY_CODE,
     format_contact_number,
     normalize_duration_value,
     normalize_reservation_status,
 )
-from translations import T
+from config.translations import T
 
 
 def save_contract(self):

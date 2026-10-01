@@ -22,7 +22,7 @@ def ensure_source_on_path() -> Path:
 
 
 APP_ROOT = PROJECT_ROOT
-ENTRY_SCRIPT = SOURCE_DIR / "main.py"
+ENTRY_SCRIPT = SOURCE_DIR / "app" / "main.py"
 
 __all__ = [
     "APP_ROOT",
