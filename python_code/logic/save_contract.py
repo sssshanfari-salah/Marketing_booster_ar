@@ -71,7 +71,7 @@ def save_contract(self):
     # ---------------------------------------------------------
     # BASIC FIELDS
     # ---------------------------------------------------------
-    contact_value = self._get_field_value("lessor contact")
+    contact_value = self._get_field_value("lessee contact")
     business_value = self._get_field_value("business")
     email_value = self._get_field_value("email")
     address_value = self._get_field_value("address")
@@ -81,7 +81,7 @@ def save_contract(self):
     # ---------------------------------------------------------
     reservation_status = normalize_reservation_status(
         {
-            "client_name": self.main_vars["lessor"].get().strip(),
+            "client_name": self.main_vars["lessee"].get().strip(),
             "contact": contact_value.strip(),
             "shops": shops_list,
             "deposit_status": (
@@ -111,7 +111,7 @@ def save_contract(self):
     # ---------------------------------------------------------
     self.client_manager.load_clients()
     client = None
-    target_name = self.main_vars["lessor"].get().strip()
+    target_name = self.main_vars["lessee"].get().strip()
 
     if target_name:
         client = next(
@@ -130,10 +130,10 @@ def save_contract(self):
             contact_value.strip(),
             business_value.strip() or "Reserved",
             email=email_value.strip(),
-            shop_number=[entry["Shop"] for entry in shops_list],   # legacy compatibility
+            shop_number=[entry["Shop"] for entry in shops_list],
             address=address_value.strip(),
-            electrical_meter=[entry["Elec meter"] for entry in shops_list],  # legacy compatibility
-            notes=[entry["Elec meter"] for entry in shops_list],   # legacy compatibility
+            electrical_meter=[entry["Elec meter"] for entry in shops_list],
+            notes=[entry["Elec meter"] for entry in shops_list],
             contract_details=contract_details,
             reservation_status=reservation_status,
         )

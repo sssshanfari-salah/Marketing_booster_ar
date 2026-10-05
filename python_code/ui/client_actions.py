@@ -4,28 +4,50 @@ import tkinter as tk
 from tkinter import messagebox
 
 from config import translations as lang
-from logic.clients_management import Client
 from config.translations import T
+from logic.clients_management import Client, ClientManager, resolve_clients_data_path
 
 
 class ClientManagementMixin:
     """Actions that create, save, and manage client records."""
 
     def save_current_client(self):
-        name = self.client_name_var.get().strip()
-        if not name or name == "<New Client>":
+        if not hasattr(self, "client_manager"):
+            self.client_manager = ClientManager(resolve_clients_data_path())
+
+        name = str(getattr(self, "client_name_var", None).get() if hasattr(self, "client_name_var") else "").strip()
+        if not name or name == T("<New Client>"):
             messagebox.showwarning(T("Missing client"), T("Please enter a client name before saving."))
             return
 
+        contact = str(getattr(self, "contact_var", None).get() if hasattr(self, "contact_var") else "").strip()
+        business = str(getattr(self, "business_var", None).get() if hasattr(self, "business_var") else "").strip()
+        email = str(getattr(self, "email_var", None).get() if hasattr(self, "email_var") else "").strip()
+        shop_number = str(getattr(self, "shop_number_var", None).get() if hasattr(self, "shop_number_var") else "").strip()
+        address = str(getattr(self, "address_var", None).get() if hasattr(self, "address_var") else "").strip()
+        electrical_meter = str(getattr(self, "electrical_meter_var", None).get() if hasattr(self, "electrical_meter_var") else "").strip()
+
         self.client_manager.load_clients()
         existing = next((client for client in self.client_manager.clients if client.name.lower() == name.lower()), None)
+
         if existing is None:
-            existing = Client(name, self.contact_var.get().strip(), self.business_var.get().strip(), self.email_var.get().strip())
+            existing = Client(
+                name,
+                contact,
+                business,
+                email=email,
+                shop_number=shop_number,
+                address=address,
+                notes=electrical_meter,
+            )
             self.client_manager.clients.append(existing)
         else:
-            existing.contact = self.contact_var.get().strip()
-            existing.business = self.business_var.get().strip()
-            existing.email = self.email_var.get().strip()
+            existing.contact = contact
+            existing.business = business
+            existing.email = email
+            existing.shop_number = shop_number
+            existing.address = address
+            existing.notes = electrical_meter
 
         self.client_manager.save_clients()
         messagebox.showinfo(T("Client saved"), T("Client saved successfully."))
@@ -34,7 +56,8 @@ class ClientManagementMixin:
         selected = self.language_var.get()
         lang.set_language(selected)
         self.language_var.set(lang.CURRENT_LANGUAGE)
-        self.refresh_lang_ui()
+        if hasattr(self, "refresh_lang_ui"):
+            self.refresh_lang_ui()
 
 
 class ClientActions(ClientManagementMixin):

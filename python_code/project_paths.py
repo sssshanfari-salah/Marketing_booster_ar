@@ -14,10 +14,11 @@ SOURCE_DIR = Path(__file__).resolve().parent
 
 
 def ensure_source_on_path() -> Path:
-    """Ensure the source directory is importable when running from the repo."""
-    source_path = str(SOURCE_DIR)
-    if source_path not in sys.path:
-        sys.path.insert(0, source_path)
+    """Ensure the project source tree is importable from any repo entry point."""
+    for candidate in (SOURCE_DIR, PROJECT_ROOT):
+        path_value = str(candidate)
+        if path_value not in sys.path:
+            sys.path.insert(0, path_value)
     return SOURCE_DIR
 
 

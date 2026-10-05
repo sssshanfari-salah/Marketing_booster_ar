@@ -3,10 +3,10 @@
 import calendar
 import json
 import re
-from datetime import datetime
 from pathlib import Path
 
 from logic.clients_management import Client
+from logic.months import generate_contract_months as generate_contract_months
 from config.translations import T
 
 
@@ -85,7 +85,14 @@ def load_country_codes():
         {"country": "Germany", "code": "+49"},
         {"country": "France", "code": "+33"},
     ]
-    candidate = Path(__file__).resolve().parent / "country_codes.json"
+
+    project_root = Path(__file__).resolve().parents[2]
+    candidates = [
+        Path(__file__).resolve().parents[1] / "config" / "country_codes.json",
+        project_root / "python_code" / "config" / "country_codes.json",
+        Path(__file__).resolve().parent / "country_codes.json",
+    ]
+    candidate = next((path for path in candidates if path.exists()), candidates[0])
     if candidate.exists():
         try:
             with candidate.open("r", encoding="utf-8") as handle:
@@ -102,25 +109,7 @@ def load_shop_electrical_meter_map():
         from logic.shops_conversion_to_dic import shop_meter_map as shared_mapping
         return dict(shared_mapping)
     except Exception:
-        meters_path = Path(__file__).resolve().parent / "Shops_Elect_meters.json"
-        mapping = {}
-        if not meters_path.exists():
-            return mapping
-        try:
-            with meters_path.open("r", encoding="utf-8") as handle:
-                entries = json.load(handle)
-        except (json.JSONDecodeError, OSError, TypeError):
-            return mapping
-        if not isinstance(entries, list):
-            return mapping
-        for item in entries:
-            if not isinstance(item, dict):
-                continue
-            shop_value = str(item.get("Shop") or item.get("shop") or item.get("shop_number") or "").strip()
-            meter_value = str(item.get("Elec meter") or item.get("Elec Meter") or item.get("electrical_meter") or item.get("meter") or "").strip()
-            if shop_value and meter_value:
-                mapping[shop_value] = meter_value
-        return mapping
+        return {}
 
 
 def parse_task_items(raw_value, fallback_total=0):
@@ -205,55 +194,6 @@ class Plan:
             "pending_tasks": list(self.pending_tasks),
             "all_tasks": list(self.all_tasks),
         }
-
-
-def generate_contract_months(start_date=None, end_date=None):
-    start_value = str(start_date or "").strip()
-    end_value = str(end_date or "").strip()
-    if not start_value and not end_value:
-        return []
-
-    def parse_date(value):
-        if not value:
-            return None
-        for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d"):
-            try:
-                return datetime.strptime(value, fmt)
-            except ValueError:
-                continue
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            return None
-
-    start_dt = parse_date(start_value)
-    end_dt = parse_date(end_value)
-    if start_dt is None and end_dt is not None:
-        start_dt = end_dt.replace(day=1)
-    if end_dt is None and start_dt is not None:
-        end_dt = start_dt.replace(day=28)
-    if start_dt is None or end_dt is None:
-        return []
-    if end_dt < start_dt:
-        start_dt, end_dt = end_dt, start_dt
-
-    months = []
-    current = start_dt.replace(day=1)
-    while current <= end_dt:
-        months.append(current.strftime("%Y-%m"))
-        if current.month == 12:
-            current = current.replace(year=current.year + 1, month=1)
-        else:
-            current = current.replace(month=current.month + 1)
-
-    seen = set()
-    unique_months = []
-    for month in months:
-        if month in seen:
-            continue
-        seen.add(month)
-        unique_months.append(month)
-    return unique_months
 
 
 class DatePickerPopup:

@@ -8,11 +8,29 @@ from pathlib import Path
 
 from config.translations import T
 
-APP_ROOT = Path(__file__).resolve().parent.parent
+APP_ROOT = Path(__file__).resolve().parents[2]
 USERS_FILE = APP_ROOT / "users.json"
 GUESTS_FILE = APP_ROOT / "guests.json"
 LEGACY_USER_PROFILE_FILE = APP_ROOT / "user_profile.json"
 CURRENT_SESSION_PROFILE = {"name": "", "email": ""}
+
+
+def _normalize_session_profile(profile):
+    if not isinstance(profile, dict):
+        profile = {}
+
+    name = str(profile.get("name") or profile.get("user_name") or "").strip()
+    email = str(profile.get("email") or profile.get("email_account") or "").strip()
+
+    if not name and not email:
+        return {"name": "", "email": ""}
+
+    normalized_name = name.lower()
+    normalized_email = email.lower()
+    if normalized_name == "guest" or normalized_email == "guest":
+        return {"name": "Guest", "email": "Guest"}
+
+    return {"name": name, "email": email}
 
 
 def _read_json_file(file_path):
@@ -210,8 +228,9 @@ def is_guest_profile(profile=None):
     if profile is None:
         profile = CURRENT_SESSION_PROFILE
 
-    user_name = str(profile.get("name") or "").strip().lower()
-    user_email = str(profile.get("email") or "").strip().lower()
+    normalized = _normalize_session_profile(profile)
+    user_name = str(normalized.get("name") or "").strip().lower()
+    user_email = str(normalized.get("email") or "").strip().lower()
     return user_name == "guest" and user_email == "guest"
 
 
@@ -228,8 +247,9 @@ def sync_session_profile(profile=None, user_name=None, user_email=None, *, clear
         return CURRENT_SESSION_PROFILE
 
     if isinstance(profile, dict):
-        CURRENT_SESSION_PROFILE["name"] = str(profile.get("name") or "").strip()
-        CURRENT_SESSION_PROFILE["email"] = str(profile.get("email") or "").strip()
+        normalized = _normalize_session_profile(profile)
+        CURRENT_SESSION_PROFILE["name"] = normalized["name"]
+        CURRENT_SESSION_PROFILE["email"] = normalized["email"]
         return CURRENT_SESSION_PROFILE
 
     if isinstance(profile, str):
@@ -238,13 +258,17 @@ def sync_session_profile(profile=None, user_name=None, user_email=None, *, clear
         user_name = profile
         user_email = user_email or ""
 
-    CURRENT_SESSION_PROFILE["name"] = str(user_name or "").strip()
-    CURRENT_SESSION_PROFILE["email"] = str(user_email or "").strip()
+    normalized = _normalize_session_profile({"name": user_name, "email": user_email})
+    CURRENT_SESSION_PROFILE["name"] = normalized["name"]
+    CURRENT_SESSION_PROFILE["email"] = normalized["email"]
     return CURRENT_SESSION_PROFILE
 
 
 def ensure_default_guest_session():
-    if not str(CURRENT_SESSION_PROFILE.get("name") or "").strip() and not str(CURRENT_SESSION_PROFILE.get("email") or "").strip():
+    normalized = _normalize_session_profile(CURRENT_SESSION_PROFILE)
+    if not normalized["name"] and not normalized["email"]:
+        sync_session_profile(user_name="Guest", user_email="Guest")
+    elif normalized["name"].lower() == "guest" or normalized["email"].lower() == "guest":
         sync_session_profile(user_name="Guest", user_email="Guest")
     return CURRENT_SESSION_PROFILE
 
@@ -257,12 +281,12 @@ def is_registered_user_profile(profile=None):
     if profile is None:
         profile = CURRENT_SESSION_PROFILE
 
-    if not isinstance(profile, dict):
-        profile = {"name": "", "email": ""}
-
-    user_name = str(profile.get("name") or "").strip()
-    user_email = str(profile.get("email") or "").strip()
+    normalized = _normalize_session_profile(profile)
+    user_name = str(normalized.get("name") or "").strip()
+    user_email = str(normalized.get("email") or "").strip()
     if not user_name or not user_email:
+        return False
+    if user_name.lower() == "guest" or user_email.lower() == "guest":
         return False
     return verify_registered_user(user_name, user_email)
 

@@ -5,6 +5,24 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
+try:
+    from python_code.project_paths import ensure_source_on_path
+except ImportError:  # pragma: no cover - direct script fallback
+    from project_paths import ensure_source_on_path
+
+ensure_source_on_path()
+
+from logic.shops_conversion_to_dic import format_shop_display_label
+from logic.shop_management import ShopManagementMixin, normalize_shop_numbers
+from logic.models.contracts import normalize_contract_details as normalize_contract_details
+from logic.models.reservations import normalize_reservation_status as normalize_reservation_status
+from logic.models.transactions import normalize_transaction_entry as normalize_transaction_entry
+from logic.months import generate_contract_months as generate_contract_months
+from logic.validations.Storage.client_storage import (
+    load_clients_from_file,
+    save_clients_to_file,
+)
+
 DEFAULT_CONTACT_COUNTRY_CODE = "+968"
 
 
@@ -72,140 +90,25 @@ def normalize_renewable_value(value):
     return "No"
 
 
-def normalize_contract_details(value):
-    contract_fields = {
-        "contract_number": "",
-        "starting_date": "",
-        "ending_date": "",
-        "commercial_registration_number": "",
-        "authorized_signature_name": "",
-        "rent_value": "",
-        "currency_type": "OMR",
-        "open_issues": "",
-        "duration_years": "",
-        "renewable": "",
-        "first_party": "",
-        "second_party": "",
-    }
-
-    if not isinstance(value, dict):
-        return dict(contract_fields)
-
-    normalized = {}
-    for key, default in contract_fields.items():
-        raw_value = value.get(key, default)
-        if raw_value is None:
-            raw_value = default
-        if key == "duration_years":
-            normalized[key] = normalize_duration_value(raw_value)
-        elif key == "renewable":
-            normalized[key] = normalize_renewable_value(raw_value)
-        else:
-            normalized[key] = str(raw_value)
-    return normalized
 
 
-def normalize_reservation_status(value):
-    reservation_fields = {
-        "client_name": "",
-        "contact": "",
-        "shop_number": "",
-        "deposit_status": "",
-        "contract_status": "",
-        "contract_duration": "",
-        "rent_value": "",
-        "deposit_amount": "",
-        "last_updated": "",
-    }
 
-    if not isinstance(value, dict):
-        return dict(reservation_fields)
+def remove_shop_from_selected_shops(selected_shops, shop_number):
+    target = str(shop_number or "").strip()
+    if not target:
+        return list(selected_shops or [])
 
-    normalized = {}
-    for key, default in reservation_fields.items():
-        raw_value = value.get(key, default)
-        if raw_value is None:
-            raw_value = default
-        if key == "contract_duration":
-            normalized[key] = normalize_duration_value(raw_value)
-        else:
-            normalized[key] = str(raw_value)
-    return normalized
-
-
-def normalize_transaction_entry(value):
-    transaction_fields = {
-        "month": "",
-        "status": "",
-        "amount": "",
-        "payment_method": "",
-        "cheque_number": "",
-        "due_date": "",
-        "bank_name": "",
-        "bank_transaction_details": "",
-    }
-
-    if not isinstance(value, dict):
-        return dict(transaction_fields)
-
-    normalized = {}
-    for key, default in transaction_fields.items():
-        raw_value = value.get(key, default)
-        if raw_value is None:
-            raw_value = default
-        normalized[key] = str(raw_value)
-    return normalized
-
-
-def generate_contract_months(start_date=None, end_date=None):
-    start_value = str(start_date or "").strip()
-    end_value = str(end_date or "").strip()
-    if not start_value and not end_value:
-        return []
-
-    def parse_date(value):
-        if not value:
-            return None
-        for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d"):
-            try:
-                return datetime.strptime(value, fmt)
-            except ValueError:
-                continue
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            return None
-
-    start_dt = parse_date(start_value)
-    end_dt = parse_date(end_value)
-
-    if start_dt is None and end_dt is not None:
-        start_dt = end_dt.replace(day=1)
-    if end_dt is None and start_dt is not None:
-        end_dt = start_dt.replace(day=28)
-    if start_dt is None or end_dt is None:
-        return []
-
-    if end_dt < start_dt:
-        start_dt, end_dt = end_dt, start_dt
-
-    months = []
-    current = start_dt.replace(day=1)
-    while current <= end_dt:
-        months.append(current.strftime("%Y-%m"))
-        if current.month == 12:
-            current = current.replace(year=current.year + 1, month=1)
-        else:
-            current = current.replace(month=current.month + 1)
-
-    seen = set()
-    unique_months = []
-    for month in months:
-        if month in seen:
+    cleaned = []
+    for entry in selected_shops or []:
+        if not isinstance(entry, dict):
+            cleaned.append(entry)
             continue
-        seen.add(month)
-        unique_months.append(month)
-    return unique_months
+
+        shop_value = str(entry.get("Shop") or entry.get("shop") or "").strip()
+        if shop_value == target:
+            continue
+        cleaned.append(entry)
+    return cleaned
 
 
 def normalize_client_progress(value):
@@ -240,93 +143,9 @@ def normalize_client_progress(value):
 
 def resolve_clients_data_path(project_root=None):
     if project_root is None:
-        project_root = Path(__file__).resolve().parent.parent
+        project_root = Path(__file__).resolve().parents[2]
 
-    project_root = Path(project_root).resolve()
-    canonical_file = project_root / "clients.json"
-    legacy_files = [
-        project_root / "python_code" / "clients.json",
-        Path.cwd() / "clients.json",
-        Path(sys.executable).resolve().parent / "clients.json",
-    ]
-
-    def read_json_list(path):
-        try:
-            if not path.exists():
-                return []
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            return payload if isinstance(payload, list) else []
-        except (json.JSONDecodeError, OSError, TypeError, ValueError):
-            return []
-
-    canonical_exists = canonical_file.exists()
-    if canonical_exists:
-        legacy_entries = []
-        seen = set()
-        for legacy_file in legacy_files:
-            if legacy_file == canonical_file or not legacy_file.exists():
-                continue
-            for entry in read_json_list(legacy_file):
-                if not isinstance(entry, dict):
-                    continue
-                name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()
-                contact = str(entry.get("contact") or entry.get("Contact") or "").strip()
-                key = (name, contact)
-                if not key[0] and not key[1]:
-                    continue
-                if key in seen:
-                    continue
-                seen.add(key)
-                legacy_entries.append(entry)
-
-        if legacy_entries:
-            merged = read_json_list(canonical_file)
-            seen_entries = set()
-            for entry in merged:
-                if not isinstance(entry, dict):
-                    continue
-                name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()
-                contact = str(entry.get("contact") or entry.get("Contact") or "").strip()
-                seen_entries.add((name, contact))
-            for entry in legacy_entries:
-                name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()
-                contact = str(entry.get("contact") or entry.get("Contact") or "").strip()
-                key = (name, contact)
-                if key in seen_entries:
-                    continue
-                merged.append(entry)
-                seen_entries.add(key)
-            canonical_file.parent.mkdir(parents=True, exist_ok=True)
-            canonical_file.write_text(json.dumps(merged, indent=2), encoding="utf-8")
-
-        return canonical_file
-
-    all_legacy_entries = []
-    seen = set()
-    for legacy_file in legacy_files:
-        if not legacy_file.exists():
-            continue
-        for entry in read_json_list(legacy_file):
-            if not isinstance(entry, dict):
-                continue
-            name = str(entry.get("name") or entry.get("Client Name") or "").strip().lower()
-            contact = str(entry.get("contact") or entry.get("Contact") or "").strip()
-            key = (name, contact)
-            if not key[0] and not key[1]:
-                continue
-            if key in seen:
-                continue
-            seen.add(key)
-            all_legacy_entries.append(entry)
-
-    if all_legacy_entries:
-        canonical_file.parent.mkdir(parents=True, exist_ok=True)
-        canonical_file.write_text(json.dumps(all_legacy_entries, indent=2), encoding="utf-8")
-        return canonical_file
-
-    canonical_file.parent.mkdir(parents=True, exist_ok=True)
-    canonical_file.write_text("[]", encoding="utf-8")
-    return canonical_file
+    return Path(project_root).resolve() / "clients.json"
 
 
 def format_contact_number(value: str, country_code: str = DEFAULT_CONTACT_COUNTRY_CODE) -> str:
@@ -354,188 +173,355 @@ def format_contact_number(value: str, country_code: str = DEFAULT_CONTACT_COUNTR
     return f"{normalized_country}{digits_only}"
 
 
+def normalize_contact(value):
+    if value is None:
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    digits = "".join(ch for ch in text if ch.isdigit())
+    if not digits:
+        return text
+    if text.startswith("+"):
+        return text
+    if digits.startswith("0"):
+        digits = digits[1:]
+    return f"{DEFAULT_CONTACT_COUNTRY_CODE}{digits}"
+
+
+def normalize_review_text(text):
+    return re.sub(
+        r"^\s*\d+\s*(?:[\.)\-\:\]|]\-|\-\s*)\s*",
+        "",
+        str(text or "").strip(),
+    )
+
+
+
+
+
+def build_clients_report_text(file_path):
+    try:
+        path = Path(file_path)
+        payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    except (TypeError, ValueError, OSError):
+        return "Clients Log\n====================\n\nNo client data found."
+
+    if not isinstance(payload, list):
+        return "Clients Log\n====================\n\nNo client data found."
+
+    lines = ["Clients Log", "====================", ""]
+    for client_data in payload:
+        if not isinstance(client_data, dict):
+            continue
+        name = str(client_data.get("name") or client_data.get("Client Name") or "Unknown Client").strip()
+        contact = str(client_data.get("contact") or client_data.get("Contact") or "").strip()
+        business = str(client_data.get("business") or client_data.get("Business") or "").strip()
+        email = str(client_data.get("email") or client_data.get("Email") or "").strip()
+        shop_number = client_data.get("shop_number") or client_data.get("Shop Number") or []
+        normalized_shops = normalize_shop_numbers(shop_number)
+        shops = ", ".join(format_shop_display_label(item) for item in normalized_shops) if normalized_shops else "N/A"
+        reviews = client_data.get("reviews") or []
+        contract_details = client_data.get("contract_details") or client_data.get("Contract Details") or {}
+
+        lines.extend([
+            f"Client: {name}",
+            f"Contact: {contact or 'N/A'}",
+            f"Business: {business or 'N/A'}",
+            f"Email: {email or 'N/A'}",
+            f"Shop Number(s): {shops}",
+        ])
+
+        if isinstance(contract_details, dict):
+            lines.extend([
+                f"Contract Number: {contract_details.get('contract_number') or contract_details.get('Contract Number') or 'N/A'}",
+                f"Starting Date: {contract_details.get('starting_date') or contract_details.get('Starting Date') or 'N/A'}",
+                f"Ending Date: {contract_details.get('ending_date') or contract_details.get('Ending Date') or 'N/A'}",
+            ])
+
+        if isinstance(reviews, list) and reviews:
+            lines.append("Reviews:")
+            for item in reviews[:5]:
+                if isinstance(item, dict):
+                    details = str(item.get("review") or item.get("Review") or "").strip()
+                    if details:
+                        lines.append(f" - {details}")
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+
+
 class Client:
-    def __init__(self, name: str, contact: str, business: str, email: str = "", shop_number: str = "", reviews=None, contract_details=None, progress=None, transactions=None, address: str = "", electrical_meter: str = "", notes: str = "", reservation_status=None):
-        self.name = name
-        self.contact = format_contact_number(contact, DEFAULT_CONTACT_COUNTRY_CODE)
-        self.business = business
-        self.email = email
-        self.shop_number = shop_number
-        self.address = str(address or "")
-        self.electrical_meter = str(electrical_meter or "")
-        self.notes = str(notes or "")
-        self.reviews = []
-        self.contract_details = normalize_contract_details(contract_details)
-        self.progress = normalize_client_progress(progress)
-        self.reservation_status = normalize_reservation_status(reservation_status)
-        self.transactions = []
+    def __init__(self, name: str, contact: str, business: str,
+                 email: str = "", shop_number=None, reviews=None,
+                 address: str = "", electrical_meter=None, notes=None,
+                 contract_details=None, reservation_status=None, transactions=None):
 
-        if reviews is not None:
-            for review in reviews:
-                if isinstance(review, dict):
-                    self.reviews.append({
-                        "date": review.get("date", ""),
-                        "review": review.get("review", ""),
-                        "comment": review.get("comment", ""),
-                    })
-                elif isinstance(review, str):
-                    self.reviews.append({"date": "", "review": review, "comment": ""})
+        self.name = str(name or "").strip()
+        self.contact = str(contact or "").strip()
+        self.business = str(business or "").strip()
+        self.email = str(email or "").strip()
 
-        if transactions is not None:
-            for entry in transactions:
-                normalized = normalize_transaction_entry(entry)
-                self.transactions.append(normalized)
+        # Always store shop numbers as a clean list of numeric strings
+        self.shop_number = self._normalize_shop_numbers(shop_number)
+
+        # Common project metadata used by dashboard/contract flows
+        self.address = str(address or "").strip()
+        self.electrical_meter = self._normalize_meter_list(electrical_meter)
+        self.notes = self._normalize_meter_list(notes)
+        self.contract_details = contract_details if isinstance(contract_details, dict) else {}
+        self.reservation_status = reservation_status if isinstance(reservation_status, dict) else {}
+        self.transactions = [
+            normalize_transaction_entry(entry)
+            for entry in transactions or []
+            if isinstance(entry, dict)
+        ]
+
+        # Always store reviews as a list of dicts
+        self.reviews = reviews if isinstance(reviews, list) else []
+
+    # ------------------------------------------------------------
+    # Normalization Helpers
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_shop_numbers(value):
+        return normalize_shop_numbers(value)
+
+    @staticmethod
+    def _normalize_review_text(text):
+        """Strip numbering like '1. Review', '2) Review', etc."""
+        return re.sub(
+            r"^\s*\d+\s*(?:[\.)\-:\]|]|\-\s*)\s*",
+            "",
+            str(text or "").strip()
+        )
+
+    @staticmethod
+    def _normalize_meter_list(value):
+        if value is None:
+            return []
+        if isinstance(value, (list, tuple, set)):
+            items = []
+            for item in value:
+                text = str(item or "").strip()
+                if text:
+                    items.append(text)
+            return items
+        text = str(value or "").strip()
+        return [text] if text else []
+
+    # ------------------------------------------------------------
+    # Serialization
+    # ------------------------------------------------------------
 
     def to_dict(self):
+        """Convert client object into JSON‑safe dictionary."""
         return {
             "name": self.name,
             "contact": self.contact,
             "business": self.business,
             "email": self.email,
-            "shop_number": self.shop_number,
+            "shop_number": list(self.shop_number),  # always list
             "address": self.address,
-            "electrical_meter": self.electrical_meter,
-            "notes": self.notes,
-            "reviews": list(self.reviews),
-            "contract_details": dict(self.contract_details),
-            "progress": dict(self.progress),
-            "reservation_status": dict(self.reservation_status),
-            "transactions": [dict(entry) for entry in self.transactions],
+            "electrical_meter": list(self.electrical_meter),
+            "notes": list(self.notes),
+            "contract_details": dict(self.contract_details) if isinstance(self.contract_details, dict) else {},
+            "reservation_status": dict(self.reservation_status) if isinstance(self.reservation_status, dict) else {},
+            "transactions": [
+                normalize_transaction_entry(entry) for entry in self.transactions
+            ],
+            "reviews": list(self.reviews),          # always list of dicts
         }
 
-    def share_text(self):
-        lines = [
-            f"Name: {self.name}",
-            f"Phone: {self.contact}",
-            f"Email: {self.email}",
-            f"Business: {self.business}",
-            f"Shop Number: {self.shop_number}",
-        ]
-        return "\n".join(line for line in lines if line and not line.endswith(": "))
-
-    def to_vcard(self):
-        lines = [
-            "BEGIN:VCARD",
-            "VERSION:3.0",
-            f"FN:{self.name}",
-            f"ORG:{self.business}",
-            f"TEL;TYPE=CELL:{self.contact}",
-            f"EMAIL:{self.email}",
-            f"NOTE:Shop Number: {self.shop_number}",
-            "END:VCARD",
-        ]
-        return "\n".join(lines)
-
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: dict):
+        """
+        Safely load client from JSON dictionary.
+        Handles older JSON formats gracefully.
+        """
         if not isinstance(data, dict):
-            return cls("", "", "")
+            return cls("", "", "", "")
 
-        normalized = {}
-        for key, value in data.items():
-            if isinstance(key, str):
-                normalized[key.strip().lower()] = value
+        name = str(data.get("name", "")).strip()
+        contact = str(data.get("contact", "")).strip()
+        business = str(data.get("business", "")).strip()
+        email = str(data.get("email", "")).strip()
 
-        def pick(*keys, default=""):
-            for key in keys:
-                if key in normalized:
-                    value = normalized[key]
-                    return value if value is not None else default
-            return default
+        # Normalize shop numbers from old or new JSON formats
+        shop_number = data.get("shop_number", [])
+        shop_number = cls._normalize_shop_numbers(shop_number)
 
-        name = pick("name", "client name", "client_name", "Client Name", default="")
-        contact = format_contact_number(pick("contact", "contact number", "contact_number", "Contact", default=""))
-        business = pick("business", "business type", "business_type", "Business", default="")
-        email = pick("email", "Email", default="")
-        shop_number = pick("shop_number", "shop number", "shop_number", "Shop Number", default="")
-        address = pick("address", "Address", default="")
-        electrical_meter = pick("electrical_meter", "Electrical Meter", "electrical meter", "electric_meter", default="")
-        notes = pick("notes", "Notes", default="")
-        reviews = pick("reviews", default=[])
-        if not isinstance(reviews, list):
-            reviews = []
-        contract_details = pick("contract_details", "contractDetails", "Contract Details", default={})
-        if not isinstance(contract_details, dict):
-            contract_details = {}
-        progress = pick("progress", default={})
-        if not isinstance(progress, dict):
-            progress = {}
-        reservation_status = pick("reservation_status", default={})
-        if not isinstance(reservation_status, dict):
-            reservation_status = {}
-        transactions = pick("transactions", default=[])
-        if not isinstance(transactions, list):
-            transactions = []
+        # Normalize reviews
+        raw_reviews = data.get("reviews", [])
+        reviews = []
+        if isinstance(raw_reviews, list):
+            for item in raw_reviews:
+                if isinstance(item, dict):
+                    reviews.append({
+                        "date": str(item.get("date", "")).strip(),
+                        "review": cls._normalize_review_text(item.get("review", "")),
+                        "comment": str(item.get("comment", "")).strip(),
+                    })
+
+        contract_details = data.get("contract_details") or data.get("Contract Details") or {}
+        reservation_status = data.get("reservation_status") or data.get("Reservation Status") or {}
 
         return cls(
-            str(name),
-            str(contact),
-            str(business),
-            str(email),
-            shop_number=str(shop_number),
+            name=name,
+            contact=contact,
+            business=business,
+            email=email,
+            shop_number=shop_number,
             reviews=reviews,
-            contract_details=contract_details,
-            progress=progress,
-            transactions=transactions,
-            address=str(address),
-            electrical_meter=str(electrical_meter),
-            notes=str(notes),
-            reservation_status=reservation_status,
+            address=str(data.get("address") or data.get("Address") or "").strip(),
+            electrical_meter=data.get("electrical_meter") or data.get("Electrical Meter") or [],
+            notes=data.get("notes") or data.get("Notes") or [],
+            contract_details=contract_details if isinstance(contract_details, dict) else {},
+            reservation_status=reservation_status if isinstance(reservation_status, dict) else {},
+            transactions=data.get("transactions", []),
         )
 
+    # ------------------------------------------------------------
+    # Convenience Methods (Optional for UI)
+    # ------------------------------------------------------------
+
+    def add_review(self, text: str):
+        """Add a new review directly to the client."""
+        review = self._normalize_review_text(text)
+        if not review:
+            return False
+
+        self.reviews.append({
+            "date": datetime.now().strftime("%d-%m-%Y %H:%M:%S"),
+            "review": review,
+            "comment": "",
+        })
+        return True
+
     def __repr__(self):
-        return f"Client name: {self.name}\nContact: {self.contact}\nType of business: {self.business}\nEmail: {self.email}\nReviews: {len(self.reviews)}"
+        return f"Client(name={self.name!r}, contact={self.contact!r})"
 
 
-class ClientManager:
+class ClientManager(ShopManagementMixin):
     def __init__(self, file_path=None):
-        if file_path is None:
-            self.file_path = resolve_clients_data_path()
-        else:
-            raw_path = Path(file_path)
-            if raw_path.name == "clients.json" and not raw_path.is_absolute():
-                self.file_path = resolve_clients_data_path()
-            else:
-                self.file_path = raw_path.resolve() if raw_path.is_absolute() else (Path.cwd() / raw_path).resolve()
+        raw_path = Path(file_path).resolve() if file_path else resolve_clients_data_path()
+        self.file_path = raw_path.resolve()
 
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.file_path.exists():
             self.file_path.write_text("[]", encoding="utf-8")
+
         self.clients = []
         self.load_clients()
 
+    # ------------------------------------------------------------
+    # Core Client Operations
+    # ------------------------------------------------------------
+
     def find_client_by_contact(self, contact: str, exclude_name: str = ""):
-        normalized_contact = format_contact_number(contact, DEFAULT_CONTACT_COUNTRY_CODE)
+        normalized = normalize_contact(contact)
+        exclude = (exclude_name or "").strip().lower()
+
         for client in self.clients:
-            if client.contact == normalized_contact and client.name.lower() != (exclude_name or "").lower():
+            if client.contact == normalized and client.name.lower() != exclude:
                 return client
         return None
 
-    def add_client(self, name: str, contact: str, business: str, email: str = "", shop_number: str = ""):
+    def add_client(self, name: str, contact: str, business: str,
+                   email: str = "", shop_number=None):
+
         name = (name or "").strip()
         if not name:
             return False
 
-        existing = self.find_client_by_contact(contact, exclude_name=name)
-        if existing is not None:
+        if self.find_client_by_contact(contact, exclude_name=name):
             return False
 
-        client = Client(name, contact, business, email, shop_number=shop_number)
+        shops = normalize_shop_numbers(shop_number)
+
+        client = Client(
+            name=name,
+            contact=normalize_contact(contact),
+            business=str(business or "").strip(),
+            email=str(email or "").strip(),
+            shop_number=shops,
+        )
+
         self.clients.append(client)
         self.save_clients()
         self.create_client_directory(client)
         return True
 
+    def upsert_client(
+        self,
+        *,
+        client_name: str,
+        contact: str = "",
+        business: str = "",
+        email: str = "",
+        shop_number=None,
+        address: str = "",
+        electrical_meter=None,
+        notes=None,
+        contract_details=None,
+        reservation_status=None,
+    ):
+        name = str(client_name or "").strip()
+        if not name:
+            raise ValueError("Client name is required.")
+
+        normalized_contact = format_contact_number(contact or "", DEFAULT_CONTACT_COUNTRY_CODE)
+        normalized_shops = normalize_shop_numbers(shop_number or [])
+        normalized_meters = list(electrical_meter or [])
+        contract_payload = contract_details or {}
+        status_payload = reservation_status or {}
+
+        existing = next(
+            (c for c in self.clients if c.name.strip().lower() == name.lower()),
+            None,
+        )
+
+        if existing is None:
+            client = Client(
+                name=name,
+                contact=normalized_contact,
+                business=str(business or "").strip(),
+                email=str(email or "").strip(),
+                shop_number=normalized_shops,
+                address=str(address or "").strip(),
+                electrical_meter=normalized_meters,
+                notes=notes or normalized_meters,
+                contract_details=contract_payload,
+                reservation_status=status_payload,
+            )
+            self.clients.append(client)
+            self.create_client_directory(client)
+            self.save_clients()
+            return client
+
+        existing.name = name
+        existing.contact = normalized_contact
+        existing.business = str(business or existing.business).strip()
+        existing.email = str(email or existing.email).strip()
+        existing.shop_number = normalized_shops
+        existing.address = str(address or existing.address).strip()
+        existing.electrical_meter = normalized_meters
+        existing.notes = notes or normalized_meters
+        existing.contract_details = contract_payload
+        existing.reservation_status = status_payload
+
+        self.save_clients()
+        return existing
+
     def delete_client(self, name: str):
-        if not name or not isinstance(name, str):
-            return False
-
-        target_name = name.strip()
-        if not target_name:
-            return False
-
+        """Delete a single client by name (used by Overview UI)."""
+        target = str(name or "").strip().lower()
         before = len(self.clients)
-        self.clients = [client for client in self.clients if client.name.lower() != target_name.lower()]
+
+        self.clients = [c for c in self.clients if c.name.lower() != target]
 
         if len(self.clients) == before:
             return False
@@ -543,16 +529,37 @@ class ClientManager:
         self.save_clients()
         return True
 
+    def delete_clients_bulk(self, names: list[str]):
+        """
+        Delete multiple selected clients (used by All Clients UI).
+        Returns number of deleted clients.
+        """
+        normalized = {str(n).strip().lower() for n in names if str(n).strip()}
+        before = len(self.clients)
+
+        self.clients = [
+            c for c in self.clients
+            if c.name.lower() not in normalized
+        ]
+
+        deleted_count = before - len(self.clients)
+        if deleted_count > 0:
+            self.save_clients()
+
+        return deleted_count
+
+    # ------------------------------------------------------------
+    # Review Handling
+    # ------------------------------------------------------------
+
     def add_review(self, name: str, review_text: str):
-        if not name or not isinstance(name, str):
+        target = str(name or "").strip().lower()
+        review = normalize_review_text(review_text)
+
+        if not target or not review:
             return False
 
-        target_name = name.strip()
-        review = str(review_text or "").strip()
-        if not target_name or not review:
-            return False
-
-        client = next((item for item in self.clients if item.name.lower() == target_name.lower()), None)
+        client = next((c for c in self.clients if c.name.lower() == target), None)
         if client is None:
             return False
 
@@ -561,32 +568,35 @@ class ClientManager:
             "review": review,
             "comment": "",
         })
+
         self.save_clients()
         return True
 
-    def update_review_comment(self, client_name: str, review_text: str, comment: str, date: str = ""):
-        if not client_name or not isinstance(client_name, str):
-            return False
+    def update_review_comment(self, client_name: str, review_text: str,
+                              comment: str, date: str = ""):
 
-        review = re.sub(r"^\s*\d+\s*(?:[\.)\-:\]|]|\-\s*)\s*", "", str(review_text or "").strip())
-        if not review:
-            return False
-
-        target_client = next((item for item in self.clients if item.name.lower() == client_name.strip().lower()), None)
-        if target_client is None:
-            return False
-
+        target = str(client_name or "").strip().lower()
+        review = normalize_review_text(review_text)
         comment_text = str(comment or "").strip()
-        for item in target_client.reviews:
-            existing_review = re.sub(r"^\s*\d+\s*(?:[\.)\-:\]|]|\-\s*)\s*", "", str(item.get("review", "")).strip())
-            same_date = not date or str(item.get("date", "")).strip() == str(date).strip()
-            if existing_review == review and same_date:
-                item["comment"] = comment_text
-                self.save_clients()
-                return True
 
-        for item in target_client.reviews:
-            if re.sub(r"^\s*\d+\s*(?:[\.)\-:\]|]|\-\s*)\s*", "", str(item.get("review", "")).strip()) == review:
+        if not target or not review:
+            return False
+
+        client = next((c for c in self.clients if c.name.lower() == target), None)
+        if client is None:
+            return False
+
+        # First pass: match review + date
+        for item in client.reviews:
+            if normalize_review_text(item.get("review")) == review:
+                if not date or item.get("date") == date:
+                    item["comment"] = comment_text
+                    self.save_clients()
+                    return True
+
+        # Second pass: match review only
+        for item in client.reviews:
+            if normalize_review_text(item.get("review")) == review:
                 item["comment"] = comment_text
                 self.save_clients()
                 return True
@@ -596,318 +606,62 @@ class ClientManager:
     def get_all_reviews(self):
         reviews = []
         for client in self.clients:
-            for review in client.reviews:
+            for r in client.reviews:
                 reviews.append({
                     "client_name": client.name,
                     "contact": client.contact,
                     "business": client.business,
                     "email": client.email,
-                    "date": review.get("date", ""),
-                    "review": review.get("review", ""),
-                    "comment": review.get("comment", ""),
+                    "date": r.get("date", ""),
+                    "review": r.get("review", ""),
+                    "comment": r.get("comment", ""),
                 })
 
-        reviews.sort(key=lambda item: (item.get("date", "") or "", item.get("client_name", "").lower()))
+        reviews.sort(key=lambda x: (x["date"], x["client_name"].lower()))
         return reviews
 
-    def list_clients(self):
-        if not self.clients:
-            return "No clients found."
-
-        result = []
-        for client in self.clients:
-            email_info = f" | {client.email}" if client.email else ""
-            result.append(f"{client.name} | {client.contact} | {client.business}{email_info}")
-        return "\n".join(result)
+    # ------------------------------------------------------------
+    # Searching
+    # ------------------------------------------------------------
 
     def search_clients(self, keyword: str):
-        keyword_lower = keyword.lower()
-        return [
-            client
-            for client in self.clients
-            if keyword_lower in client.name.lower()
-            or keyword_lower in client.contact.lower()
-            or keyword_lower in client.business.lower()
-            or keyword_lower in client.email.lower()
-        ]
+        key = str(keyword or "").strip().lower()
+        if not key:
+            return []
 
-    def get_available_shop_numbers(self, exclude_name: str = "") -> list[str]:
-        used_numbers = set()
-        for client in self.clients:
-            if client.name.lower() == (exclude_name or "").lower():
-                continue
-            shop_number = str(client.shop_number or "").strip()
-            if shop_number.isdigit():
-                value = int(shop_number)
-                if 1 <= value <= 36:
-                    used_numbers.add(value)
+        results = []
+        for c in self.clients:
+            if (
+                key in c.name.lower()
+                or key in c.contact.lower()
+                or key in c.business.lower()
+                or key in c.email.lower()
+                or any(key == s.lower() for s in c.shop_number)
+            ):
+                results.append(c)
 
-        return [str(number) for number in range(1, 37) if number not in used_numbers]
+        return results
 
-    def suggest_available_shop_number(self, preferred_shop_number: str, exclude_name: str = "") -> str:
-        normalized = str(preferred_shop_number or "").strip()
-        if normalized and normalized.isdigit():
-            value = int(normalized)
-            if 1 <= value <= 36:
-                valid, _ = self.validate_shop_number(normalized, exclude_name=exclude_name)
-                if valid:
-                    return normalized
+    # ------------------------------------------------------------
+    # Shop Number Logic (List-Based)
+    # ------------------------------------------------------------
 
-        available = self.get_available_shop_numbers(exclude_name)
-        return available[0] if available else ""
-
-    def validate_shop_number(self, shop_number: str, exclude_name: str = "") -> tuple[bool, str]:
-        normalized = str(shop_number or "").strip()
-        if not normalized:
-            return False, "Please enter a shop number between 1 and 36."
-
-        if not normalized.isdigit():
-            return False, "Shop number must be a whole number from 1 to 36."
-
-        value = int(normalized)
-        if value < 1 or value > 36:
-            return False, "Shop number must be between 1 and 36."
-
-        for client in self.clients:
-            if client.name.lower() == (exclude_name or "").lower():
-                continue
-            if str(client.shop_number or "").strip() == normalized:
-                remaining = self.get_available_shop_numbers(exclude_name)
-                if remaining:
-                    return False, f"Shop number '{normalized}' is already used. Remaining available shops: {', '.join(remaining[:12])}{' ...' if len(remaining) > 12 else ''}."
-                return False, f"Shop number '{normalized}' is already used by '{client.name}'."
-
-        return True, ""
-
-    def create_client_directory(self, client):
-        if client is None or not isinstance(client, Client):
-            return None
-
-        project_root = self.file_path.parent if self.file_path is not None else Path.cwd()
-        clients_root = project_root / "Clients"
-        clients_root.mkdir(parents=True, exist_ok=True)
-
-        safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", str(client.name or "Client").strip()).strip("._") or "Client"
-        safe_shop = str(client.shop_number or "").strip()
-        folder_name = f"{safe_name}_{safe_shop}" if safe_shop else safe_name
-        folder_path = clients_root / folder_name
-        folder_path.mkdir(parents=True, exist_ok=True)
-        return folder_path
+   
 
     def save_clients(self):
-        self.file_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = [client.to_dict() for client in self.clients]
-        self.file_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        save_clients_to_file(self.file_path, self.clients)
 
     def load_clients(self):
-        if not self.file_path.exists():
-            self.clients = []
-            return
+        self.clients = load_clients_from_file(self.file_path)
 
-        try:
-            data = json.loads(self.file_path.read_text(encoding="utf-8"))
-            self.clients = [Client.from_dict(item) for item in data]
-        except (json.JSONDecodeError, TypeError, ValueError):
-            self.clients = []
+    # ------------------------------------------------------------
+    # Export
+    # ------------------------------------------------------------
 
     def json2txt(self):
-        with self.file_path.open("r", encoding="utf-8") as infile:
-            data = json.load(infile)
-
-        output_path = Path(r"docs/clients_data.txt")
-        with output_path.open("w", encoding="utf-8") as outfile:
-            outfile.write(json.dumps(data, indent=2))
-
-
-def infer_country_from_contact(contact_value):
-    raw = str(contact_value or "").strip()
-    if not raw:
-        return "N/A"
-
-    digits = "".join(ch for ch in raw if ch.isdigit())
-    if not digits:
-        return "N/A"
-
-    country_map = {
-        "+968": "Oman",
-        "+966": "Saudi Arabia",
-        "+971": "United Arab Emirates",
-        "+974": "Qatar",
-        "+965": "Kuwait",
-        "+973": "Bahrain",
-        "+962": "Jordan",
-        "+20": "Egypt",
-        "+1": "United States",
-        "+44": "United Kingdom",
-        "+49": "Germany",
-        "+33": "France",
-    }
-
-    for code, country in country_map.items():
-        if digits.startswith(code.lstrip("+")):
-            return country
-
-    if digits.startswith("968"):
-        return "Oman"
-    if digits.startswith("0"):
-        return "Oman"
-    return "N/A"
-
-
-def build_clients_report_text(file_path=None):
-    resolved_path = Path(file_path) if file_path is not None else Path(__file__).resolve().parent.parent / "clients.json"
-    if not resolved_path.exists():
-        return "Clients Log\n\nNo clients found."
-
-    try:
-        data = json.loads(resolved_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError, TypeError):
-        return "Clients Log\n\nNo clients found."
-
-    if not isinstance(data, list) or not data:
-        return "Clients Log\n\nNo clients found."
-
-    lines = ["Clients Log", "====================", ""]
-    for index, item in enumerate(data, start=1):
-        client = Client.from_dict(item)
-        contract = dict(client.contract_details) if isinstance(client.contract_details, dict) else {}
-        progress = dict(client.progress) if isinstance(client.progress, dict) else {}
-
-        lines.append(f"Shop Number: {client.shop_number or 'N/A'}")
-        lines.append(f"Client {index}: {client.name}")
-        lines.append("")
-        lines.append("Client Details")
-        lines.append("---------------")
-        lines.append(f"Contact: {client.contact}")
-        lines.append(f"Business: {client.business}")
-        lines.append(f"Email: {client.email or 'N/A'}")
-        lines.append(f"Country: {infer_country_from_contact(client.contact) if client.contact else 'N/A'}")
-        lines.append("")
-        lines.append("Contract Details")
-        lines.append("----------------")
-        lines.append(f"Contract Number: {contract.get('contract_number') or 'N/A'}")
-        lines.append(f"Starting Date: {contract.get('starting_date') or 'N/A'}")
-        lines.append(f"Ending Date: {contract.get('ending_date') or 'N/A'}")
-        lines.append(f"Commercial Registration Number: {contract.get('commercial_registration_number') or 'N/A'}")
-        lines.append(f"Authorized Signature Name: {contract.get('authorized_signature_name') or 'N/A'}")
-        lines.append(f"Rent Value: {contract.get('rent_value') or 'N/A'}")
-        lines.append(f"Currency Type: {contract.get('currency_type') or 'OMR'}")
-        lines.append(f"Open Issues: {contract.get('open_issues') or 'N/A'}")
-        lines.append("")
-        lines.append("Tasks")
-        lines.append("-----")
-        lines.append(f"Progress: {progress.get('progress', 0)}%")
-        tasks = progress.get('all_tasks') or []
-        if isinstance(tasks, list) and tasks:
-            lines.append("Task List: " + ", ".join(str(task) for task in tasks))
-        else:
-            lines.append("Task List: None")
-        lines.append("")
-        lines.append("Reviews")
-        lines.append("-------")
-        if client.reviews:
-            for review in client.reviews:
-                review_text = review.get("review", "") if isinstance(review, dict) else str(review)
-                review_date = review.get("date", "") if isinstance(review, dict) else ""
-                comment = review.get("comment", "") if isinstance(review, dict) else ""
-                if review_date:
-                    lines.append(f"- {review_date}: {review_text}")
-                else:
-                    lines.append(f"- {review_text}")
-                if comment:
-                    lines.append(f"  Comment: {comment}")
-        else:
-            lines.append("Reviews: None")
-        lines.append("")
-
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def build_client_payment_report_text(client_name, client_manager=None):
-    if client_manager is None:
-        client_manager = ClientManager("clients.json")
-
-    client_manager.load_clients()
-    client = next((item for item in client_manager.clients if item.name.lower() == str(client_name or "").strip().lower()), None)
-    if client is None:
-        return f"Client Payment Report\n\nClient '{client_name}' was not found."
-
-    contract_details = client.contract_details or {}
-    contract_start = str(contract_details.get("starting_date") or "").strip()
-    contract_end = str(contract_details.get("ending_date") or "").strip()
-    current_date = datetime.now().strftime("%d-%m-%Y")
-    contract_status = "Active"
-    if contract_start and contract_end:
-        try:
-            start_dt = datetime.strptime(contract_start, "%d-%m-%Y")
-            end_dt = datetime.strptime(contract_end, "%d-%m-%Y")
-            today_dt = datetime.strptime(current_date, "%d-%m-%Y")
-            if today_dt < start_dt:
-                contract_status = "Not Started"
-            elif today_dt > end_dt:
-                contract_status = "Expired"
-        except ValueError:
-            contract_status = "Pending evaluation"
-    elif contract_start and not contract_end:
-        contract_status = "In progress"
-    elif not contract_start and contract_end:
-        contract_status = "Pending start date"
-
-    total_amount = 0.0
-    paid_count = 0
-    pending_count = 0
-    transaction_lines = []
-    transactions = list(getattr(client, "transactions", []) or [])
-    for index, transaction in enumerate(transactions, start=1):
-        month = str(transaction.get("month", "") or "").strip() or "N/A"
-        status = str(transaction.get("status", "") or "").strip() or "Pending"
-        amount = str(transaction.get("amount", "") or "").strip()
-        payment_method = str(transaction.get("payment_method", "") or "").strip() or "Cash"
-        cheque_number = str(transaction.get("cheque_number", "") or "").strip()
-        bank_transaction_details = str(transaction.get("bank_transaction_details", "") or "").strip()
-        due_date = str(transaction.get("due_date", "") or "").strip()
-        bank_name = str(transaction.get("bank_name", "") or "").strip()
-
-        try:
-            total_amount += float(amount) if amount else 0.0
-        except ValueError:
-            pass
-
-        if status.lower() in {"paid", "completed", "complete", "success", "successful"}:
-            paid_count += 1
-        else:
-            pending_count += 1
-
-        transaction_lines.append(f"{index}. Month: {month}")
-        transaction_lines.append(f"   Status: {status}")
-        transaction_lines.append(f"   Amount: {amount or 'N/A'}")
-        transaction_lines.append(f"   Payment Method: {payment_method}")
-        if payment_method.lower() == "cheque":
-            transaction_lines.append(f"   Cheque Number: {cheque_number or 'N/A'}")
-        if payment_method.lower() == "bank transaction":
-            transaction_lines.append(f"   Bank Transaction Details: {bank_transaction_details or 'N/A'}")
-        transaction_lines.append(f"   Due Date: {due_date or 'N/A'}")
-        transaction_lines.append(f"   Bank Name: {bank_name or 'N/A'}")
-        transaction_lines.append("")
-
-    if not transaction_lines:
-        transaction_lines = ["No transactions recorded."]
-
-    lines = [
-        f"Client Payment Report - {client.name}",
-        "=" * 40,
-        "",
-        f"Business: {client.business or 'N/A'}",
-        f"Contact: {client.contact or 'N/A'}",
-        f"Shop Number: {client.shop_number or 'N/A'}",
-        f"Contract Period: {contract_start or 'N/A'} to {contract_end or 'N/A'}",
-        f"Contract Period Status: {contract_status}",
-        f"Total Amount: {total_amount:.2f} OMR",
-        f"Paid Transactions: {paid_count}",
-        f"Pending Transactions: {pending_count}",
-        "",
-        "Transactions",
-        "-----------",
-    ]
-    lines.extend(transaction_lines)
-    return "\n".join(lines).rstrip() + "\n"
+        output = Path("docs/clients_data.txt")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps([c.to_dict() for c in self.clients], indent=2),
+            encoding="utf-8"
+        )

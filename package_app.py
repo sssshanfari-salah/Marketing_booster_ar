@@ -13,6 +13,48 @@ def resolve_source_dir():
     return APP_DIR / "python_code"
 
 
+def migrate_legacy_project_data_files():
+    legacy_root = APP_DIR / "python_code"
+    canonical_map = {
+        "users.json": APP_DIR / "users.json",
+        "guests.json": APP_DIR / "guests.json",
+    }
+
+    for filename, canonical_path in canonical_map.items():
+        legacy_path = legacy_root / filename
+        if not legacy_path.exists():
+            continue
+        if canonical_path.exists() and canonical_path.stat().st_size > 0:
+            continue
+        try:
+            shutil.copy2(legacy_path, canonical_path)
+        except OSError:
+            pass
+
+    for filename, canonical_path in canonical_map.items():
+        legacy_path = legacy_root / filename
+        if not legacy_path.exists() or not canonical_path.exists():
+            continue
+        try:
+            legacy_payload = json.loads(legacy_path.read_text(encoding="utf-8")) if legacy_path.read_text(encoding="utf-8").strip() else None
+            canonical_payload = json.loads(canonical_path.read_text(encoding="utf-8")) if canonical_path.read_text(encoding="utf-8").strip() else None
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            continue
+
+        if not isinstance(legacy_payload, list) or not isinstance(canonical_payload, list):
+            continue
+        if len(canonical_payload) >= len(legacy_payload):
+            continue
+        canonical_path.write_text(json.dumps(legacy_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    source_dir = APP_DIR / "python_code"
+    if str(source_dir) not in sys.path:
+        sys.path.insert(0, str(source_dir))
+    from logic.validations.Storage.client_storage import migrate_legacy_client_files
+
+    migrate_legacy_client_files(APP_DIR)
+
+
 SOURCE_DIR = resolve_source_dir()
 ENTRY_SCRIPT = SOURCE_DIR / "app" / "main.py"
 DIST_DIR = APP_DIR / "dist"
@@ -65,6 +107,62 @@ def build_default_shop_meter_catalog():
 DEFAULT_SHOP_METER_CATALOG = build_default_shop_meter_catalog()
 APP_DISPLAY_NAME = "Clients Manager"
 SPEC_FILE = APP_DIR / f"{APP_NAME}.spec"
+
+
+def discover_package_imports():
+    """Return all project packages/modules that should be bundled for frozen builds."""
+    package_roots = [
+        ("python_code", APP_DIR / "python_code"),
+        ("logic", SOURCE_DIR / "logic"),
+        ("ui", SOURCE_DIR / "ui"),
+        ("config", SOURCE_DIR / "config"),
+    ]
+
+    discovered = {
+        "tkinter",
+        "tkinter.ttk",
+        "tkinter.messagebox",
+        "tkinter.filedialog",
+        "tkinter.simpledialog",
+        "tkinter.font",
+        "tkinter.constants",
+        "tkinter.commondialog",
+        "tkinter.colorchooser",
+        "webbrowser",
+        "PIL",
+        "PIL.Image",
+        "PIL.ImageTk",
+        "PIL._imaging",
+        "PIL._imagingtk",
+        "bidi",
+        "bidi.algorithm",
+        "arabic_reshaper",
+        "logic",
+        "ui",
+        "config",
+        "python_code",
+    }
+
+    for root_name, root_dir in package_roots:
+        if not root_dir.exists():
+            continue
+        for path in sorted(root_dir.rglob("*.py")):
+            if any(part in {"__pycache__", "build", "dist"} for part in path.parts):
+                continue
+            if path.name.startswith("test_"):
+                continue
+            relative_parts = path.relative_to(root_dir).with_suffix("").parts
+            if relative_parts and relative_parts[-1] == "__init__":
+                module_name = root_name
+            else:
+                module_name = ".".join([root_name, *relative_parts])
+            if module_name:
+                discovered.add(module_name)
+
+    return sorted(discovered)
+
+
+PACKAGING_HIDDEN_IMPORTS = discover_package_imports()
 PYTHON_SOURCE_FILES = sorted(
     path
     for path in SOURCE_DIR.rglob("*.py")
@@ -124,7 +222,7 @@ RUNTIME_DATA_FILES = [
     COUNTRY_CODES_DATA,
     SHOPS_ELECTRICAL_METERS_FILE,
     DOCUMENTS_DATA_FILE,
-    SOURCE_DIR / "translations.py",
+    SOURCE_DIR / "config" / "translations.py",
     STARCO_RENT_CONTRACT,
     *PROJECT_RUNTIME_DIRECTORIES,
 ]
@@ -158,20 +256,40 @@ def validate_runtime_asset_catalog():
     session_file = SOURCE_DIR / "ui" / "session.py"
     action_file = SOURCE_DIR / "ui" / "client_actions.py"
     translation_file = SOURCE_DIR / "config" / "translations.py"
+    client_manager_file = SOURCE_DIR / "logic" / "clients_management.py"
 
     ui_content = ui_file.read_text(encoding="utf-8") if ui_file.exists() else ""
     ui_utils_content = ui_utils_file.read_text(encoding="utf-8") if ui_utils_file.exists() else ""
     session_content = session_file.read_text(encoding="utf-8") if session_file.exists() else ""
     action_content = action_file.read_text(encoding="utf-8") if action_file.exists() else ""
     translation_content = translation_file.read_text(encoding="utf-8") if translation_file.exists() else ""
+    client_manager_content = client_manager_file.read_text(encoding="utf-8") if client_manager_file.exists() else ""
+    shop_management_file = SOURCE_DIR / "logic" / "shop_management.py"
+    shop_management_content = shop_management_file.read_text(encoding="utf-8") if shop_management_file.exists() else ""
+    finance_file = SOURCE_DIR / "logic" / "starco_finance.py"
+    finance_content = finance_file.read_text(encoding="utf-8") if finance_file.exists() else ""
 
     ui_markers = [
+        "from logic.validations.Storage.reports.client_payment_report import build_client_payment_report_text",
         "def set_language(lang):",
         "def T(text, **kwargs):",
         "def validate_translation_coverage():",
+        "def safe_main():",
+        "def is_desktop_environment_available():",
+        "Headless mode detected: Tkinter GUI startup skipped because no desktop session is available.",
+        "Runtime startup issue after window creation: a GUI callback failed during startup.",
         "CURRENT_LANGUAGE = \"eng\"",
         "Logged in as: {user_name}",
         "Client Details",
+        "self.selected_shops = remove_shop_from_selected_shops(self.selected_shops, deleted_shop_number)",
+        "def select_all_clients(self):",
+        "self.tree.configure(selectmode=\"extended\")",
+        "self.tree.bind(\"<Control-a>\", lambda event: self.select_all_clients())",
+        "def rebuild_selected_shops_from_clients(self):",
+        "self.rebuild_selected_shops_from_clients()",
+        "self.client_manager.validate_shop_number(",
+        "self.selected_shops.append({\"Shop\": shop_number, \"Elec meter\": str(meter_value or \"\")})",
+        "if not names:\n            self.client_name_var.set(\"\")\n            self.client_combo.set(\"\")\n            return",
     ]
 
     ui_utils_markers = [
@@ -204,6 +322,41 @@ def validate_runtime_asset_catalog():
         "\"Language\": \"Language\"",
     ]
 
+    client_manager_markers = [
+        "from logic.shop_management import ShopManagementMixin, normalize_shop_numbers",
+        "class ClientManager(ShopManagementMixin):",
+        "from logic.models.transactions import normalize_transaction_entry as normalize_transaction_entry",
+        "from logic.models.reservations import normalize_reservation_status as normalize_reservation_status",
+        "from logic.validations.Storage.client_storage import (",
+        "from logic.models.transactions import normalize_transaction_entry as normalize_transaction_entry",
+        "def build_clients_report_text(file_path):",
+    ]
+
+    shop_management_markers = [
+        "def normalize_shop_numbers(value)",
+        "class ShopManagementMixin:",
+        "def validate_shop_number(self,",
+        "def get_used_shop_numbers(self,",
+        "def get_available_shop_numbers(self,",
+        "def create_client_directory(self, client)",
+    ]
+    finance_markers = [
+        "from logic.models.transactions import normalize_transaction_entry as normalize_transaction_entry",
+        "from logic.models.contracts import normalize_contract_details as normalize_contract_details",
+        "from logic.models.reservations import normalize_reservation_status as normalize_reservation_status",
+        "class ClientTransactionsWindow(tk.Toplevel):",
+        "class ReservationStatusWindow(tk.Toplevel):",
+    ]
+
+    shop_validation_file = SOURCE_DIR / "logic" / "shops_conversion_to_dic.py"
+    shop_validation_content = shop_validation_file.read_text(encoding="utf-8") if shop_validation_file.exists() else ""
+    shop_validation_markers = [
+        "def validate_shop(shop, selected=None):",
+        "authoritative_selected = _load_authoritative_selected_shops()",
+        "if authoritative_selected:",
+        "selected = authoritative_selected",
+    ]
+
     stale_ui_markers = [
         "def current_language(",
         "CURRENT_LANGUAGE = lang.CURRENT_LANGUAGE",
@@ -217,6 +370,10 @@ def validate_runtime_asset_catalog():
         (ui_file, ui_markers),
         (action_file, action_markers),
         (translation_file, translation_markers),
+        (client_manager_file, client_manager_markers),
+        (shop_management_file, shop_management_markers),
+        (finance_file, finance_markers),
+        (shop_validation_file, shop_validation_markers),
     ]
     optional_file_sets = [
         (ui_utils_file, ui_utils_markers),
@@ -228,6 +385,10 @@ def validate_runtime_asset_catalog():
         session_file: session_content,
         action_file: action_content,
         translation_file: translation_content,
+        client_manager_file: client_manager_content,
+        shop_management_file: shop_management_content,
+        finance_file: finance_content,
+        shop_validation_file: shop_validation_content,
     }
 
     missing_by_file = []
@@ -444,6 +605,33 @@ def ensure_pyinstaller():
         return False
 
 
+def ensure_packaging_dependencies():
+    required_packages = [
+        "pyinstaller",
+        "pillow",
+        "python-bidi",
+        "arabic-reshaper",
+    ]
+    missing = []
+
+    for package in required_packages:
+        try:
+            if package == "pyinstaller":
+                import PyInstaller  # noqa: F401
+            elif package == "pillow":
+                import PIL  # noqa: F401
+            elif package == "python-bidi":
+                import bidi  # noqa: F401
+            elif package == "arabic-reshaper":
+                import arabic_reshaper  # noqa: F401
+        except Exception:
+            missing.append(package)
+
+    if missing:
+        print(f"Installing packaging dependencies: {', '.join(missing)}")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", *missing])
+
+
 def ensure_pywin32():
     try:
         import win32com.client  # noqa: F401
@@ -491,6 +679,36 @@ def force_remove_path(path, retries=8, delay=0.5):
             time.sleep(delay)
 
 
+def terminate_stale_build_processes():
+    try:
+        output = subprocess.check_output(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'marketing_booster_ar.exe' -or $_.CommandLine -match 'marketing_booster_ar' } | Select-Object -ExpandProperty ProcessId",
+            ],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return
+
+    for raw_pid in output.splitlines():
+        try:
+            pid = int(str(raw_pid).strip())
+        except ValueError:
+            continue
+        if pid <= 0:
+            continue
+        try:
+            subprocess.run(["taskkill", "/PID", str(pid), "/F"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
+
+
 def remove_directory(path):
     if not path.exists():
         return
@@ -501,6 +719,7 @@ def remove_directory(path):
 
 
 def ensure_runtime_files():
+    migrate_legacy_project_data_files()
     APP_DIR.mkdir(parents=True, exist_ok=True)
     SOURCE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -583,6 +802,7 @@ def build_app():
     validate_runtime_asset_catalog()
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    terminate_stale_build_processes()
     remove_stale_artifacts()
     remove_directory(BUILD_DIR)
     remove_directory(DIST_DIR)
@@ -590,6 +810,8 @@ def build_app():
     if not ensure_pyinstaller():
         print("PyInstaller is not installed. Installing it now...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+
+    ensure_packaging_dependencies()
 
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
@@ -600,13 +822,29 @@ def build_app():
     if not ENTRY_SCRIPT.exists():
         raise FileNotFoundError(f"Entry script missing: {ENTRY_SCRIPT}")
 
+    # Use PYINSTALLER_CONSOLE_FALLBACK when building in CI, remote shells, or any headless
+    # environment that needs a console-capable executable for logs and diagnostics.
+    # Leave it unset for the normal desktop GUI build, which remains windowed.
+    console_fallback_enabled = str(os.environ.get("PYINSTALLER_CONSOLE_FALLBACK", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    window_mode_flag = "--console" if console_fallback_enabled else "--windowed"
+
+    if console_fallback_enabled:
+        print("PyInstaller console fallback enabled for headless/CI execution.")
+    else:
+        print("PyInstaller desktop packaging mode enabled (windowed GUI).")
+
     cmd = [
         sys.executable,
         "-m",
         "PyInstaller",
         "--clean",
         "--onefile",
-        "--windowed",
+        window_mode_flag,
         "--name",
         APP_NAME,
         "--distpath",
@@ -615,39 +853,28 @@ def build_app():
         str(BUILD_DIR),
         "--specpath",
         str(APP_DIR),
-        "--hidden-import",
-        "tkinter",
-        "--hidden-import",
-        "tkinter.ttk",
-        "--hidden-import",
-        "tkinter.messagebox",
-        "--hidden-import",
-        "tkinter.filedialog",
-        "--hidden-import",
-        "tkinter.simpledialog",
-        "--hidden-import",
-        "webbrowser",
-        "--hidden-import",
-        "bidi",
-        "--hidden-import",
-        "bidi.algorithm",
-        "--hidden-import",
-        "arabic_reshaper",
-        "--hidden-import",
-        "PIL",
-        "--hidden-import",
-        "PIL.Image",
-        "--hidden-import",
-        "PIL.ImageTk",
-        "--collect-all",
-        "tkinter",
-        "--collect-all",
-        "bidi",
-        "--collect-all",
-        "arabic_reshaper",
-        "--collect-all",
-        "PIL",
+        "--paths",
+        str(SOURCE_DIR),
+        "--paths",
+        str(APP_DIR),
     ]
+
+    for hidden_import in PACKAGING_HIDDEN_IMPORTS:
+        cmd.extend(["--hidden-import", hidden_import])
+
+    for package_name in ("logic", "ui", "config", "python_code"):
+        cmd.extend(["--collect-submodules", package_name])
+
+    cmd.extend([
+        "--collect-all",
+        "tkinter",
+        "--collect-all",
+        "bidi",
+        "--collect-all",
+        "arabic_reshaper",
+        "--collect-all",
+        "PIL",
+    ])
 
     if TARGET_ICON.exists():
         cmd.extend(["--icon", str(TARGET_ICON)])

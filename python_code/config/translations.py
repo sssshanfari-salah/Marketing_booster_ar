@@ -3,11 +3,22 @@
 import re
 
 try:
+    from python_code.project_paths import ensure_source_on_path
+except ImportError:  # pragma: no cover - direct script fallback
+    from project_paths import ensure_source_on_path
+
+ensure_source_on_path()
+
+try:
     import arabic_reshaper
 except ModuleNotFoundError:
     arabic_reshaper = None
 
-from bidi.algorithm import get_display
+try:
+    from bidi.algorithm import get_display
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    def get_display(value):
+        return value
 
 # Shared language state.
 CURRENT_LANGUAGE = "eng"
@@ -30,6 +41,9 @@ TRANSLATIONS = {
         "Add Client": "Add Client",
         "Save Client": "Save Client",
         "Delete Selected Client": "Delete Selected Client",
+        "Select All": "Select All",
+        "Delete clients?": "Delete clients?",
+        "Delete client?": "Delete client?",
         "Progress Overview": "Progress Overview",
         "Progress": "Progress",
         "Tasks": "Tasks",
@@ -137,6 +151,9 @@ TRANSLATIONS = {
         "Add Client": "إضافة عميل",
         "Save Client": "حفظ العميل",
         "Delete Selected Client": "حذف العميل المحدد",
+        "Select All": "تحديد الكل",
+        "Delete clients?": "حذف العملاء؟",
+        "Delete client?": "حذف العميل؟",
         "Progress Overview": "نظرة عامة على التقدم",
         "Progress": "التقدم",
         "Tasks": "المهام",

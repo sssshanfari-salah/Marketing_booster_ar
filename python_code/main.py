@@ -1,1 +1,1 @@
-from app.main import *
+from python_code.app.main import *

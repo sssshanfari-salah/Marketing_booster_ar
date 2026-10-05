@@ -25,7 +25,10 @@ class WelcomeWindow(tk.Tk, BaseWindow):
     """Compatibility wrapper for the dashboard window implementation."""
 
     def __new__(cls, *args, **kwargs):
-        from ui.dashboard import WelcomeWindow as CanonicalWelcomeWindow
+        try:
+            from python_code.ui.dashboard import WelcomeWindow as CanonicalWelcomeWindow
+        except ImportError:  # pragma: no cover - script execution fallback
+            from ui.dashboard import WelcomeWindow as CanonicalWelcomeWindow
         return CanonicalWelcomeWindow(*args, **kwargs)
 
     def __init__(self, *args, **kwargs):
@@ -36,7 +39,10 @@ class ProgressApp(tk.Tk):
     """Compatibility wrapper for the dashboard app implementation."""
 
     def __new__(cls, *args, **kwargs):
-        from ui.dashboard import ProgressApp as CanonicalProgressApp
+        try:
+            from python_code.ui.dashboard import ProgressApp as CanonicalProgressApp
+        except ImportError:  # pragma: no cover - script execution fallback
+            from ui.dashboard import ProgressApp as CanonicalProgressApp
         return CanonicalProgressApp(*args, **kwargs)
 
     def __init__(self, *args, **kwargs):
@@ -44,27 +50,42 @@ class ProgressApp(tk.Tk):
 
 
 def build_startup_splash():
-    from ui.dashboard import build_startup_splash as canonical_build_startup_splash
+    try:
+        from python_code.ui.dashboard import build_startup_splash as canonical_build_startup_splash
+    except ImportError:  # pragma: no cover - script execution fallback
+        from ui.dashboard import build_startup_splash as canonical_build_startup_splash
     return canonical_build_startup_splash()
 
 
 def open_overview_window():
-    from ui.dashboard import open_overview_window as canonical_open_overview_window
+    try:
+        from python_code.ui.dashboard import open_overview_window as canonical_open_overview_window
+    except ImportError:  # pragma: no cover - script execution fallback
+        from ui.dashboard import open_overview_window as canonical_open_overview_window
     return canonical_open_overview_window()
 
 
 def open_welcome_home(force_new=False):
-    from ui.dashboard import open_welcome_home as canonical_open_welcome_home
+    try:
+        from python_code.ui.dashboard import open_welcome_home as canonical_open_welcome_home
+    except ImportError:  # pragma: no cover - script execution fallback
+        from ui.dashboard import open_welcome_home as canonical_open_welcome_home
     return canonical_open_welcome_home(force_new=force_new)
 
 
 def safe_main():
-    from ui.dashboard import safe_main as canonical_safe_main
+    try:
+        from python_code.ui.dashboard import safe_main as canonical_safe_main
+    except ImportError:  # pragma: no cover - script execution fallback
+        from ui.dashboard import safe_main as canonical_safe_main
     return canonical_safe_main()
 
 
 def open_reservation_contract_form(client_name=None, client_data=None):
-    from ui.reservation_contract import ShopReservationForm
+    try:
+        from python_code.ui.reservation_contract import ShopReservationForm
+    except ImportError:  # pragma: no cover - script execution fallback
+        from ui.reservation_contract import ShopReservationForm
     return ShopReservationForm(client_name=client_name, client_data=client_data)
 
 

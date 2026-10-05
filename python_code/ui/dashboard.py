@@ -1,4 +1,4 @@
-import calendar
+﻿import calendar
 import json
 import os
 import re
@@ -17,7 +17,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 try:
-    from ui.utils import (
+    from python_code.ui.utils import (
         apply_bidi_text,
         configure_emoji_label,
         get_emoji_font_families,
@@ -49,12 +49,17 @@ except ImportError:
 from logic.clients_management import (
     Client,
     ClientManager,
-    build_client_payment_report_text,
+    DEFAULT_CONTACT_COUNTRY_CODE,
     build_clients_report_text,
     format_contact_number,
-    generate_contract_months,
+    normalize_reservation_status,
+    remove_shop_from_selected_shops,
     resolve_clients_data_path,
 )
+from logic.months import generate_contract_months
+from logic.shops_conversion_to_dic import format_shop_display_label
+from logic.validations.Storage.reports.client_payment_report import build_client_payment_report_text
+from logic.starco_finance import ClientTransactionsWindow, ReservationStatusWindow
 
 APP_ICON = None
 for candidate in [
@@ -73,7 +78,7 @@ CURRENT_LANGUAGE = "eng"
 APP_ROOT = Path(__file__).resolve().parent.parent
 
 try:
-    from .session import (
+    from python_code.ui.session import (
         APP_ROOT as SESSION_APP_ROOT,
         CURRENT_SESSION_PROFILE,
         GUESTS_FILE,
@@ -134,9 +139,19 @@ except ImportError:  # pragma: no cover - script execution fallback
     )
 
 APP_ROOT = SESSION_APP_ROOT
-COUNTRY_CODES_PATH = Path(__file__).resolve().parent / "country_codes.json"
-
-
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+COUNTRY_CODES_PATH = next(
+    (
+        path
+        for path in (
+            Path(__file__).resolve().parent.parent / "config" / "country_codes.json",
+            PROJECT_ROOT / "python_code" / "config" / "country_codes.json",
+            Path(__file__).resolve().parent / "country_codes.json",
+        )
+        if path.exists()
+    ),
+    Path(__file__).resolve().parent.parent / "config" / "country_codes.json",
+)
 
 
 def build_all_clients_row_values(client, progress_info=None):
@@ -156,11 +171,24 @@ def build_all_clients_row_values(client, progress_info=None):
     else:
         reservation_status = "Not reserved"
 
+    raw_shop_value = getattr(client, "shop_number", "")
+    if isinstance(raw_shop_value, (list, tuple)):
+        shop_display = ", ".join(
+            str(item).strip() for item in raw_shop_value if str(item).strip()
+        )
+    else:
+        shop_display = str(raw_shop_value or "").strip()
+    if shop_display:
+        shop_display = ", ".join(
+            format_shop_display_label(item)
+            for item in [part.strip() for part in shop_display.split(",") if part.strip()]
+        )
+
     return (
         client.name,
         getattr(client, "contact", ""),
         client.business,
-        getattr(client, "shop_number", ""),
+        shop_display,
         getattr(client, "electrical_meter", getattr(client, "notes", "")),
         reservation_status,
         f"{progress}%",
@@ -188,26 +216,30 @@ def load_shop_electrical_meter_map():
 
 
 def resolve_shop_electrical_meter(shop_number):
-    shop_value = str(shop_number or "").strip()
-    if not shop_value:
-        return ""
-
-    mapping = load_shop_electrical_meter_map()
-    if shop_value in mapping:
-        return str(mapping[shop_value]).strip()
-
-    normalized = shop_value.lower()
-    if normalized == "office":
-        return str(mapping.get("Office", "")).strip()
-
     try:
-        shop_id = int(shop_value)
-    except ValueError:
-        return ""
+        from logic.shops_conversion_to_dic import resolve_shop_electrical_meter as shared_resolver
+        return shared_resolver(shop_number)
+    except Exception:
+        shop_value = str(shop_number or "").strip()
+        if not shop_value:
+            return ""
 
-    if 1 <= shop_id <= 36:
-        return str(mapping.get(str(shop_id), "")).strip()
-    return ""
+        mapping = load_shop_electrical_meter_map()
+        if shop_value in mapping:
+            return str(mapping[shop_value]).strip()
+
+        normalized = shop_value.lower()
+        if normalized == "office":
+            return str(mapping.get("Office", "")).strip()
+
+        try:
+            shop_id = int(shop_value)
+        except ValueError:
+            return ""
+
+        if 1 <= shop_id <= 36:
+            return str(mapping.get(str(shop_id), "")).strip()
+        return ""
 
 
 def _coerce_currency_amount(value):
@@ -509,7 +541,7 @@ TRANSLATIONS = {
         "Select a task from the pending list first.": "Select a task from the pending list first.",
         "Client Progress Manager": "Clients Manager",
         "Welcome to Starco Commercial Complex": "Welcome to Starco Commercial Complex",
-        "Welcome to Starco Commercial Complex Arabic": "مرحبًا بكم في مجمع ستاركو التجاري",
+        "Welcome to Starco Commercial Complex Arabic": "Ù…Ø±Ø­Ø¨Ù‹Ø§ Ø¨ÙƒÙ… ÙÙŠ Ù…Ø¬Ù…Ø¹ Ø³ØªØ§Ø±ÙƒÙˆ Ø§Ù„ØªØ¬Ø§Ø±ÙŠ",
         "Overview": "Overview",
         "Exit": "Exit",
         "Client Details": "Client Details",
@@ -644,7 +676,7 @@ TRANSLATIONS = {
         "Task {i}": "Task {i}",
         "Language": "Language",
         "English": "English",
-        "العربية": "العربية",
+        "Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©": "Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©",
         "Print": "Print",
         "Save Log": "Save Log",
         "Select file path": "Select file path",
@@ -660,169 +692,169 @@ TRANSLATIONS = {
         "Client details copied to the clipboard.": "Client details copied to the clipboard.",
     },
     "ar": {
-        "Tkinter could not start in this environment.": "تعذر启动 واجهة Tkinter في هذا البيئة.",
-        "Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.": "يرجى تشغيل هذا الملف من محطة Windows عادية أو من محطة VS Code، وليس من وحدة تحكم رأسية أو وضع التصحيح.",
-        "Client": "العميل",
-        "Client: {client_name}": "العميل: {client_name}",
-        "All Tasks": "جميع المهام",
-        "Pending Tasks": "المهام المعلقة",
-        "Mark Done": "تم الإنجاز",
-        "Close": "إغلاق",
-        "No task plan": "لا توجد خطة مهام",
-        "There is no active task plan to update.": "لا توجد خطة مهام نشطة لتحديثها.",
-        "No task selected": "لم يتم تحديد أي مهمة",
-        "Select a task from the pending list first.": "حدد مهمة من القائمة المعلقة أولاً.",
-        "Client Progress Manager": "مدير العملاء",
+        "Tkinter could not start in this environment.": "ØªØ¹Ø°Ø±å¯åŠ¨ ÙˆØ§Ø¬Ù‡Ø© Tkinter ÙÙŠ Ù‡Ø°Ø§ Ø§Ù„Ø¨ÙŠØ¦Ø©.",
+        "Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.": "ÙŠØ±Ø¬Ù‰ ØªØ´ØºÙŠÙ„ Ù‡Ø°Ø§ Ø§Ù„Ù…Ù„Ù Ù…Ù† Ù…Ø­Ø·Ø© Windows Ø¹Ø§Ø¯ÙŠØ© Ø£Ùˆ Ù…Ù† Ù…Ø­Ø·Ø© VS CodeØŒ ÙˆÙ„ÙŠØ³ Ù…Ù† ÙˆØ­Ø¯Ø© ØªØ­ÙƒÙ… Ø±Ø£Ø³ÙŠØ© Ø£Ùˆ ÙˆØ¶Ø¹ Ø§Ù„ØªØµØ­ÙŠØ­.",
+        "Client": "Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "Client: {client_name}": "Ø§Ù„Ø¹Ù…ÙŠÙ„: {client_name}",
+        "All Tasks": "Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù…Ù‡Ø§Ù…",
+        "Pending Tasks": "Ø§Ù„Ù…Ù‡Ø§Ù… Ø§Ù„Ù…Ø¹Ù„Ù‚Ø©",
+        "Mark Done": "ØªÙ… Ø§Ù„Ø¥Ù†Ø¬Ø§Ø²",
+        "Close": "Ø¥ØºÙ„Ø§Ù‚",
+        "No task plan": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø®Ø·Ø© Ù…Ù‡Ø§Ù…",
+        "There is no active task plan to update.": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø®Ø·Ø© Ù…Ù‡Ø§Ù… Ù†Ø´Ø·Ø© Ù„ØªØ­Ø¯ÙŠØ«Ù‡Ø§.",
+        "No task selected": "Ù„Ù… ÙŠØªÙ… ØªØ­Ø¯ÙŠØ¯ Ø£ÙŠ Ù…Ù‡Ù…Ø©",
+        "Select a task from the pending list first.": "Ø­Ø¯Ø¯ Ù…Ù‡Ù…Ø© Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ø¹Ù„Ù‚Ø© Ø£ÙˆÙ„Ø§Ù‹.",
+        "Client Progress Manager": "Ù…Ø¯ÙŠØ± Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡",
         "Welcome to Starco Commercial Complex": "Welcome to Starco Commercial Complex",
-        "Welcome to Starco Commercial Complex Arabic": "مرحبًا بكم في مجمع ستاركو التجاري",
-        "Overview": "نظرة عامة",
-        "Exit": "خروج",
-        "Client Details": "تفاصيل العميل",
-        "Client Name": "اسم العميل",
-        "Country": "الدولة",
-        "Contact": "رقم التواصل",
-        "Business": "نوع النشاط",
-        "Shop Number": "رقم المحل",
-        "Address": "العنوان",
-        "Electrical Meter": "عداد الكهرباء",
-        "Email": "البريد الإلكتروني",
-        "Client Review": "ملاحظات العميل",
-        "Add Review": "إضافة ملاحظة",
-        "Open Review Log": "فتح سجل الملاحظات",
-        "Add Client": "إضافة عميل",
-        "Create Client Plan": "إنشاء خطة العميل",
-        "Save Client": "حفظ العميل",
-        "Delete Selected Client": "حذف العميل المحدد",
-        "Progress Overview": "نظرة عامة على التقدم",
-        "Progress": "التقدم",
-        "Total Tasks": "إجمالي المهام",
-        "Tasks": "المهام",
-        "New task": "مهمة جديدة",
-        "No client selected": "لم يتم تحديد عميل",
-        "No pending tasks": "لا توجد مهام معلقة",
-        "No tasks yet": "لا توجد مهام بعد",
-        "No client plan": "لا توجد خطة عميل",
-        "Create a client plan first.": "أنشئ خطة العميل أولاً.",
-        "Missing client": "اسم العميل مفقود",
-        "Please enter a client name.": "يرجى إدخال اسم العميل.",
-        "Missing contact": "رقم التواصل مفقود",
-        "Please enter the client contact number.": "يرجى إدخال رقم التواصل الخاص بالعميل.",
-        "Missing business": "نوع النشاط مفقود",
-        "Please enter the client business type.": "يرجى إدخال نوع نشاط العميل.",
-        "Missing tasks": "المهام مفقودة",
-        "Enter at least one task or set a total task count greater than zero.": "أدخل مهمة واحدة على الأقل أو قم بتعيين إجمالي مهام أكبر من صفر.",
-        "Review saved": "تم حفظ الملاحظة",
-        "Review saved for '{name}'.": "تم حفظ الملاحظة للعميل '{name}'.",
-        "No review": "لا توجد ملاحظة",
-        "Please type a review before saving it.": "يرجى كتابة ملاحظة قبل حفظها.",
-        "Client Reviews Log": "سجل ملاحظات العملاء",
-        "Date": "التاريخ",
-        "Review": "الملاحظة",
-        "No reviews yet": "لا توجد ملاحظات بعد",
-        "All Clients Progress": "تقدم جميع العملاء",
-        "Edit Selected Client": "تعديل العميل المحدد",
-        "Refresh": "تحديث",
-        "Home": "الرئيسية",
-        "Delete client?": "حذف العميل؟",
-        "Are you sure you want to delete '{client_name}' from the client list?": "هل أنت متأكد أنك تريد حذف '{client_name}' من قائمة العملاء؟",
-        "Client deleted": "تم حذف العميل",
-        "'{client_name}' was removed successfully.": "تم حذف '{client_name}' بنجاح.",
-        "Client not found": "لم يتم العثور على العميل",
-        "'{client_name}' was not found in the saved client list.": "لم يتم العثور على '{client_name}' في قائمة العملاء المحفوظة.",
-        "Saved progress only": "تقدم محفوظ فقط",
-        "Select a client row first.": "حدد صف عميل أولاً.",
-        "Select a client from the list first.": "حدد عميلًا من القائمة أولاً.",
-        "Add Task": "إضافة مهمة",
-        "Tasks Details": "تفاصيل المهام",
-        "Contract Details": "تفاصيل العقد",
-        "Preview": "معاينة",
-        "Close Preview": "إغلاق المعاينة",
-        "Save": "حفظ",
-        "Edit": "تعديل",
-        "OK": "موافق",
-        "Refresh Progress": "تحديث التقدم",
-        "Payment Report": "تقرير الدفع",
-        "Save Comment": "حفظ التعليق",
-        "Share Client Info": "مشاركة معلومات العميل",
-        "Contract Number": "رقم العقد",
-        "Starting Date": "تاريخ البداية",
-        "Ending Date": "تاريخ النهاية",
-        "Commercial Registration Number": "رقم السجل التجاري",
-        "Authorized Signature Name": "اسم الممضي المفوض",
-        "Rent Value": "قيمة الإيجار",
-        "Currency Type": "نوع العملة",
-        "Open Issues Requiring Attention": "المشكلات المفتوحة التي تحتاج إلى عناية",
-        "All Clients": "جميع العملاء",
-        "Open All Clients": "جميع العملاء",
-        "Project Manager To-Do": "مدير المشاريع - المهام",
-        "Open client payment records": "فتح سجلات الدفع للعميل",
-        "Follow up payment for {client_name} - {month}": "متابعة الدفع لـ {client_name} - {month}",
-        "No pending payment follow-ups": "لا توجد متابعة مستحقة للدفع",
-        "Transactions": "المعاملات",
-        "Client Transactions": "معاملات العميل",
-        "Month": "الشهر",
-        "Status": "الحالة",
-        "Amount": "المبلغ",
-        "Payment Method": "طريقة الدفع",
-        "Cheque Number": "رقم الشيك",
-        "Due Date": "تاريخ الاستحقاق",
-        "Bank Name": "اسم البنك",
-        "Reservation Status": "حالة الحجز",
-        "Shop Number to Reserve": "رقم المحل المراد حجزه",
-        "Deposit Money Received": "إيداع المال المستلم",
-        "Preliminary Contract Status": "حالة العقد المبدئية",
-        "Deposit received": "تم استلام الإيداع",
-        "Deposit not received": "لم يتم استلام الإيداع",
-        "Completed": "مكتمل",
-        "Under progress": "قيد التنفيذ",
-        "Add Month": "إضافة شهر",
-        "Save Transactions": "حفظ المعاملات",
-        "Transactions saved": "تم حفظ المعاملات",
-        "Client payment transactions were updated successfully.": "تم تحديث معاملات دفع العميل بنجاح.",
-        "No payments yet": "لا توجد مدفوعات بعد",
-        "Send Email": "إرسال بريد إلكتروني",
-        "Save & Exit": "حفظ والخروج",
-        "Cancel": "إلغاء",
-        "Proceed to exit": "متابعة الخروج",
-        "Please enter a client name before saving.": "يرجى إدخال اسم العميل قبل الحفظ.",
-        "Please enter the client contact number before saving.": "يرجى إدخال رقم التواصل الخاص بالعميل قبل الحفظ.",
-        "Please enter the client business type before saving.": "يرجى إدخال نوع نشاط العميل قبل الحفظ.",
-        "This client does not have an email saved yet.": "هذا العميل لا يحتوي على بريد إلكتروني محفوظ بعد.",
-        "Select or create a client before adding a review.": "حدد عميلًا أو أنشئ عميلًا قبل إضافة ملاحظة.",
-        "No email": "لا يوجد بريد إلكتروني",
-        "Exit app": "الخروج من التطبيق",
-        "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.": "أنت تخرج من التطبيق. تأكد من حفظ جميع البيانات المدخلة، وإلا استمر في الخروج.",
-        "Task Details - {client_name}": "تفاصيل المهام - {client_name}",
-        "<New Client>": "<عميل جديد>",
-        "Select an existing client first.": "حدد العميل أولاً.",
-        "Client saved": "تم حفظ العميل",
-        "'{name}' was saved successfully.": "تم حفظ '{name}' بنجاح.",
-        "No client plan": "لا توجد خطة عميل",
-        "Select a task from the pending list.": "حدد مهمة من القائمة المعلقة.",
-        "Save Review": "حفظ الملاحظة",
-        "Save Task": "حفظ المهمة",
-        "Delete Tasks": "حذف المهام",
-        "Clients name missing": "اسم العميل مفقود",
-        "Please fill the client name field first.": "يرجى ملء حقل اسم العميل أولاً.",
-        "No review": "لا توجد مراجعة",
-        "Please type a review before saving it.": "يرجى كتابة ملاحظة قبل حفظها.",
-        "Task {i}": "المهمة {i}",
-        "Language": "اللغة",
+        "Welcome to Starco Commercial Complex Arabic": "Ù…Ø±Ø­Ø¨Ù‹Ø§ Ø¨ÙƒÙ… ÙÙŠ Ù…Ø¬Ù…Ø¹ Ø³ØªØ§Ø±ÙƒÙˆ Ø§Ù„ØªØ¬Ø§Ø±ÙŠ",
+        "Overview": "Ù†Ø¸Ø±Ø© Ø¹Ø§Ù…Ø©",
+        "Exit": "Ø®Ø±ÙˆØ¬",
+        "Client Details": "ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "Client Name": "Ø§Ø³Ù… Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "Country": "Ø§Ù„Ø¯ÙˆÙ„Ø©",
+        "Contact": "Ø±Ù‚Ù… Ø§Ù„ØªÙˆØ§ØµÙ„",
+        "Business": "Ù†ÙˆØ¹ Ø§Ù„Ù†Ø´Ø§Ø·",
+        "Shop Number": "Ø±Ù‚Ù… Ø§Ù„Ù…Ø­Ù„",
+        "Address": "Ø§Ù„Ø¹Ù†ÙˆØ§Ù†",
+        "Electrical Meter": "Ø¹Ø¯Ø§Ø¯ Ø§Ù„ÙƒÙ‡Ø±Ø¨Ø§Ø¡",
+        "Email": "Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ",
+        "Client Review": "Ù…Ù„Ø§Ø­Ø¸Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "Add Review": "Ø¥Ø¶Ø§ÙØ© Ù…Ù„Ø§Ø­Ø¸Ø©",
+        "Open Review Log": "ÙØªØ­ Ø³Ø¬Ù„ Ø§Ù„Ù…Ù„Ø§Ø­Ø¸Ø§Øª",
+        "Add Client": "Ø¥Ø¶Ø§ÙØ© Ø¹Ù…ÙŠÙ„",
+        "Create Client Plan": "Ø¥Ù†Ø´Ø§Ø¡ Ø®Ø·Ø© Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "Save Client": "Ø­ÙØ¸ Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "Delete Selected Client": "Ø­Ø°Ù Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø§Ù„Ù…Ø­Ø¯Ø¯",
+        "Progress Overview": "Ù†Ø¸Ø±Ø© Ø¹Ø§Ù…Ø© Ø¹Ù„Ù‰ Ø§Ù„ØªÙ‚Ø¯Ù…",
+        "Progress": "Ø§Ù„ØªÙ‚Ø¯Ù…",
+        "Total Tasks": "Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ù…Ù‡Ø§Ù…",
+        "Tasks": "Ø§Ù„Ù…Ù‡Ø§Ù…",
+        "New task": "Ù…Ù‡Ù…Ø© Ø¬Ø¯ÙŠØ¯Ø©",
+        "No client selected": "Ù„Ù… ÙŠØªÙ… ØªØ­Ø¯ÙŠØ¯ Ø¹Ù…ÙŠÙ„",
+        "No pending tasks": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ù‡Ø§Ù… Ù…Ø¹Ù„Ù‚Ø©",
+        "No tasks yet": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ù‡Ø§Ù… Ø¨Ø¹Ø¯",
+        "No client plan": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø®Ø·Ø© Ø¹Ù…ÙŠÙ„",
+        "Create a client plan first.": "Ø£Ù†Ø´Ø¦ Ø®Ø·Ø© Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø£ÙˆÙ„Ø§Ù‹.",
+        "Missing client": "Ø§Ø³Ù… Ø§Ù„Ø¹Ù…ÙŠÙ„ Ù…ÙÙ‚ÙˆØ¯",
+        "Please enter a client name.": "ÙŠØ±Ø¬Ù‰ Ø¥Ø¯Ø®Ø§Ù„ Ø§Ø³Ù… Ø§Ù„Ø¹Ù…ÙŠÙ„.",
+        "Missing contact": "Ø±Ù‚Ù… Ø§Ù„ØªÙˆØ§ØµÙ„ Ù…ÙÙ‚ÙˆØ¯",
+        "Please enter the client contact number.": "ÙŠØ±Ø¬Ù‰ Ø¥Ø¯Ø®Ø§Ù„ Ø±Ù‚Ù… Ø§Ù„ØªÙˆØ§ØµÙ„ Ø§Ù„Ø®Ø§Øµ Ø¨Ø§Ù„Ø¹Ù…ÙŠÙ„.",
+        "Missing business": "Ù†ÙˆØ¹ Ø§Ù„Ù†Ø´Ø§Ø· Ù…ÙÙ‚ÙˆØ¯",
+        "Please enter the client business type.": "ÙŠØ±Ø¬Ù‰ Ø¥Ø¯Ø®Ø§Ù„ Ù†ÙˆØ¹ Ù†Ø´Ø§Ø· Ø§Ù„Ø¹Ù…ÙŠÙ„.",
+        "Missing tasks": "Ø§Ù„Ù…Ù‡Ø§Ù… Ù…ÙÙ‚ÙˆØ¯Ø©",
+        "Enter at least one task or set a total task count greater than zero.": "Ø£Ø¯Ø®Ù„ Ù…Ù‡Ù…Ø© ÙˆØ§Ø­Ø¯Ø© Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„ Ø£Ùˆ Ù‚Ù… Ø¨ØªØ¹ÙŠÙŠÙ† Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ù…Ù‡Ø§Ù… Ø£ÙƒØ¨Ø± Ù…Ù† ØµÙØ±.",
+        "Review saved": "ØªÙ… Ø­ÙØ¸ Ø§Ù„Ù…Ù„Ø§Ø­Ø¸Ø©",
+        "Review saved for '{name}'.": "ØªÙ… Ø­ÙØ¸ Ø§Ù„Ù…Ù„Ø§Ø­Ø¸Ø© Ù„Ù„Ø¹Ù…ÙŠÙ„ '{name}'.",
+        "No review": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ù„Ø§Ø­Ø¸Ø©",
+        "Please type a review before saving it.": "ÙŠØ±Ø¬Ù‰ ÙƒØªØ§Ø¨Ø© Ù…Ù„Ø§Ø­Ø¸Ø© Ù‚Ø¨Ù„ Ø­ÙØ¸Ù‡Ø§.",
+        "Client Reviews Log": "Ø³Ø¬Ù„ Ù…Ù„Ø§Ø­Ø¸Ø§Øª Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡",
+        "Date": "Ø§Ù„ØªØ§Ø±ÙŠØ®",
+        "Review": "Ø§Ù„Ù…Ù„Ø§Ø­Ø¸Ø©",
+        "No reviews yet": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ù„Ø§Ø­Ø¸Ø§Øª Ø¨Ø¹Ø¯",
+        "All Clients Progress": "ØªÙ‚Ø¯Ù… Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡",
+        "Edit Selected Client": "ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø§Ù„Ù…Ø­Ø¯Ø¯",
+        "Refresh": "ØªØ­Ø¯ÙŠØ«",
+        "Home": "Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©",
+        "Delete client?": "Ø­Ø°Ù Ø§Ù„Ø¹Ù…ÙŠÙ„ØŸ",
+        "Are you sure you want to delete '{client_name}' from the client list?": "Ù‡Ù„ Ø£Ù†Øª Ù…ØªØ£ÙƒØ¯ Ø£Ù†Ùƒ ØªØ±ÙŠØ¯ Ø­Ø°Ù '{client_name}' Ù…Ù† Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ØŸ",
+        "Client deleted": "ØªÙ… Ø­Ø°Ù Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "'{client_name}' was removed successfully.": "ØªÙ… Ø­Ø°Ù '{client_name}' Ø¨Ù†Ø¬Ø§Ø­.",
+        "Client not found": "Ù„Ù… ÙŠØªÙ… Ø§Ù„Ø¹Ø«ÙˆØ± Ø¹Ù„Ù‰ Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "'{client_name}' was not found in the saved client list.": "Ù„Ù… ÙŠØªÙ… Ø§Ù„Ø¹Ø«ÙˆØ± Ø¹Ù„Ù‰ '{client_name}' ÙÙŠ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ Ø§Ù„Ù…Ø­ÙÙˆØ¸Ø©.",
+        "Saved progress only": "ØªÙ‚Ø¯Ù… Ù…Ø­ÙÙˆØ¸ ÙÙ‚Ø·",
+        "Select a client row first.": "Ø­Ø¯Ø¯ ØµÙ Ø¹Ù…ÙŠÙ„ Ø£ÙˆÙ„Ø§Ù‹.",
+        "Select a client from the list first.": "Ø­Ø¯Ø¯ Ø¹Ù…ÙŠÙ„Ù‹Ø§ Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø£ÙˆÙ„Ø§Ù‹.",
+        "Add Task": "Ø¥Ø¶Ø§ÙØ© Ù…Ù‡Ù…Ø©",
+        "Tasks Details": "ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ù…Ù‡Ø§Ù…",
+        "Contract Details": "ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø¹Ù‚Ø¯",
+        "Preview": "Ù…Ø¹Ø§ÙŠÙ†Ø©",
+        "Close Preview": "Ø¥ØºÙ„Ø§Ù‚ Ø§Ù„Ù…Ø¹Ø§ÙŠÙ†Ø©",
+        "Save": "Ø­ÙØ¸",
+        "Edit": "ØªØ¹Ø¯ÙŠÙ„",
+        "OK": "Ù…ÙˆØ§ÙÙ‚",
+        "Refresh Progress": "ØªØ­Ø¯ÙŠØ« Ø§Ù„ØªÙ‚Ø¯Ù…",
+        "Payment Report": "ØªÙ‚Ø±ÙŠØ± Ø§Ù„Ø¯ÙØ¹",
+        "Save Comment": "Ø­ÙØ¸ Ø§Ù„ØªØ¹Ù„ÙŠÙ‚",
+        "Share Client Info": "Ù…Ø´Ø§Ø±ÙƒØ© Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "Contract Number": "Ø±Ù‚Ù… Ø§Ù„Ø¹Ù‚Ø¯",
+        "Starting Date": "ØªØ§Ø±ÙŠØ® Ø§Ù„Ø¨Ø¯Ø§ÙŠØ©",
+        "Ending Date": "ØªØ§Ø±ÙŠØ® Ø§Ù„Ù†Ù‡Ø§ÙŠØ©",
+        "Commercial Registration Number": "Ø±Ù‚Ù… Ø§Ù„Ø³Ø¬Ù„ Ø§Ù„ØªØ¬Ø§Ø±ÙŠ",
+        "Authorized Signature Name": "Ø§Ø³Ù… Ø§Ù„Ù…Ù…Ø¶ÙŠ Ø§Ù„Ù…ÙÙˆØ¶",
+        "Rent Value": "Ù‚ÙŠÙ…Ø© Ø§Ù„Ø¥ÙŠØ¬Ø§Ø±",
+        "Currency Type": "Ù†ÙˆØ¹ Ø§Ù„Ø¹Ù…Ù„Ø©",
+        "Open Issues Requiring Attention": "Ø§Ù„Ù…Ø´ÙƒÙ„Ø§Øª Ø§Ù„Ù…ÙØªÙˆØ­Ø© Ø§Ù„ØªÙŠ ØªØ­ØªØ§Ø¬ Ø¥Ù„Ù‰ Ø¹Ù†Ø§ÙŠØ©",
+        "All Clients": "Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡",
+        "Open All Clients": "Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡",
+        "Project Manager To-Do": "Ù…Ø¯ÙŠØ± Ø§Ù„Ù…Ø´Ø§Ø±ÙŠØ¹ - Ø§Ù„Ù…Ù‡Ø§Ù…",
+        "Open client payment records": "ÙØªØ­ Ø³Ø¬Ù„Ø§Øª Ø§Ù„Ø¯ÙØ¹ Ù„Ù„Ø¹Ù…ÙŠÙ„",
+        "Follow up payment for {client_name} - {month}": "Ù…ØªØ§Ø¨Ø¹Ø© Ø§Ù„Ø¯ÙØ¹ Ù„Ù€ {client_name} - {month}",
+        "No pending payment follow-ups": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…ØªØ§Ø¨Ø¹Ø© Ù…Ø³ØªØ­Ù‚Ø© Ù„Ù„Ø¯ÙØ¹",
+        "Transactions": "Ø§Ù„Ù…Ø¹Ø§Ù…Ù„Ø§Øª",
+        "Client Transactions": "Ù…Ø¹Ø§Ù…Ù„Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "Month": "Ø§Ù„Ø´Ù‡Ø±",
+        "Status": "Ø§Ù„Ø­Ø§Ù„Ø©",
+        "Amount": "Ø§Ù„Ù…Ø¨Ù„Øº",
+        "Payment Method": "Ø·Ø±ÙŠÙ‚Ø© Ø§Ù„Ø¯ÙØ¹",
+        "Cheque Number": "Ø±Ù‚Ù… Ø§Ù„Ø´ÙŠÙƒ",
+        "Due Date": "ØªØ§Ø±ÙŠØ® Ø§Ù„Ø§Ø³ØªØ­Ù‚Ø§Ù‚",
+        "Bank Name": "Ø§Ø³Ù… Ø§Ù„Ø¨Ù†Ùƒ",
+        "Reservation Status": "Ø­Ø§Ù„Ø© Ø§Ù„Ø­Ø¬Ø²",
+        "Shop Number to Reserve": "Ø±Ù‚Ù… Ø§Ù„Ù…Ø­Ù„ Ø§Ù„Ù…Ø±Ø§Ø¯ Ø­Ø¬Ø²Ù‡",
+        "Deposit Money Received": "Ø¥ÙŠØ¯Ø§Ø¹ Ø§Ù„Ù…Ø§Ù„ Ø§Ù„Ù…Ø³ØªÙ„Ù…",
+        "Preliminary Contract Status": "Ø­Ø§Ù„Ø© Ø§Ù„Ø¹Ù‚Ø¯ Ø§Ù„Ù…Ø¨Ø¯Ø¦ÙŠØ©",
+        "Deposit received": "ØªÙ… Ø§Ø³ØªÙ„Ø§Ù… Ø§Ù„Ø¥ÙŠØ¯Ø§Ø¹",
+        "Deposit not received": "Ù„Ù… ÙŠØªÙ… Ø§Ø³ØªÙ„Ø§Ù… Ø§Ù„Ø¥ÙŠØ¯Ø§Ø¹",
+        "Completed": "Ù…ÙƒØªÙ…Ù„",
+        "Under progress": "Ù‚ÙŠØ¯ Ø§Ù„ØªÙ†ÙÙŠØ°",
+        "Add Month": "Ø¥Ø¶Ø§ÙØ© Ø´Ù‡Ø±",
+        "Save Transactions": "Ø­ÙØ¸ Ø§Ù„Ù…Ø¹Ø§Ù…Ù„Ø§Øª",
+        "Transactions saved": "ØªÙ… Ø­ÙØ¸ Ø§Ù„Ù…Ø¹Ø§Ù…Ù„Ø§Øª",
+        "Client payment transactions were updated successfully.": "ØªÙ… ØªØ­Ø¯ÙŠØ« Ù…Ø¹Ø§Ù…Ù„Ø§Øª Ø¯ÙØ¹ Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø¨Ù†Ø¬Ø§Ø­.",
+        "No payments yet": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ø¯ÙÙˆØ¹Ø§Øª Ø¨Ø¹Ø¯",
+        "Send Email": "Ø¥Ø±Ø³Ø§Ù„ Ø¨Ø±ÙŠØ¯ Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ",
+        "Save & Exit": "Ø­ÙØ¸ ÙˆØ§Ù„Ø®Ø±ÙˆØ¬",
+        "Cancel": "Ø¥Ù„ØºØ§Ø¡",
+        "Proceed to exit": "Ù…ØªØ§Ø¨Ø¹Ø© Ø§Ù„Ø®Ø±ÙˆØ¬",
+        "Please enter a client name before saving.": "ÙŠØ±Ø¬Ù‰ Ø¥Ø¯Ø®Ø§Ù„ Ø§Ø³Ù… Ø§Ù„Ø¹Ù…ÙŠÙ„ Ù‚Ø¨Ù„ Ø§Ù„Ø­ÙØ¸.",
+        "Please enter the client contact number before saving.": "ÙŠØ±Ø¬Ù‰ Ø¥Ø¯Ø®Ø§Ù„ Ø±Ù‚Ù… Ø§Ù„ØªÙˆØ§ØµÙ„ Ø§Ù„Ø®Ø§Øµ Ø¨Ø§Ù„Ø¹Ù…ÙŠÙ„ Ù‚Ø¨Ù„ Ø§Ù„Ø­ÙØ¸.",
+        "Please enter the client business type before saving.": "ÙŠØ±Ø¬Ù‰ Ø¥Ø¯Ø®Ø§Ù„ Ù†ÙˆØ¹ Ù†Ø´Ø§Ø· Ø§Ù„Ø¹Ù…ÙŠÙ„ Ù‚Ø¨Ù„ Ø§Ù„Ø­ÙØ¸.",
+        "This client does not have an email saved yet.": "Ù‡Ø°Ø§ Ø§Ù„Ø¹Ù…ÙŠÙ„ Ù„Ø§ ÙŠØ­ØªÙˆÙŠ Ø¹Ù„Ù‰ Ø¨Ø±ÙŠØ¯ Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ Ù…Ø­ÙÙˆØ¸ Ø¨Ø¹Ø¯.",
+        "Select or create a client before adding a review.": "Ø­Ø¯Ø¯ Ø¹Ù…ÙŠÙ„Ù‹Ø§ Ø£Ùˆ Ø£Ù†Ø´Ø¦ Ø¹Ù…ÙŠÙ„Ù‹Ø§ Ù‚Ø¨Ù„ Ø¥Ø¶Ø§ÙØ© Ù…Ù„Ø§Ø­Ø¸Ø©.",
+        "No email": "Ù„Ø§ ÙŠÙˆØ¬Ø¯ Ø¨Ø±ÙŠØ¯ Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ",
+        "Exit app": "Ø§Ù„Ø®Ø±ÙˆØ¬ Ù…Ù† Ø§Ù„ØªØ·Ø¨ÙŠÙ‚",
+        "You are exiting the app. Ensure all entered data is saved; otherwise proceed to exit.": "Ø£Ù†Øª ØªØ®Ø±Ø¬ Ù…Ù† Ø§Ù„ØªØ·Ø¨ÙŠÙ‚. ØªØ£ÙƒØ¯ Ù…Ù† Ø­ÙØ¸ Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø¯Ø®Ù„Ø©ØŒ ÙˆØ¥Ù„Ø§ Ø§Ø³ØªÙ…Ø± ÙÙŠ Ø§Ù„Ø®Ø±ÙˆØ¬.",
+        "Task Details - {client_name}": "ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ù…Ù‡Ø§Ù… - {client_name}",
+        "<New Client>": "<Ø¹Ù…ÙŠÙ„ Ø¬Ø¯ÙŠØ¯>",
+        "Select an existing client first.": "Ø­Ø¯Ø¯ Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø£ÙˆÙ„Ø§Ù‹.",
+        "Client saved": "ØªÙ… Ø­ÙØ¸ Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "'{name}' was saved successfully.": "ØªÙ… Ø­ÙØ¸ '{name}' Ø¨Ù†Ø¬Ø§Ø­.",
+        "No client plan": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø®Ø·Ø© Ø¹Ù…ÙŠÙ„",
+        "Select a task from the pending list.": "Ø­Ø¯Ø¯ Ù…Ù‡Ù…Ø© Ù…Ù† Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ø¹Ù„Ù‚Ø©.",
+        "Save Review": "Ø­ÙØ¸ Ø§Ù„Ù…Ù„Ø§Ø­Ø¸Ø©",
+        "Save Task": "Ø­ÙØ¸ Ø§Ù„Ù…Ù‡Ù…Ø©",
+        "Delete Tasks": "Ø­Ø°Ù Ø§Ù„Ù…Ù‡Ø§Ù…",
+        "Clients name missing": "Ø§Ø³Ù… Ø§Ù„Ø¹Ù…ÙŠÙ„ Ù…ÙÙ‚ÙˆØ¯",
+        "Please fill the client name field first.": "ÙŠØ±Ø¬Ù‰ Ù…Ù„Ø¡ Ø­Ù‚Ù„ Ø§Ø³Ù… Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø£ÙˆÙ„Ø§Ù‹.",
+        "No review": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ø±Ø§Ø¬Ø¹Ø©",
+        "Please type a review before saving it.": "ÙŠØ±Ø¬Ù‰ ÙƒØªØ§Ø¨Ø© Ù…Ù„Ø§Ø­Ø¸Ø© Ù‚Ø¨Ù„ Ø­ÙØ¸Ù‡Ø§.",
+        "Task {i}": "Ø§Ù„Ù…Ù‡Ù…Ø© {i}",
+        "Language": "Ø§Ù„Ù„ØºØ©",
         "English": "English",
-        "العربية": "العربية",
-        "Print": "طباعة",
-        "Save Log": "حفظ السجل",
-        "Select file path": "اختر مسار الملف",
-        "Browse": "تصفح",
-        "Export Client Log": "تصدير سجل العميل",
-        "Export Task Log": "تصدير سجل المهام",
-        "Export Review Log": "تصدير سجل المراجعات",
-        "Export Observation Log": "تصدير سجل المراجعات",
-        "Export Clients Log": "تصدير سجل العملاء",
-        "No printers registered on this laptop.": "لا توجد طابعات مسجلة في هذا الجهاز.",
-        "Copy vCard (.vcf)": "نسخ vCard (.vcf)",
+        "Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©": "Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©",
+        "Print": "Ø·Ø¨Ø§Ø¹Ø©",
+        "Save Log": "Ø­ÙØ¸ Ø§Ù„Ø³Ø¬Ù„",
+        "Select file path": "Ø§Ø®ØªØ± Ù…Ø³Ø§Ø± Ø§Ù„Ù…Ù„Ù",
+        "Browse": "ØªØµÙØ­",
+        "Export Client Log": "ØªØµØ¯ÙŠØ± Ø³Ø¬Ù„ Ø§Ù„Ø¹Ù…ÙŠÙ„",
+        "Export Task Log": "ØªØµØ¯ÙŠØ± Ø³Ø¬Ù„ Ø§Ù„Ù…Ù‡Ø§Ù…",
+        "Export Review Log": "ØªØµØ¯ÙŠØ± Ø³Ø¬Ù„ Ø§Ù„Ù…Ø±Ø§Ø¬Ø¹Ø§Øª",
+        "Export Observation Log": "ØªØµØ¯ÙŠØ± Ø³Ø¬Ù„ Ø§Ù„Ù…Ø±Ø§Ø¬Ø¹Ø§Øª",
+        "Export Clients Log": "ØªØµØ¯ÙŠØ± Ø³Ø¬Ù„ Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡",
+        "No printers registered on this laptop.": "Ù„Ø§ ØªÙˆØ¬Ø¯ Ø·Ø§Ø¨Ø¹Ø§Øª Ù…Ø³Ø¬Ù„Ø© ÙÙŠ Ù‡Ø°Ø§ Ø§Ù„Ø¬Ù‡Ø§Ø².",
+        "Copy vCard (.vcf)": "Ù†Ø³Ø® vCard (.vcf)",
         "vCard (.vcf)": "vCard (.vcf)",
-        "Client details copied to the clipboard.": "تم نسخ تفاصيل العميل إلى الحافظة.",
+        "Client details copied to the clipboard.": "ØªÙ… Ù†Ø³Ø® ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø¥Ù„Ù‰ Ø§Ù„Ø­Ø§ÙØ¸Ø©.",
     },
 }
 
@@ -956,8 +988,22 @@ def build_review_log_report_text(client_name="", review_text=""):
     return "\n".join(str(item) for item in lines).rstrip() + "\n"
 
 
+def is_desktop_environment_available():
+    """Return True only when a real desktop Tk session can be created."""
+    try:
+        if os.name != "nt" and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+            return False
+        tk.Tcl()
+        return True
+    except Exception:
+        return False
+
+
 # Splash screen shown while the desktop app initializes and loads resources.
 def build_startup_splash():
+    if not is_desktop_environment_available():
+        raise RuntimeError(T("Tkinter could not start in this environment."))
+
     splash = tk.Tk()
     splash.overrideredirect(True)
     splash.configure(bg="#09111d")
@@ -995,7 +1041,7 @@ def build_startup_splash():
         bg="#1d2736",
         fg="#f5c451",
         font=("Segoe UI", 12, "bold"),
-        text="★",
+        text="â˜…",
     )
     logo_label.pack()
 
@@ -1019,9 +1065,9 @@ def build_startup_splash():
                     logo_label.configure(image=photo, compound="center", text="")
                     logo_label.image = photo
                 else:
-                    logo_label.configure(text="★")
+                    logo_label.configure(text="â˜…")
             except Exception:
-                logo_label.configure(text="★")
+                logo_label.configure(text="â˜…")
 
         def animate_logo(step=0):
             if step <= 18:
@@ -1236,11 +1282,11 @@ class WelcomeWindow(tk.Tk):
                     logo_label.configure(image=photo, compound="center", text="")
                     logo_label.image = photo
                 else:
-                    logo_label.configure(text="★")
+                    logo_label.configure(text="â˜…")
             except Exception:
-                logo_label.configure(text="★")
+                logo_label.configure(text="â˜…")
         else:
-            logo_label.configure(text="★")
+            logo_label.configure(text="â˜…")
 
         title = ttk.Label(
             header,
@@ -2084,7 +2130,7 @@ class UserRegistrationWindow(tk.Toplevel):
                 pass
 
     def generate_project_manager_todo_tasks(self):
-        manager = ClientManager("clients.json")
+        manager = ClientManager(resolve_clients_data_path())
         manager.load_clients()
         tasks = []
         for client in manager.clients:
@@ -2143,23 +2189,53 @@ class UserRegistrationWindow(tk.Toplevel):
 
 def safe_main():
     try:
+        if not is_desktop_environment_available():
+            print(
+                "Headless mode detected: Tkinter GUI startup skipped because no desktop session is available.",
+                file=sys.stderr,
+            )
+            return 0
+
         splash = build_startup_splash()
 
         def launch_welcome_window():
-            splash.destroy()
-            welcome = WelcomeWindow()
-            welcome.mainloop()
+            try:
+                if splash is not None and hasattr(splash, "winfo_exists") and splash.winfo_exists():
+                    splash.destroy()
+                welcome = WelcomeWindow()
+                welcome.mainloop()
+            except Exception as exc:
+                try:
+                    if splash is not None and hasattr(splash, "winfo_exists") and splash.winfo_exists():
+                        splash.destroy()
+                except Exception:
+                    pass
+                print(
+                    "Runtime startup issue after window creation: a GUI callback failed during startup.",
+                    file=sys.stderr,
+                )
+                print(
+                    T("Tkinter could not start in this environment.") + "\n\n"
+                    + T("Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.")
+                    + f"\n\nDetails: {exc}",
+                    file=sys.stderr,
+                )
 
         splash.after(4000, launch_welcome_window)
         splash.mainloop()
-    except tk.TclError as exc:
+        return 0
+    except (tk.TclError, RuntimeError) as exc:
+        print(
+            "Headless mode detected: GUI startup skipped because no usable desktop environment is available.",
+            file=sys.stderr,
+        )
         message = (
             T("Tkinter could not start in this environment.") + "\n\n"
             + T("Please run this script in a normal Windows terminal or VS Code terminal, not in a headless/debug console.")
             + f"\n\nDetails: {exc}"
         )
         print(message, file=sys.stderr)
-        raise SystemExit(1)
+        return 0
 
 
 def parse_task_items(raw_value, fallback_total=0):
@@ -2461,7 +2537,7 @@ class ContractDetailsWindow(tk.Toplevel):
         self.geometry("680x520")
         self.minsize(500, 420)
         self.master_app = master
-        self.manager = getattr(master, "client_manager", ClientManager("clients.json")) if master is not None else ClientManager("clients.json")
+        self.manager = getattr(master, "client_manager", ClientManager(resolve_clients_data_path())) if master is not None else ClientManager(resolve_clients_data_path())
 
         self.client_name = ""
         if self.master_app is not None and hasattr(self.master_app, "client_name_var"):
@@ -2492,7 +2568,7 @@ class ContractDetailsWindow(tk.Toplevel):
                 date_frame.grid(row=row_index, column=1, sticky="ew", pady=(0, 8))
                 date_frame.columnconfigure(0, weight=1)
                 ttk.Entry(date_frame, textvariable=var, width=32).grid(row=0, column=0, sticky="ew", padx=(0, 6))
-                ttk.Button(date_frame, text="📅", width=3, command=lambda selected_key=key, entry_var=var: self._pick_date(selected_key, entry_var)).grid(row=0, column=1, sticky="e")
+                ttk.Button(date_frame, text="ðŸ“…", width=3, command=lambda selected_key=key, entry_var=var: self._pick_date(selected_key, entry_var)).grid(row=0, column=1, sticky="e")
             else:
                 ttk.Entry(main, textvariable=var, width=38).grid(row=row_index, column=1, sticky="ew", pady=(0, 8))
             row_index += 1
@@ -2613,7 +2689,7 @@ class ClientPaymentReportWindow(tk.Toplevel):
         self.master_app = master
         self.protocol("WM_DELETE_WINDOW", self.go_back)
         self.client_name = str(client_name or "").strip()
-        self.manager = getattr(master, "client_manager", ClientManager("clients.json")) if master is not None else ClientManager("clients.json")
+        self.manager = getattr(master, "client_manager", ClientManager(resolve_clients_data_path())) if master is not None else ClientManager(resolve_clients_data_path())
         self.manager.load_clients()
 
         self.client = self._find_client(self.client_name) if self.client_name else None
@@ -2760,789 +2836,6 @@ class ClientPaymentReportWindow(tk.Toplevel):
             messagebox.showerror(T("Save Log"), f"Unable to save report: {exc}")
 
 
-class ClientTransactionsWindow(tk.Toplevel):
-    PAYMENT_METHOD_CHOICES = ("Cash", "Cheque", "Bank Transaction")
-
-    def __init__(self, master=None, client_name=""):
-        super().__init__(master)
-        self.title(T("Client Transactions"))
-        self.geometry("980x560")
-        self.minsize(780, 420)
-        self.master_app = master
-        self.client_name = str(client_name or "").strip()
-        self.manager = getattr(master, "client_manager", ClientManager("clients.json")) if master is not None else ClientManager("clients.json")
-        self.manager.load_clients()
-
-        self.client = self._find_client(self.client_name) if self.client_name else None
-        if self.client is None and self.master_app is not None and hasattr(self.master_app, "client_name_var"):
-            determined = str(self.master_app.client_name_var.get() or "").strip()
-            self.client_name = determined
-            self.client = self._find_client(determined)
-
-        self.status_checkbuttons = {}
-        self.status_vars = {}
-        self.method_comboboxes = {}
-        self.method_vars = {}
-        self.cheque_entries = {}
-        self.cheque_vars = {}
-        self.bank_transaction_entries = {}
-        self.bank_transaction_vars = {}
-        self.amount_entries = {}
-        self.amount_vars = {}
-        self.due_date_entries = {}
-        self.due_date_vars = {}
-        self.bank_name_entries = {}
-        self.bank_name_vars = {}
-        self.due_date_buttons = {}
-        self.month_comboboxes = {}
-        self.month_vars = {}
-        self.month_options = self._build_month_options()
-
-        main = ttk.Frame(self, padding=12)
-        main.pack(fill="both", expand=True)
-        main.columnconfigure(0, weight=1)
-
-        header = ttk.Frame(main)
-        header.pack(fill="x", pady=(0, 10))
-
-        header_fields = ttk.Frame(header)
-        header_fields.pack(fill="x")
-        header_fields.columnconfigure(1, weight=1)
-
-        ttk.Label(header_fields, text=f"{T('Client')}:", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w", padx=(0, 8))
-        self.client_selector_var = tk.StringVar(value=self.client_name or "")
-        self.client_selector = ttk.Combobox(
-            header_fields,
-            textvariable=self.client_selector_var,
-            values=self._list_client_names(),
-            state="readonly",
-            width=28,
-        )
-        self.client_selector.grid(row=0, column=1, sticky="ew")
-        self.client_selector.bind("<<ComboboxSelected>>", self._switch_client_for_transactions)
-
-        columns = ("month", "status", "amount", "method", "cheque", "due_date", "bank", "bank_transaction_detail")
-        self.tree = ttk.Treeview(main, columns=columns, show="headings", height=14)
-        for column, title in zip(columns, [T("Month"), T("Status"), T("Amount"), T("Payment Method"), T("Cheque Number"), T("Due Date"), T("Bank Name"), T("Bank Transaction Details")]):
-            self.tree.heading(column, text=title)
-            self.tree.column(column, width=120, anchor="w")
-        self.tree.pack(fill="both", expand=True)
-        self.tree.bind("<Configure>", lambda event: (
-            self._position_status_checkbuttons(),
-            self._position_method_comboboxes(),
-            self._position_cheque_entries(),
-            self._position_bank_transaction_entries(),
-            self._position_amount_entries(),
-            self._position_due_date_entries(),
-            self._position_due_date_buttons(),
-            self._position_bank_name_entries(),
-            self._position_month_comboboxes(),
-        ))
-
-        controls = ttk.Frame(main)
-        controls.pack(fill="x", pady=(8, 0))
-        ttk.Button(controls, text=T("Add Month"), command=self.add_transaction_row).pack(side="left", padx=(0, 8))
-        ttk.Button(controls, text=T("Save Transactions"), command=self.save_transactions).pack(side="left", padx=(0, 8))
-        ttk.Button(controls, text=T("Back"), command=self.go_back).pack(side="left", padx=(0, 8))
-        ttk.Button(controls, text=T("Home"), command=self.go_home).pack(side="left")
-
-        self.refresh_view()
-
-    def go_back(self):
-        close_popup_and_return(self)
-
-    def _list_client_names(self):
-        self.manager.load_clients()
-        return [client.name for client in self.manager.clients if getattr(client, "name", "").strip()]
-
-    def _find_client(self, client_name):
-        if not client_name:
-            return None
-        self.manager.load_clients()
-        return next((client for client in self.manager.clients if client.name.lower() == client_name.lower()), None)
-
-    def _switch_client_for_transactions(self, event=None):
-        selected_name = str(self.client_selector_var.get() or "").strip()
-        if not selected_name:
-            return
-
-        self.client_name = selected_name
-        self.client = self._find_client(selected_name)
-        self.month_options = self._build_month_options()
-        self.refresh_view()
-
-    def go_home(self):
-        self.destroy()
-        open_welcome_home()
-
-    def _build_month_options(self):
-        if self.client is None:
-            return []
-
-        contract_details = getattr(self.client, "contract_details", {}) or {}
-        start_date = str(contract_details.get("starting_date") or "").strip()
-        end_date = str(contract_details.get("ending_date") or "").strip()
-        months = generate_contract_months(start_date, end_date)
-        if months:
-            return months
-        return []
-
-    def _normalize_payment_method(self, value):
-        if value is None:
-            return "Cash"
-
-        normalized = str(value).strip()
-        if not normalized:
-            return "Cash"
-
-        lookup = {choice.lower(): choice for choice in self.PAYMENT_METHOD_CHOICES}
-        if normalized.lower() in lookup:
-            return lookup[normalized.lower()]
-
-        for choice in self.PAYMENT_METHOD_CHOICES:
-            if normalized.lower() in choice.lower():
-                return choice
-
-        return "Cash"
-
-    def _is_payment_completed(self, entry):
-        status = str(entry.get("status", "") or "").strip().lower()
-        return status in {"paid", "completed", "complete", "success", "successful", "yes", "true", "1"}
-
-    def _position_status_checkbuttons(self):
-        for row_id, checkbutton in list(self.status_checkbuttons.items()):
-            if not self.tree.exists(row_id):
-                checkbutton.destroy()
-                self.status_checkbuttons.pop(row_id, None)
-                self.status_vars.pop(row_id, None)
-                continue
-
-            try:
-                x, y, width, height = self.tree.bbox(row_id, "status")
-            except Exception:
-                continue
-
-            if width <= 0:
-                continue
-
-            checkbutton.place(x=x + 4, y=y + 2, width=max(18, width - 8), height=max(18, height - 4))
-
-    def _position_method_comboboxes(self):
-        for row_id, combobox in list(self.method_comboboxes.items()):
-            if not self.tree.exists(row_id):
-                combobox.destroy()
-                self.method_comboboxes.pop(row_id, None)
-                self.method_vars.pop(row_id, None)
-                continue
-
-            try:
-                x, y, width, height = self.tree.bbox(row_id, "method")
-            except Exception:
-                continue
-
-            if width <= 0:
-                continue
-
-            combobox.place(x=x + 2, y=y + 2, width=max(120, width - 6), height=max(22, height - 4))
-
-    def _position_cheque_entries(self):
-        for row_id, entry_widget in list(self.cheque_entries.items()):
-            if not self.tree.exists(row_id):
-                entry_widget.destroy()
-                self.cheque_entries.pop(row_id, None)
-                self.cheque_vars.pop(row_id, None)
-                continue
-
-            try:
-                x, y, width, height = self.tree.bbox(row_id, "cheque")
-            except Exception:
-                continue
-
-            if width <= 0:
-                continue
-
-            entry_widget.place(x=x + 2, y=y + 2, width=max(90, width - 6), height=max(22, height - 4))
-
-    def _position_bank_transaction_entries(self):
-        for row_id, entry_widget in list(self.bank_transaction_entries.items()):
-            if not self.tree.exists(row_id):
-                entry_widget.destroy()
-                self.bank_transaction_entries.pop(row_id, None)
-                self.bank_transaction_vars.pop(row_id, None)
-                continue
-
-            try:
-                x, y, width, height = self.tree.bbox(row_id, "bank_transaction_detail")
-            except Exception:
-                continue
-
-            if width <= 0:
-                continue
-
-            entry_widget.place(x=x + 2, y=y + 2, width=max(110, width - 6), height=max(22, height - 4))
-
-    def _position_amount_entries(self):
-        for row_id, entry_widget in list(self.amount_entries.items()):
-            if not self.tree.exists(row_id):
-                entry_widget.destroy()
-                self.amount_entries.pop(row_id, None)
-                self.amount_vars.pop(row_id, None)
-                continue
-
-            try:
-                x, y, width, height = self.tree.bbox(row_id, "amount")
-            except Exception:
-                continue
-
-            if width <= 0:
-                continue
-
-            entry_widget.place(x=x + 2, y=y + 2, width=max(90, width - 6), height=max(22, height - 4))
-
-    def _position_due_date_entries(self):
-        for row_id, entry_widget in list(self.due_date_entries.items()):
-            if not self.tree.exists(row_id):
-                entry_widget.destroy()
-                self.due_date_entries.pop(row_id, None)
-                self.due_date_vars.pop(row_id, None)
-                continue
-
-            try:
-                x, y, width, height = self.tree.bbox(row_id, "due_date")
-            except Exception:
-                continue
-
-            if width <= 0:
-                continue
-
-            entry_widget.place(x=x + 2, y=y + 2, width=max(92, width - 34), height=max(22, height - 4))
-
-    def _position_due_date_buttons(self):
-        for row_id, button_widget in list(self.due_date_buttons.items()):
-            if not self.tree.exists(row_id):
-                button_widget.destroy()
-                self.due_date_buttons.pop(row_id, None)
-                continue
-
-            try:
-                x, y, width, height = self.tree.bbox(row_id, "due_date")
-            except Exception:
-                continue
-
-            if width <= 0:
-                continue
-
-            button_widget.place(x=x + max(92, width - 28), y=y + 2, width=28, height=max(22, height - 4))
-
-    def _position_bank_name_entries(self):
-        for row_id, entry_widget in list(self.bank_name_entries.items()):
-            if not self.tree.exists(row_id):
-                entry_widget.destroy()
-                self.bank_name_entries.pop(row_id, None)
-                self.bank_name_vars.pop(row_id, None)
-                continue
-
-            try:
-                x, y, width, height = self.tree.bbox(row_id, "bank")
-            except Exception:
-                continue
-
-            if width <= 0:
-                continue
-
-            entry_widget.place(x=x + 2, y=y + 2, width=max(110, width - 6), height=max(22, height - 4))
-
-    def _position_month_comboboxes(self):
-        for row_id, combobox in list(self.month_comboboxes.items()):
-            if not self.tree.exists(row_id):
-                combobox.destroy()
-                self.month_comboboxes.pop(row_id, None)
-                self.month_vars.pop(row_id, None)
-                continue
-
-            try:
-                x, y, width, height = self.tree.bbox(row_id, "month")
-            except Exception:
-                continue
-
-            if width <= 0:
-                continue
-
-            combobox.place(x=x + 2, y=y + 2, width=max(110, width - 6), height=max(22, height - 4))
-
-    def _get_month_order_index(self, month_value):
-        if not month_value:
-            return -1
-        if not self.month_options:
-            return -1
-        try:
-            return self.month_options.index(month_value)
-        except ValueError:
-            return -1
-
-    def _can_complete_payment(self, entry):
-        if not entry:
-            return False
-
-        month = str(entry.get("month", "") or "").strip()
-        amount = str(entry.get("amount", "") or "").strip()
-        payment_method = self._normalize_payment_method(entry.get("payment_method", "Cash"))
-        due_date = str(entry.get("due_date", "") or "").strip()
-        cheque_number = str(entry.get("cheque_number", "") or "").strip()
-        bank_detail = str(entry.get("bank_transaction_details", "") or "").strip()
-
-        if not month or not amount or not due_date:
-            return False
-
-        if payment_method == "Cheque":
-            if not cheque_number:
-                return False
-            return bool(cheque_number)
-        elif payment_method == "Bank Transaction":
-            if not bank_detail:
-                return False
-            return bool(bank_detail)
-
-        current_index = self._get_month_order_index(month)
-        if current_index <= 0:
-            return True
-
-        previous_month = self.month_options[current_index - 1] if current_index - 1 >= 0 else ""
-        if not previous_month:
-            return True
-
-        for candidate in (getattr(self.client, "transactions", []) or []):
-            if str(candidate.get("month", "") or "").strip() != previous_month:
-                continue
-            if str(candidate.get("status", "") or "").strip().lower() not in {"paid", "completed", "complete", "success", "successful"}:
-                return False
-            break
-        else:
-            return False
-
-        return True
-
-    def _toggle_status(self, row_id, entry, var):
-        completed = bool(var.get())
-        if not completed:
-            entry["status"] = "Pending"
-            self.tree.set(row_id, "status", "Pending")
-            return
-
-        if not self._can_complete_payment(entry):
-            var.set(False)
-            entry["status"] = "Pending"
-            self.tree.set(row_id, "status", "Pending")
-            prior_month = self._get_previous_month(entry.get("month", ""))
-            if prior_month:
-                messagebox.showwarning(T("Outstanding payment"), T("Complete the previous month payment for '{month}' before marking this payment as paid.", month=prior_month))
-            else:
-                messagebox.showwarning(T("Incomplete payment"), T("Complete the required payment details before marking this month as paid."))
-            return
-
-        entry["status"] = "Paid"
-        self.tree.set(row_id, "status", "Paid")
-
-    def _coerce_due_date_for_month(self, month_value, due_date_value):
-        month_text = str(month_value or "").strip()
-        if not month_text:
-            return str(due_date_value or "").strip()
-
-        try:
-            month_start = datetime.strptime(f"{month_text}-01", "%Y-%m-%d")
-        except ValueError:
-            return str(due_date_value or "").strip()
-
-        last_day = calendar.monthrange(month_start.year, month_start.month)[1]
-        month_end = datetime(month_start.year, month_start.month, last_day).strftime("%d-%m-%Y")
-
-        value = str(due_date_value or "").strip()
-        if not value:
-            return month_end
-
-        try:
-            parsed = datetime.strptime(value, "%d-%m-%Y")
-        except ValueError:
-            try:
-                parsed = datetime.fromisoformat(value)
-                parsed = parsed if parsed else datetime.strptime(value, "%Y-%m-%d")
-            except ValueError:
-                return month_end
-
-        if parsed.year == month_start.year and parsed.month == month_start.month:
-            return parsed.strftime("%d-%m-%Y")
-        return month_end
-
-    def _get_previous_month(self, month_value):
-        month = str(month_value or "").strip()
-        current_index = self._get_month_order_index(month)
-        if current_index <= 0 or not self.month_options:
-            return ""
-        return self.month_options[current_index - 1]
-
-    def _update_month(self, row_id, entry, var):
-        entry["month"] = str(var.get() or "").strip()
-        self.tree.set(row_id, "month", entry["month"])
-
-        coerced_due_date = self._coerce_due_date_for_month(entry["month"], entry.get("due_date", ""))
-        if coerced_due_date != str(entry.get("due_date", "") or "").strip():
-            entry["due_date"] = coerced_due_date
-            self.tree.set(row_id, "due_date", coerced_due_date)
-            if row_id in self.due_date_vars:
-                self.due_date_vars[row_id].set(coerced_due_date)
-
-    def _update_payment_method(self, row_id, entry, var):
-        entry["payment_method"] = self._normalize_payment_method(var.get())
-        self.tree.set(row_id, "method", entry["payment_method"])
-
-        cheque_entry = self.cheque_entries.get(row_id)
-        if cheque_entry is not None:
-            if entry["payment_method"] == "Cheque":
-                cheque_entry.configure(state="normal")
-            else:
-                if entry.get("cheque_number", "").strip():
-                    entry["cheque_number"] = ""
-                    self.cheque_vars[row_id].set("")
-                cheque_entry.configure(state="disabled")
-
-        bank_detail_entry = self.bank_transaction_entries.get(row_id)
-        if bank_detail_entry is not None:
-            if entry["payment_method"] == "Bank Transaction":
-                bank_detail_entry.configure(state="normal")
-            else:
-                if entry.get("bank_transaction_details", "").strip():
-                    entry["bank_transaction_details"] = ""
-                    self.bank_transaction_vars[row_id].set("")
-                bank_detail_entry.configure(state="disabled")
-
-    def refresh_view(self):
-        self.month_options = self._build_month_options()
-
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
-        for row_id, checkbutton in list(self.status_checkbuttons.items()):
-            checkbutton.destroy()
-        self.status_checkbuttons.clear()
-        self.status_vars.clear()
-
-        for row_id, combobox in list(self.method_comboboxes.items()):
-            combobox.destroy()
-        self.method_comboboxes.clear()
-        self.method_vars.clear()
-
-        for row_id, entry_widget in list(self.cheque_entries.items()):
-            entry_widget.destroy()
-        self.cheque_entries.clear()
-        self.cheque_vars.clear()
-
-        for row_id, entry_widget in list(self.bank_transaction_entries.items()):
-            entry_widget.destroy()
-        self.bank_transaction_entries.clear()
-        self.bank_transaction_vars.clear()
-
-        for row_id, entry_widget in list(self.amount_entries.items()):
-            entry_widget.destroy()
-        self.amount_entries.clear()
-        self.amount_vars.clear()
-
-        for row_id, entry_widget in list(self.due_date_entries.items()):
-            entry_widget.destroy()
-        self.due_date_entries.clear()
-        self.due_date_vars.clear()
-
-        for row_id, button_widget in list(self.due_date_buttons.items()):
-            button_widget.destroy()
-        self.due_date_buttons.clear()
-
-        for row_id, entry_widget in list(self.bank_name_entries.items()):
-            entry_widget.destroy()
-        self.bank_name_entries.clear()
-        self.bank_name_vars.clear()
-
-        for row_id, combobox in list(self.month_comboboxes.items()):
-            combobox.destroy()
-        self.month_comboboxes.clear()
-        self.month_vars.clear()
-
-        if self.client is None:
-            self.tree.insert("", "end", values=(T("No client selected"), "", "", "", "", "", ""))
-            return
-
-        transactions = list(getattr(self.client, "transactions", []) or [])
-        if not transactions:
-            self.tree.insert("", "end", values=(T("No payments yet"), "", "", "", "", "", ""))
-            return
-
-        for entry in transactions:
-            month_value = str(entry.get("month", "") or "").strip()
-            if self.month_options and month_value not in self.month_options:
-                month_value = month_value or self.month_options[0]
-            if not month_value:
-                month_value = self.month_options[0] if self.month_options else ""
-
-            row_id = self.tree.insert(
-                "",
-                "end",
-                values=(
-                    month_value,
-                    "",
-                    str(entry.get("amount", "")),
-                    self._normalize_payment_method(entry.get("payment_method", "Cash")),
-                    str(entry.get("cheque_number", "")),
-                    str(entry.get("due_date", "")),
-                    str(entry.get("bank_name", "")),
-                    str(entry.get("bank_transaction_details", "")),
-                ),
-            )
-
-            month_var = tk.StringVar(value=month_value)
-            self.month_vars[row_id] = month_var
-            month_combo = ttk.Combobox(
-                self.tree,
-                textvariable=month_var,
-                values=list(self.month_options) if self.month_options else [month_value],
-                state="readonly" if self.month_options else "normal",
-                width=12,
-            )
-            month_combo.bind(
-                "<<ComboboxSelected>>",
-                lambda event, current_row=row_id, current_entry=entry, current_var=month_var: self._update_month(current_row, current_entry, current_var),
-            )
-            self.month_comboboxes[row_id] = month_combo
-
-            checkbox_var = tk.BooleanVar(value=self._is_payment_completed(entry))
-            self.status_vars[row_id] = checkbox_var
-            checkbutton = tk.Checkbutton(
-                self.tree,
-                variable=checkbox_var,
-                command=lambda current_row=row_id, current_entry=entry, current_var=checkbox_var: self._toggle_status(current_row, current_entry, current_var),
-                bd=0,
-                highlightthickness=0,
-                padx=0,
-                pady=0,
-            )
-            self.status_checkbuttons[row_id] = checkbutton
-
-            method_var = tk.StringVar(value=self._normalize_payment_method(entry.get("payment_method", "Cash")))
-            self.method_vars[row_id] = method_var
-            combobox = ttk.Combobox(
-                self.tree,
-                textvariable=method_var,
-                values=list(self.PAYMENT_METHOD_CHOICES),
-                state="readonly",
-                width=16,
-            )
-            combobox.bind(
-                "<<ComboboxSelected>>",
-                lambda event, current_row=row_id, current_entry=entry, current_var=method_var: self._update_payment_method(current_row, current_entry, current_var),
-            )
-            self.method_comboboxes[row_id] = combobox
-
-            amount_var = tk.StringVar(value=str(entry.get("amount", "")))
-            self.amount_vars[row_id] = amount_var
-            amount_entry = ttk.Entry(self.tree, textvariable=amount_var, width=10)
-            amount_entry.bind("<FocusOut>", lambda event, current_row=row_id, current_entry=entry, current_var=amount_var: self._update_amount(current_row, current_entry, current_var))
-            self.amount_entries[row_id] = amount_entry
-
-            due_date_var = tk.StringVar(value=str(entry.get("due_date", "")))
-            self.due_date_vars[row_id] = due_date_var
-            due_date_entry = ttk.Entry(self.tree, textvariable=due_date_var, width=12, state="readonly")
-            due_date_entry.bind("<FocusOut>", lambda event, current_row=row_id, current_entry=entry, current_var=due_date_var: self._update_due_date(current_row, current_entry, current_var))
-            self.due_date_entries[row_id] = due_date_entry
-            due_date_button = ttk.Button(self.tree, text="📅", width=3, command=lambda current_row=row_id, current_var=due_date_var, current_entry=entry: self._pick_due_date(current_row, current_var, current_entry))
-            self.due_date_buttons[row_id] = due_date_button
-
-            bank_name_var = tk.StringVar(value=str(entry.get("bank_name", "")))
-            self.bank_name_vars[row_id] = bank_name_var
-            bank_name_entry = ttk.Entry(self.tree, textvariable=bank_name_var, width=14)
-            bank_name_entry.bind("<FocusOut>", lambda event, current_row=row_id, current_entry=entry, current_var=bank_name_var: self._update_bank_name(current_row, current_entry, current_var))
-            self.bank_name_entries[row_id] = bank_name_entry
-
-            cheque_var = tk.StringVar(value=str(entry.get("cheque_number", "")))
-            self.cheque_vars[row_id] = cheque_var
-            cheque_entry = ttk.Entry(self.tree, textvariable=cheque_var, width=12)
-            cheque_entry.bind("<FocusOut>", lambda event, current_row=row_id, current_entry=entry, current_var=cheque_var: self._update_cheque_number(current_row, current_entry, current_var))
-            self.cheque_entries[row_id] = cheque_entry
-            if self._normalize_payment_method(entry.get("payment_method", "Cash")) != "Cheque":
-                cheque_entry.configure(state="disabled")
-
-            bank_transaction_var = tk.StringVar(value=str(entry.get("bank_transaction_details", "")))
-            self.bank_transaction_vars[row_id] = bank_transaction_var
-            bank_transaction_entry = ttk.Entry(self.tree, textvariable=bank_transaction_var, width=14)
-            bank_transaction_entry.bind("<FocusOut>", lambda event, current_row=row_id, current_entry=entry, current_var=bank_transaction_var: self._update_bank_transaction_details(current_row, current_entry, current_var))
-            self.bank_transaction_entries[row_id] = bank_transaction_entry
-            if self._normalize_payment_method(entry.get("payment_method", "Cash")) != "Bank Transaction":
-                bank_transaction_entry.configure(state="disabled")
-
-        self._position_status_checkbuttons()
-        self._position_method_comboboxes()
-        self._position_amount_entries()
-        self._position_due_date_entries()
-        self._position_due_date_buttons()
-        self._position_bank_name_entries()
-        self._position_cheque_entries()
-        self._position_bank_transaction_entries()
-        self._position_month_comboboxes()
-
-    def _update_amount(self, row_id, entry, var):
-        value = str(var.get() or "").strip()
-        try:
-            if value:
-                float(value)
-            entry["amount"] = value
-        except ValueError:
-            entry["amount"] = ""
-            var.set("")
-            messagebox.showwarning(T("Invalid amount"), T("Please enter a valid numeric amount."))
-
-    def _pick_due_date(self, row_id, var, entry=None):
-        selected = pick_date(self, var.get())
-        if not selected:
-            return
-        current_month = str((entry or {}).get("month", "") or "").strip()
-        normalized = self._coerce_due_date_for_month(current_month, selected)
-        var.set(normalized)
-        self.tree.set(row_id, "due_date", normalized)
-        if entry is not None:
-            entry["due_date"] = normalized
-        if row_id in self.due_date_vars:
-            self.due_date_vars[row_id].set(normalized)
-
-    def _update_due_date(self, row_id, entry, var):
-        value = str(var.get() or "").strip()
-        normalized = self._coerce_due_date_for_month(entry.get("month", ""), value)
-        entry["due_date"] = normalized
-        self.tree.set(row_id, "due_date", normalized)
-        var.set(normalized)
-
-    def _update_bank_name(self, row_id, entry, var):
-        entry["bank_name"] = str(var.get() or "").strip()
-
-    def _update_cheque_number(self, row_id, entry, var):
-        entry["cheque_number"] = str(var.get() or "").strip()
-
-    def _update_bank_transaction_details(self, row_id, entry, var):
-        entry["bank_transaction_details"] = str(var.get() or "").strip()
-
-    def _next_month_for_new_row(self):
-        if not self.month_options:
-            return ""
-
-        saved_months = [
-            str(item.get("month", "") or "").strip()
-            for item in (getattr(self.client, "transactions", []) or [])
-            if str(item.get("month", "") or "").strip()
-        ]
-        if not saved_months:
-            return self.month_options[0]
-
-        contract_end_month = self.month_options[-1]
-        existing_months = {month for month in saved_months if month in self.month_options}
-        if contract_end_month in existing_months:
-            return contract_end_month
-
-        last_month = ""
-        last_dt = None
-        for month_value in saved_months:
-            if month_value not in self.month_options:
-                continue
-            try:
-                candidate = datetime.strptime(f"{month_value}-01", "%Y-%m-%d")
-            except ValueError:
-                continue
-            if last_dt is None or candidate > last_dt:
-                last_dt = candidate
-                last_month = month_value
-
-        if last_dt is None:
-            return self.month_options[0]
-
-        current_index = self.month_options.index(last_month) if last_month in self.month_options else -1
-        if current_index >= len(self.month_options) - 1:
-            return contract_end_month
-
-        return self.month_options[current_index + 1]
-
-    def add_transaction_row(self):
-        if self.client is None:
-            messagebox.showwarning(T("No client selected"), T("Select a client from the list first."))
-            return
-
-        if self.month_options:
-            existing_months = {
-                str(item.get("month", "") or "").strip()
-                for item in (getattr(self.client, "transactions", []) or [])
-                if str(item.get("month", "") or "").strip()
-            }
-            if self.month_options[-1] in existing_months:
-                return
-
-        month_value = self._next_month_for_new_row()
-        self.client.transactions.append({
-            "month": month_value,
-            "status": "Pending",
-            "amount": "",
-            "payment_method": "Cash",
-            "cheque_number": "",
-            "due_date": "",
-            "bank_name": "",
-            "bank_transaction_details": "",
-        })
-        self.refresh_view()
-
-    def save_transactions(self):
-        if self.client is None:
-            messagebox.showwarning(T("No client selected"), T("Select a client from the list first."))
-            return
-
-        completed_rows = []
-        for row_id, entry in zip(self.tree.get_children(), self.client.transactions):
-            if row_id in self.month_vars:
-                entry["month"] = str(self.month_vars[row_id].get() or "").strip()
-            if row_id in self.status_vars:
-                entry["status"] = "Paid" if self.status_vars[row_id].get() else "Pending"
-            if row_id in self.amount_vars:
-                entry["amount"] = str(self.amount_vars[row_id].get() or "").strip()
-            if row_id in self.method_vars:
-                entry["payment_method"] = self._normalize_payment_method(self.method_vars[row_id].get())
-            if row_id in self.cheque_vars:
-                entry["cheque_number"] = str(self.cheque_vars[row_id].get() or "").strip()
-            if row_id in self.due_date_vars:
-                entry["due_date"] = str(self.due_date_vars[row_id].get() or "").strip()
-            if row_id in self.bank_name_vars:
-                entry["bank_name"] = str(self.bank_name_vars[row_id].get() or "").strip()
-            if row_id in self.bank_transaction_vars:
-                entry["bank_transaction_details"] = str(self.bank_transaction_vars[row_id].get() or "").strip()
-
-            if entry.get("status", "").lower() == "paid" and self._can_complete_payment(entry):
-                completed_rows.append(entry)
-
-        self.manager.load_clients()
-        for existing in self.manager.clients:
-            if existing.name.lower() == self.client.name.lower():
-                existing.transactions = [
-                    {
-                        "month": str(item.get("month", "") or "").strip(),
-                        "status": str(item.get("status", "") or "").strip(),
-                        "amount": str(item.get("amount", "") or "").strip(),
-                        "payment_method": str(item.get("payment_method", "") or "").strip(),
-                        "cheque_number": str(item.get("cheque_number", "") or "").strip(),
-                        "due_date": str(item.get("due_date", "") or "").strip(),
-                        "bank_name": str(item.get("bank_name", "") or "").strip(),
-                        "bank_transaction_details": str(item.get("bank_transaction_details", "") or "").strip(),
-                    }
-                    for item in self.client.transactions
-                ]
-                break
-        self.manager.save_clients()
-
-        if completed_rows:
-            month_name = str(completed_rows[-1].get("month", "") or "").strip() or "this month"
-            messagebox.showinfo(T("Payment completed"), f"Payment for {month_name} has been marked as successfully completed.")
-
-        messagebox.showinfo(T("Transactions saved"), T("Client payment transactions were updated successfully."))
-        self.refresh_view()
 
 
 class ExportClientsLogWindow(tk.Toplevel):
@@ -3551,7 +2844,7 @@ class ExportClientsLogWindow(tk.Toplevel):
         self.title(T("Export Clients Log"))
         self.geometry("560x180")
         self.minsize(420, 150)
-        self.manager = manager or ClientManager("clients.json")
+        self.manager = manager or ClientManager(resolve_clients_data_path())
 
         main = ttk.Frame(self, padding=16)
         main.pack(fill="both", expand=True)
@@ -3592,7 +2885,7 @@ class ExportClientsLogWindow(tk.Toplevel):
             self.path_var.set(selected)
 
     def build_report_text(self):
-        return build_clients_report_text(self.manager.file_path if hasattr(self.manager, "file_path") else "clients.json")
+        return build_clients_report_text(self.manager.file_path if hasattr(self.manager, "file_path") else resolve_clients_data_path())
 
     def preview_report(self):
         report = self.build_report_text()
@@ -3769,7 +3062,7 @@ class ClientReviewsLogWindow(tk.Toplevel):
         self.geometry("1100x560")
         self.minsize(900, 420)
 
-        self.manager = manager or ClientManager("clients.json")
+        self.manager = manager or ClientManager(resolve_clients_data_path())
         self.manager.load_clients()
 
         self.tree = ttk.Treeview(
@@ -3949,6 +3242,8 @@ class ProgressApp(tk.Tk):
         for client in self.client_manager.clients:
             if isinstance(getattr(client, "progress", None), dict) and client.progress:
                 Plan.Clients_progress[client.name] = dict(client.progress)
+        self.selected_shops = []
+        self.rebuild_selected_shops_from_clients()
 
         self.client_name_var = tk.StringVar(value="")
         self.country_name_var = tk.StringVar(value=DEFAULT_COUNTRY)
@@ -4038,7 +3333,7 @@ class ProgressApp(tk.Tk):
                 raise ValueError("Pillow not available or icon missing")
         except Exception:
             self.header_logo_image = None
-            logo_label = tk.Label(header, text="★", font=("Segoe UI", 18, "bold"), fg="#1f2937", bd=0)
+            logo_label = tk.Label(header, text="â˜…", font=("Segoe UI", 18, "bold"), fg="#1f2937", bd=0)
             logo_label.grid(row=0, column=0, sticky="w", padx=(0, 10))
 
         title = tk.Label(
@@ -4094,8 +3389,8 @@ class ProgressApp(tk.Tk):
         details_frame = self.details_frame
         details_frame.columnconfigure(1, weight=1)
 
-        client_name_label = ttk.Label(details_frame, text=f"👤 {T('Client Name')}")
-        set_emoji_translated_label(client_name_label, "Client Name", "👤 ")
+        client_name_label = ttk.Label(details_frame, text=f"ðŸ‘¤ {T('Client Name')}")
+        set_emoji_translated_label(client_name_label, "Client Name", "ðŸ‘¤ ")
         client_name_label.grid(row=0, column=0, sticky="w", padx=(10, 12), pady=(8, 6))
         self.translatable_labels.append((client_name_label, "Client Name"))
         self.client_combo = ttk.Combobox(details_frame, textvariable=self.client_name_var, state="normal")
@@ -4103,16 +3398,16 @@ class ProgressApp(tk.Tk):
         self.client_combo.bind("<<ComboboxSelected>>", self.on_client_name_selected)
         self.refresh_client_combo()
 
-        country_label = ttk.Label(details_frame, text=f"🌍 {T('Country')}")
-        set_emoji_translated_label(country_label, "Country", "🌍 ")
+        country_label = ttk.Label(details_frame, text=f"ðŸŒ {T('Country')}")
+        set_emoji_translated_label(country_label, "Country", "ðŸŒ ")
         country_label.grid(row=1, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((country_label, "Country"))
         self.country_combo = ttk.Combobox(details_frame, textvariable=self.country_name_var, values=COUNTRY_OPTIONS, state="readonly")
         self.country_combo.grid(row=1, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
         self.country_combo.current(COUNTRY_OPTIONS.index(DEFAULT_COUNTRY) if DEFAULT_COUNTRY in COUNTRY_OPTIONS else 0)
 
-        contact_label = ttk.Label(details_frame, text=f"📞 {T('Contact')}")
-        set_emoji_translated_label(contact_label, "Contact", "📞 ")
+        contact_label = ttk.Label(details_frame, text=f"ðŸ“ž {T('Contact')}")
+        set_emoji_translated_label(contact_label, "Contact", "ðŸ“ž ")
         contact_label.grid(row=2, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((contact_label, "Contact"))
         self.contact_entry = ttk.Entry(
@@ -4123,38 +3418,44 @@ class ProgressApp(tk.Tk):
         )
         self.contact_entry.grid(row=2, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        email_label = ttk.Label(details_frame, text=f"✉️ {T('Email')}")
-        set_emoji_translated_label(email_label, "Email", "✉️ ")
+        email_label = ttk.Label(details_frame, text=f"âœ‰ï¸ {T('Email')}")
+        set_emoji_translated_label(email_label, "Email", "âœ‰ï¸ ")
         email_label.grid(row=3, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((email_label, "Email"))
         self.email_entry = ttk.Entry(details_frame, textvariable=self.email_var)
         self.email_entry.grid(row=3, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        business_label = ttk.Label(details_frame, text=f"🏢 {T('Business')}")
-        set_emoji_translated_label(business_label, "Business", "🏢 ")
+        business_label = ttk.Label(details_frame, text=f"ðŸ¢ {T('Business')}")
+        set_emoji_translated_label(business_label, "Business", "ðŸ¢ ")
         business_label.grid(row=4, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((business_label, "Business"))
         self.business_entry = ttk.Entry(details_frame, textvariable=self.business_var)
         self.business_entry.grid(row=4, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        shop_label = ttk.Label(details_frame, text=f"🏪 {T('Shop Number')}")
-        set_emoji_translated_label(shop_label, "Shop Number", "🏪 ")
+        shop_label = ttk.Label(details_frame, text=f"ðŸª {T('Shop Number')}")
+        set_emoji_translated_label(shop_label, "Shop Number", "ðŸª ")
         shop_label.grid(row=5, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
         self.translatable_labels.append((shop_label, "Shop Number"))
-        self.shop_number_entry = ttk.Entry(details_frame, textvariable=self.shop_number_var)
+        self.shop_number_entry = ttk.Combobox(
+            details_frame,
+            textvariable=self.shop_number_var,
+            values=self.client_manager.get_available_shop_numbers(),
+            state="normal",
+        )
         self.shop_number_entry.grid(row=5, column=1, sticky="ew", padx=(0, 10), pady=(0, 8))
+        self.shop_number_entry.bind("<FocusIn>", self._refresh_shop_number_options)
         self.shop_number_entry.bind("<FocusOut>", self._sync_electrical_meter_from_shop_number)
         self.shop_number_entry.bind("<Return>", self._sync_electrical_meter_from_shop_number)
 
-        address_label = ttk.Label(details_frame, text=f"📍 {T('Address')}")
-        set_emoji_translated_label(address_label, "Address", "📍 ")
+        address_label = ttk.Label(details_frame, text=f"ðŸ“ {T('Address')}")
+        set_emoji_translated_label(address_label, "Address", "ðŸ“ ")
         address_label.grid(row=6, column=0, sticky="w", padx=(10, 12), pady=(0, 6))
         self.translatable_labels.append((address_label, "Address"))
         self.address_entry = ttk.Entry(details_frame, textvariable=self.address_var)
         self.address_entry.grid(row=6, column=1, sticky="ew", padx=(0, 10), pady=(0, 6))
 
-        electrical_meter_label = ttk.Label(details_frame, text=f"⚡ {T('Electrical Meter')}")
-        set_emoji_translated_label(electrical_meter_label, "Electrical Meter", "⚡ ")
+        electrical_meter_label = ttk.Label(details_frame, text=f"âš¡ {T('Electrical Meter')}")
+        set_emoji_translated_label(electrical_meter_label, "Electrical Meter", "âš¡ ")
         electrical_meter_label.grid(row=7, column=0, sticky="w", padx=(10, 12), pady=(0, 8))
         self.translatable_labels.append((electrical_meter_label, "Electrical Meter"))
         self.electrical_meter_entry = ttk.Entry(details_frame, textvariable=self.electrical_meter_var)
@@ -4444,15 +3745,34 @@ class ProgressApp(tk.Tk):
         new_client_label = T("<New Client>")
         combo_values = [new_client_label] + names
         self.client_combo.configure(values=combo_values)
-        if self.client_name_var.get() in combo_values:
-            self.client_combo.set(self.client_name_var.get())
+        current_name = str(self.client_name_var.get() or "").strip()
+        if not names:
+            self.client_name_var.set("")
+            self.client_combo.set("")
+            return
+        if current_name in combo_values:
+            self.client_combo.set(current_name)
         else:
             self.client_combo.set(new_client_label)
 
+    def rebuild_selected_shops_from_clients(self):
+        self.client_manager.load_clients()
+        self.selected_shops = []
+        for client in self.client_manager.clients:
+            shop_number = str(getattr(client, "shop_number", "") or "").strip()
+            if not shop_number:
+                continue
+            self.selected_shops.append({
+                "Shop": shop_number,
+                "Elec meter": str(getattr(client, "electrical_meter", "") or getattr(client, "notes", "") or ""),
+            })
+
     def clear_client_form(self):
         self.plan = None
-        self.selected_shops = []
+        self.rebuild_selected_shops_from_clients()
         self.client_name_var.set("")
+        if self.client_combo is not None and self.client_combo.winfo_exists():
+            self.client_combo.set("")
         self.country_name_var.set(DEFAULT_COUNTRY)
         self.contact_var.set("")
         self.business_var.set("")
@@ -4562,12 +3882,33 @@ class ProgressApp(tk.Tk):
         if not confirm:
             return
 
+        deleted_client = next((client for client in self.client_manager.clients if client.name.lower() == name.lower()), None)
+        deleted_shop_number = str(getattr(deleted_client, "shop_number", "") or "").strip()
+
         removed = self.client_manager.delete_client(name)
         if not removed:
+            matching_progress_name = next(
+                (
+                    progress_name for progress_name in Plan.Clients_progress
+                    if str(progress_name).strip().lower() == name.lower()
+                ),
+                None,
+            )
+            if matching_progress_name is not None:
+                Plan.Clients_progress.pop(matching_progress_name, None)
+                self.refresh_client_combo()
+                self.clear_client_form()
+                messagebox.showinfo(T("Progress cleared"), T("'{client_name}' was removed from the saved progress list.", client_name=name))
+                return
+
             messagebox.showwarning(T("Client not found"), T("'{client_name}' was not found in the saved client list.", client_name=name))
             return
 
         Plan.Clients_progress.pop(name, None)
+        self.rebuild_selected_shops_from_clients()
+        self.selected_shops = remove_shop_from_selected_shops(self.selected_shops, deleted_shop_number)
+        if self.shop_number_var.get().strip() == deleted_shop_number:
+            self.shop_number_var.set("")
         self.refresh_client_combo()
         self.clear_client_form()
         messagebox.showinfo(T("Client deleted"), T("'{client_name}' was removed successfully.", client_name=name))
@@ -4875,28 +4216,44 @@ class ProgressApp(tk.Tk):
         if not shop_number:
             return
 
+        self.rebuild_selected_shops_from_clients()
+        self.client_manager.load_clients()
+
         try:
-            from logic.shops_conversion_to_dic import shop_meter_map, validate_shop
+            from logic.shops_conversion_to_dic import resolve_shop_electrical_meter as shared_resolve_shop_electrical_meter
         except ImportError:
-            shop_meter_map = load_shop_electrical_meter_map()
-            validate_shop = None
+            shared_resolve_shop_electrical_meter = resolve_shop_electrical_meter
 
-        if validate_shop is not None:
-            valid, msg = validate_shop(shop_number, self.selected_shops)
-            if not valid:
-                messagebox.showerror(T("Error"), T(msg))
-                self.shop_number_var.set("")
-                return
+        exclude_name = str(self.client_name_var.get() or "").strip()
+        if exclude_name == T("<New Client>"):
+            exclude_name = ""
+        valid, msg = self.client_manager.validate_shop_number(
+            shop_number,
+            exclude_name=exclude_name,
+        )
+        if not valid:
+            messagebox.showerror(T("Error"), T(msg))
+            self.shop_number_var.set("")
+            return
 
-        meter_value = shop_meter_map.get(shop_number, "")
-        if not meter_value:
-            meter_value = load_shop_electrical_meter_map().get(shop_number, "")
+        meter_value = shared_resolve_shop_electrical_meter(shop_number)
 
         if meter_value:
             self.electrical_meter_var.set(str(meter_value))
 
         if shop_number and not any(str(item.get("Shop", "")).strip() == shop_number for item in self.selected_shops):
             self.selected_shops.append({"Shop": shop_number, "Elec meter": str(meter_value or "")})
+
+    def _refresh_shop_number_options(self, event=None):
+        self.client_manager.load_clients()
+        client_name = str(self.client_name_var.get() or "").strip()
+        if client_name == T("<New Client>"):
+            client_name = ""
+        self.shop_number_entry.configure(
+            values=self.client_manager.get_available_shop_numbers(
+                exclude_name=client_name
+            )
+        )
 
     def save_current_client(self):
         if self._require_registered_user_for_changes(T("Save client")):
@@ -5153,7 +4510,7 @@ class ClientDetailsWindow(tk.Toplevel):
         self.geometry("540x420")
         self.minsize(500, 360)
         self.master_app = master
-        self.manager = master_manager or getattr(master, "client_manager", ClientManager("clients.json"))
+        self.manager = master_manager or getattr(master, "client_manager", ClientManager(resolve_clients_data_path()))
         self.client_name = client_name.strip() if client_name else ""
         self.client = self._find_client(self.client_name)
         self.edit_mode = False
@@ -5243,7 +4600,16 @@ class ClientDetailsWindow(tk.Toplevel):
         self.fields["contact"]["var"].set(parse_contact_for_ui(self.client.contact)[0])
         self.fields["business"]["var"].set(self.client.business)
         self.fields["email"]["var"].set(self.client.email)
-        self.fields["shop_number"]["var"].set(getattr(self.client, "shop_number", ""))
+        shop_value = getattr(self.client, "shop_number", "")
+        if isinstance(shop_value, (list, tuple)):
+            formatted_shop_value = ", ".join(
+                format_shop_display_label(item)
+                for item in shop_value
+                if str(item).strip()
+            )
+        else:
+            formatted_shop_value = format_shop_display_label(shop_value)
+        self.fields["shop_number"]["var"].set(formatted_shop_value)
         self.fields["address"]["var"].set(getattr(self.client, "address", ""))
         self.fields["electrical_meter"]["var"].set(getattr(self.client, "electrical_meter", getattr(self.client, "notes", "")))
         self._render_vcard_preview()
@@ -5338,295 +4704,6 @@ class ClientDetailsWindow(tk.Toplevel):
         self.destroy()
 
 
-class ReservationStatusWindow(tk.Toplevel):
-    @staticmethod
-    def _normalize_status_value(value, *, kind):
-        candidate = str(value or "").strip().lower()
-        if kind == "deposit":
-            if candidate in {"deposite recieved", "deposit received", "received", "تم استلام الإيداع", "تم استلام الدفعة"}:
-                return "Deposite recieved"
-            if candidate in {"deposite not recieved", "deposit not received", "not received", "لم يتم استلام الإيداع", "لم يتم استلام الدفعة"}:
-                return "Deposite not recieved"
-            return "Deposite not recieved"
-        if candidate in {"completed", "complete", "done", "مكتمل", "تم"}:
-            return "completed"
-        if candidate in {"under progress", "in progress", "pending", "قيد التنفيذ", "قيد التقدم", "معلق"}:
-            return "under progress"
-        return "under progress"
-
-    def _deposit_status_display_values(self):
-        return [T("Deposit received"), T("Deposit not received")]
-
-    def _contract_status_display_values(self, deposit_status):
-        normalized = self._normalize_status_value(deposit_status, kind="deposit")
-        if normalized == "Deposite recieved":
-            return [T("Completed"), T("Under progress")]
-        return [T("Under progress")]
-
-    def __init__(self, master=None):
-        super().__init__(master)
-        self.title(T("Reservation Status"))
-        self.geometry("500x360")
-        self.minsize(420, 300)
-        self.master_app = master
-        self.manager = getattr(master, "client_manager", ClientManager("clients.json")) if master is not None else ClientManager("clients.json")
-
-        main = ttk.Frame(self, padding=16)
-        main.pack(fill="both", expand=True)
-        main.columnconfigure(1, weight=1)
-
-        self.client_name_var = tk.StringVar(value="")
-        self.contact_var = tk.StringVar(value="")
-        self.shop_number_var = tk.StringVar(value="")
-        self.electrical_meter_var = tk.StringVar(value="")
-        self.deposit_status_var = tk.StringVar(value=T("Deposit not received"))
-        self.contract_status_var = tk.StringVar(value=T("Under progress"))
-
-        if self.master_app is not None:
-            if hasattr(self.master_app, "client_name_var"):
-                current_name = str(self.master_app.client_name_var.get() or "").strip()
-                if current_name and current_name != T("<New Client>"):
-                    self.client_name_var.set(current_name)
-            if hasattr(self.master_app, "contact_var"):
-                self.contact_var.set(self.master_app.contact_var.get().strip())
-            if hasattr(self.master_app, "shop_number_var"):
-                self.shop_number_var.set(self.master_app.shop_number_var.get().strip())
-            if hasattr(self.master_app, "electrical_meter_var"):
-                self.electrical_meter_var.set(self.master_app.electrical_meter_var.get().strip())
-
-        if self.shop_number_var.get():
-            self.electrical_meter_var.set(resolve_shop_electrical_meter(self.shop_number_var.get()))
-
-        if self.client_name_var.get():
-            client = self._find_client(self.client_name_var.get())
-            if client is not None:
-                reservation = getattr(client, "reservation_status", {}) or {}
-                if reservation.get("client_name"):
-                    self.client_name_var.set(reservation.get("client_name", self.client_name_var.get()))
-                if reservation.get("contact"):
-                    self.contact_var.set(reservation.get("contact", self.contact_var.get()))
-                if reservation.get("shop_number"):
-                    self.shop_number_var.set(reservation.get("shop_number", self.shop_number_var.get()))
-                if reservation.get("deposit_status"):
-                    self.deposit_status_var.set(reservation.get("deposit_status", self.deposit_status_var.get()))
-                if reservation.get("contract_status"):
-                    self.contract_status_var.set(reservation.get("contract_status", self.contract_status_var.get()))
-
-        fields = [
-            (T("Client Name"), self.client_name_var),
-            (T("Contact"), self.contact_var),
-            (T("Shop Number to Reserve"), self.shop_number_var),
-        ]
-
-        for row_index, (label_text, var) in enumerate(fields):
-            ttk.Label(main, text=label_text, font=("Segoe UI", 10, "bold")).grid(row=row_index, column=0, sticky="w", padx=(0, 12), pady=(0, 8))
-            ttk.Entry(main, textvariable=var, width=30).grid(row=row_index, column=1, sticky="ew", pady=(0, 8))
-
-        self.shop_number_var.trace_add("write", self._sync_meter_from_shop_number)
-
-        ttk.Label(main, text=T("Electrical Meter"), font=("Segoe UI", 10, "bold")).grid(row=3, column=0, sticky="w", padx=(0, 12), pady=(0, 8))
-        ttk.Entry(main, textvariable=self.electrical_meter_var, width=30).grid(row=3, column=1, sticky="ew", pady=(0, 8))
-
-        ttk.Label(main, text=T("Deposit Money Received"), font=("Segoe UI", 10, "bold")).grid(row=4, column=0, sticky="w", padx=(0, 12), pady=(0, 8))
-        deposit_combo = ttk.Combobox(
-            main,
-            textvariable=self.deposit_status_var,
-            values=self._deposit_status_display_values(),
-            state="readonly",
-            width=28,
-        )
-        deposit_combo.grid(row=4, column=1, sticky="ew", pady=(0, 8))
-        deposit_combo.bind("<<ComboboxSelected>>", self._update_contract_status_option)
-
-        ttk.Label(main, text=T("Preliminary Contract Status"), font=("Segoe UI", 10, "bold")).grid(row=5, column=0, sticky="w", padx=(0, 12), pady=(0, 8))
-        status_values = self._contract_status_display_values(self.deposit_status_var.get())
-        self.contract_status_var.set(status_values[0] if status_values else T("Under progress"))
-        status_combo = ttk.Combobox(main, textvariable=self.contract_status_var, values=status_values, state="readonly", width=28)
-        status_combo.grid(row=5, column=1, sticky="ew", pady=(0, 8))
-
-        button_row = ttk.Frame(main)
-        button_row.grid(row=6, column=0, columnspan=2, sticky="e", pady=(12, 0))
-        ttk.Button(button_row, text=T("Save"), command=self.save_status).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Close"), command=self.destroy).pack(side="left")
-
-        self.bind("<Escape>", lambda event: self.destroy())
-
-    def _sync_meter_from_shop_number(self, *args):
-        shop_number = self.shop_number_var.get().strip()
-        self.electrical_meter_var.set(resolve_shop_electrical_meter(shop_number))
-
-    def _update_contract_status_option(self, event=None):
-        deposit_value = self._normalize_status_value(self.deposit_status_var.get(), kind="deposit")
-        if deposit_value == "Deposite recieved":
-            self.contract_status_var.set(T("Completed"))
-            options = [T("Completed"), T("Under progress")]
-        else:
-            self.contract_status_var.set(T("Under progress"))
-            options = [T("Under progress")]
-
-        for child in self.winfo_children():
-            if isinstance(child, ttk.Frame):
-                for widget in child.winfo_children():
-                    if isinstance(widget, ttk.Combobox) and widget["state"] == "readonly":
-                        try:
-                            widget.configure(values=options)
-                        except Exception:
-                            pass
-
-    def _find_client(self, client_name):
-        if not client_name:
-            return None
-        self.manager.load_clients()
-        return next((client for client in self.manager.clients if client.name.lower() == client_name.lower()), None)
-
-    def _available_shop_numbers(self, current_client_name=""):
-        shop_file = Path(__file__).resolve().parent / "Shops_Elect_meters.json"
-        known_shops = []
-        if shop_file.exists():
-            try:
-                with shop_file.open("r", encoding="utf-8") as infile:
-                    data = json.load(infile)
-                if isinstance(data, list):
-                    for item in data:
-                        if isinstance(item, dict):
-                            shop = str(item.get("Shop") or item.get("shop") or "").strip()
-                            if shop:
-                                known_shops.append(shop)
-            except (json.JSONDecodeError, OSError, TypeError):
-                pass
-
-        if not known_shops:
-            known_shops = [str(index) for index in range(1, 101)]
-
-        self.manager.load_clients()
-        used_shops = set()
-        for client in self.manager.clients:
-            shop_value = str(getattr(client, "shop_number", "") or "").strip()
-            if not shop_value:
-                continue
-            if current_client_name and client.name.strip().lower() == current_client_name.strip().lower():
-                continue
-            used_shops.add(shop_value)
-
-        available = [shop for shop in known_shops if shop not in used_shops]
-        return available
-
-    def save_status(self):
-        client_name = self.client_name_var.get().strip()
-        contact = self.contact_var.get().strip()
-        shop_number = self.shop_number_var.get().strip()
-        deposit_status = self._normalize_status_value(self.deposit_status_var.get(), kind="deposit") or "Deposite not recieved"
-        contract_status = self._normalize_status_value(self.contract_status_var.get(), kind="contract") or "under progress"
-        electrical_meter = str(self.electrical_meter_var.get().strip() or resolve_shop_electrical_meter(shop_number) or "")
-
-        if deposit_status.lower() == "deposite recieved":
-            contract_status = "completed" if contract_status.lower() in {"completed", "complete", "done"} else "completed"
-        else:
-            contract_status = "under progress"
-
-        if not client_name:
-            messagebox.showwarning(T("Missing client"), T("Please enter the client name before saving the reservation status."))
-            return
-        if not contact:
-            messagebox.showwarning(T("Missing contact"), T("Please enter the client contact number before saving the reservation status."))
-            return
-        if not shop_number:
-            messagebox.showwarning(T("Missing shop number"), T("Please enter the shop number to reserve before saving the reservation status."))
-            return
-
-        self.manager.load_clients()
-        client = self._find_client(client_name)
-        if client is None:
-            client = next(
-                (existing for existing in self.manager.clients if existing.contact == format_contact_number(contact, DEFAULT_CONTACT_COUNTRY_CODE)),
-                None,
-            )
-
-        if client is not None and str(getattr(client, "shop_number", "") or "").strip() not in {"", shop_number}:
-            other_clients = [
-                existing for existing in self.manager.clients
-                if existing.name.strip().lower() != client_name.strip().lower()
-                and str(getattr(existing, "shop_number", "") or "").strip() == shop_number
-            ]
-            if other_clients:
-                available = self._available_shop_numbers(current_client_name=client_name)
-                available_text = ", ".join(available) if available else "No available shop numbers remain"
-                messagebox.showwarning(
-                    T("Shop unavailable"),
-                    T("Shop number '{shop}' is already assigned to another client. Available shop numbers: {available}.", shop=shop_number, available=available_text),
-                )
-                return
-
-        if client is None:
-            client = Client(
-                client_name,
-                contact,
-                "Reserved",
-                shop_number=shop_number,
-                address="",
-                notes=electrical_meter,
-                electrical_meter=electrical_meter,
-                reservation_status={
-                    "client_name": client_name,
-                    "contact": contact,
-                    "shop_number": shop_number,
-                    "deposit_status": deposit_status,
-                    "contract_status": contract_status,
-                },
-            )
-            self.manager.clients.append(client)
-        else:
-            client.name = client_name
-            client.contact = format_contact_number(contact, DEFAULT_CONTACT_COUNTRY_CODE)
-            client.shop_number = shop_number
-            client.electrical_meter = electrical_meter or str(getattr(client, "electrical_meter", getattr(client, "notes", "")) or "")
-            client.notes = client.electrical_meter
-            if self.master_app is not None:
-                if hasattr(self.master_app, "business_var"):
-                    business = str(self.master_app.business_var.get() or "").strip()
-                    if business:
-                        client.business = business
-                if hasattr(self.master_app, "email_var"):
-                    email = str(self.master_app.email_var.get() or "").strip()
-                    if email:
-                        client.email = email
-                if hasattr(self.master_app, "address_var"):
-                    address = str(self.master_app.address_var.get() or "").strip()
-                    if address:
-                        client.address = address
-            client.reservation_status = normalize_reservation_status({
-                "client_name": client_name,
-                "contact": client.contact,
-                "shop_number": shop_number,
-                "deposit_status": deposit_status,
-                "contract_status": contract_status,
-            })
-
-        self.manager.save_clients()
-
-        if self.master_app is not None:
-            if hasattr(self.master_app, "client_name_var"):
-                self.master_app.client_name_var.set(client_name)
-            if hasattr(self.master_app, "contact_var"):
-                self.master_app.contact_var.set(client.contact)
-            if hasattr(self.master_app, "shop_number_var"):
-                self.master_app.shop_number_var.set(shop_number)
-            if hasattr(self.master_app, "electrical_meter_var"):
-                self.master_app.electrical_meter_var.set(client.electrical_meter)
-            if hasattr(self.master_app, "address_var"):
-                self.master_app.address_var.set(str(getattr(client, "address", "") or ""))
-            if hasattr(self.master_app, "business_var") and not str(self.master_app.business_var.get() or "").strip():
-                self.master_app.business_var.set(str(getattr(client, "business", "") or ""))
-            if hasattr(self.master_app, "email_var") and not str(self.master_app.email_var.get() or "").strip():
-                self.master_app.email_var.set(str(getattr(client, "email", "") or ""))
-            if hasattr(self.master_app, "load_client_progress"):
-                self.master_app.load_client_progress(client_name, getattr(client, "business", ""))
-            if hasattr(self.master_app, "refresh_client_combo"):
-                self.master_app.refresh_client_combo()
-
-        messagebox.showinfo(T("Reservation status saved"), T("Reservation status for '{name}' was saved successfully.", name=client_name))
-        self.destroy()
-
 
 class AllClientsProgressWindow(tk.Toplevel):
     def __init__(self, master=None):
@@ -5635,7 +4712,7 @@ class AllClientsProgressWindow(tk.Toplevel):
         self.geometry("720x440")
         self.minsize(620, 360)
 
-        self.manager = ClientManager("clients.json")
+        self.manager = ClientManager(resolve_clients_data_path())
         self.tree = ttk.Treeview(
             self,
             columns=("client", "contact", "business", "shop_number", "electrical_meter", "reservation_status", "progress", "tasks"),
@@ -5648,7 +4725,7 @@ class AllClientsProgressWindow(tk.Toplevel):
         self.tree.heading("electrical_meter", text=T("Electrical Meter"))
         self.tree.heading("reservation_status", text=T("Reservation Status"))
         self.tree.heading("progress", text=T("Progress"))
-        self.tree.heading("tasks", text="المتبقي / الإجمالي")
+        self.tree.heading("tasks", text="Ø§Ù„Ù…ØªØ¨Ù‚ÙŠ / Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ")
         self.tree.column("client", width=140, anchor="w")
         self.tree.column("contact", width=140, anchor="w")
         self.tree.column("business", width=170, anchor="w")
@@ -5659,10 +4736,15 @@ class AllClientsProgressWindow(tk.Toplevel):
         self.tree.column("tasks", width=120, anchor="center")
         self.tree.pack(fill="both", expand=True, padx=12, pady=(12, 8))
 
+        self.tree.configure(selectmode="extended")
         self.tree.bind("<Double-1>", self.edit_selected_client)
+        self.tree.bind("<Delete>", lambda event: self.delete_selected_client())
+        self.tree.bind("<BackSpace>", lambda event: self.delete_selected_client())
+        self.tree.bind("<Control-a>", lambda event: self.select_all_clients())
 
         button_row = ttk.Frame(self)
         button_row.pack(pady=(0, 12))
+        ttk.Button(button_row, text=T("Select All"), command=self.select_all_clients).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Edit Selected Client"), command=self.edit_selected_client).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Delete Selected Client"), command=self.delete_selected_client).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left", padx=(0, 8))
@@ -5717,37 +4799,104 @@ class AllClientsProgressWindow(tk.Toplevel):
 
         self.destroy()
 
-    def delete_selected_client(self):
+    def select_all_clients(self):
+        children = self.tree.get_children()
+        if not children:
+            messagebox.showinfo(T("No clients"), T("There are no clients to select."))
+            return
+        self.tree.selection_set(children)
+
+    def _get_selected_client_names(self):
         selection = self.tree.selection()
         if not selection:
+            return []
+
+        names = []
+        seen = set()
+        for item_id in selection:
+            values = self.tree.item(item_id, "values")
+            if not values:
+                continue
+            client_name = str(values[0] if isinstance(values, (list, tuple)) and len(values) > 0 else values or "").strip()
+            if not client_name or client_name.lower() in seen:
+                continue
+            seen.add(client_name.lower())
+            names.append(client_name)
+        return names
+
+    def delete_selected_client(self):
+        client_names = self._get_selected_client_names()
+        if not client_names:
             messagebox.showwarning(T("No client selected"), T("Select a client row first."))
             return
 
-        values = self.tree.item(selection[0], "values")
-        if not values:
-            return
+        if len(client_names) > 1:
+            confirm = messagebox.askyesno(
+                T("Delete clients?"),
+                T("Are you sure you want to delete {count} selected clients?", count=len(client_names)),
+            )
+            if not confirm:
+                return
+        else:
+            confirm = messagebox.askyesno(
+                T("Delete client?"),
+                T("Are you sure you want to delete '{client_name}' from the client list?", client_name=client_names[0]),
+            )
+            if not confirm:
+                return
 
-        client_name = values[0]
-        confirm = messagebox.askyesno(
-            T("Delete client?"),
-            T("Are you sure you want to delete '{client_name}' from the client list?", client_name=client_name),
-        )
-        if not confirm:
-            return
+        deleted_names = []
+        deleted_shop_numbers = []
+        for client_name in client_names:
+            deleted_client = next(
+                (
+                    client for client in self.manager.clients
+                    if str(getattr(client, "name", "") or "").strip().lower() == client_name.lower()
+                ),
+                None,
+            )
+            deleted_shop_numbers.append(str(getattr(deleted_client, "shop_number", "") or "").strip())
 
-        if self.manager.delete_client(client_name):
-            Plan.Clients_progress.pop(client_name, None)
-            if self.master and hasattr(self.master, "refresh_client_combo"):
-                self.master.refresh_client_combo()
-            if self.master and hasattr(self.master, "clear_client_form"):
-                self.master.clear_client_form()
-            messagebox.showinfo(T("Client deleted"), T("'{client_name}' was removed successfully.", client_name=client_name))
-            self.refresh_view()
-            self.lift()
-            self.focus_set()
-            return
+            if self.manager.delete_client(client_name):
+                deleted_names.append(client_name)
+                Plan.Clients_progress.pop(client_name, None)
+            else:
+                matching_progress_name = next(
+                    (
+                        progress_name for progress_name in Plan.Clients_progress
+                        if str(progress_name).strip().lower() == client_name.lower()
+                    ),
+                    None,
+                )
+                if matching_progress_name is not None:
+                    Plan.Clients_progress.pop(matching_progress_name, None)
+                    deleted_names.append(client_name)
 
-        messagebox.showwarning(T("Client not found"), T("'{client_name}' was not found in the saved client list.", client_name=client_name))
+        if self.master and hasattr(self.master, "rebuild_selected_shops_from_clients"):
+            self.master.rebuild_selected_shops_from_clients()
+        if self.master and hasattr(self.master, "selected_shops"):
+            for shop_number in set(filter(None, deleted_shop_numbers)):
+                self.master.selected_shops = remove_shop_from_selected_shops(self.master.selected_shops, shop_number)
+        if self.master and hasattr(self.master, "shop_number_var"):
+            current_shop = str(self.master.shop_number_var.get() or "").strip()
+            if current_shop in set(filter(None, deleted_shop_numbers)):
+                self.master.shop_number_var.set("")
+        if self.master and hasattr(self.master, "refresh_client_combo"):
+            self.master.refresh_client_combo()
+        if self.master and hasattr(self.master, "clear_client_form"):
+            self.master.clear_client_form()
+
+        if deleted_names:
+            messagebox.showinfo(
+                T("Clients deleted") if len(deleted_names) > 1 else T("Client deleted"),
+                T("'{client_name}' was removed successfully.", client_name=deleted_names[0]) if len(deleted_names) == 1 else T("{count} clients were removed successfully.", count=len(deleted_names)),
+            )
+        else:
+            messagebox.showwarning(T("Client not found"), T("'{client_name}' was not found in the saved client list.", client_name=client_names[0]))
+
+        self.refresh_view()
+        self.lift()
+        self.focus_set()
 
     def refresh_view(self):
         for item in self.tree.get_children():
@@ -5789,3 +4938,4 @@ class AllClientsProgressWindow(tk.Toplevel):
 
 if __name__ == "__main__":
     safe_main()
+

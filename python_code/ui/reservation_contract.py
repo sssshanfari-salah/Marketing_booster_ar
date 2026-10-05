@@ -11,15 +11,24 @@ from logic.clients_management import (
     ClientManager,
     DEFAULT_CONTACT_COUNTRY_CODE,
     format_contact_number,
-    normalize_contract_details,
     normalize_duration_value,
     normalize_renewable_value,
     normalize_reservation_status,
+    normalize_shop_numbers,
     resolve_clients_data_path,
 )
-from ui.dashboard import pick_date
-from logic.shops_conversion_to_dic import shop_meter_map
+from logic.models.contracts import normalize_contract_details
+try:
+    from python_code.ui.dashboard import pick_date
+except ImportError:  # pragma: no cover - script execution fallback
+    from ui.dashboard import pick_date
+from logic.shops_conversion_to_dic import resolve_shop_electrical_meter as _resolve_shop_electrical_meter
+from logic.shop_management import ShopNumber
 from config.translations import T
+
+KHALID_SECOND_PARTY_NAME = "Khalid Salim Said Al Shanfari"
+SALAH_SECOND_PARTY_NAME = "Salah Salim Said Al Shanfari"
+SECOND_PARTY_OPTIONS = [KHALID_SECOND_PARTY_NAME, SALAH_SECOND_PARTY_NAME]
 
 
 def normalize_python_date(value):
@@ -40,10 +49,7 @@ def normalize_python_date(value):
 
 
 def resolve_shop_electrical_meter(shop_number):
-    shop_value = str(shop_number or "").strip()
-    if not shop_value:
-        return ""
-    return str(shop_meter_map.get(shop_value, "")).strip()
+    return _resolve_shop_electrical_meter(shop_number)
 
 APP_ICON = None
 for candidate in [
@@ -66,15 +72,21 @@ class ShopReservationForm(tk.Tk):
         if not shop:
             return False, T("Shop number is required.")
 
-        if not shop.isdigit():
-            return False, T("Shop number must be numeric and between 1 and 36.")
+        normalized_shops = ShopNumber.normalize(shop)
+        if len(normalized_shops) != 1:
+            return False, T("Shop number must be numeric, Office, or between 1 and 37.")
 
-        value = int(shop)
-        if value < 1 or value > 36:
-            return False, T("Shop number must be between 1 and 36.")
+        normalized_shop = normalized_shops[0]
+        value = ShopNumber.to_int(normalized_shop)
+        if not ShopNumber.is_valid_value(value):
+            return False, T("Shop number must be between 1 and 37, or Office.")
 
-        used_numbers = {str(row[0]).strip() for row in existing_rows if row and len(row) > 0}
-        if shop in used_numbers:
+        used_numbers = {
+            normalized
+            for row in existing_rows if row and len(row) > 0
+            for normalized in ShopNumber.normalize(row[0])
+        }
+        if normalized_shop in used_numbers:
             return False, T("Shop number already exists in the list.")
 
         return True, ""
@@ -160,6 +172,7 @@ class ShopReservationForm(tk.Tk):
 
         button_row = ttk.Frame(self, padding=(0, 0, 0, 18))
         button_row.pack()
+        ttk.Button(button_row, text=T("New Contract"), command=self.reset_form, width=18).pack(side="left", padx=(0, 10))
         ttk.Button(button_row, text=T("Save Contract"), command=self.save_contract, width=18).pack(side="left", padx=(0, 10))
         ttk.Button(button_row, text=T("Preview Contract"), command=self.preview_saved_contract, width=18).pack(side="left")
 
@@ -192,67 +205,134 @@ class ShopReservationForm(tk.Tk):
             return {}
         return matches[-1]
 
+    def reset_form(self):
+        self.saved_client_data = {}
+        self.client_name = ""
+        self.main_vars["lessor"].set(KHALID_SECOND_PARTY_NAME)
+        self.main_vars["lessor contact"].set("")
+        self.main_vars["business"].set("")
+        self.main_vars["email"].set("")
+        self.main_vars["address"].set("")
+        self.main_vars["lessee"].set("")
+        self.main_vars["lessee contact"].set("")
+        self.main_vars["date"].set(datetime.now().strftime("%d-%m-%Y"))
+        self.main_vars["duration"].set("")
+        self.renew_var.set("Yes")
+        self.payment_vars["rent"].set("")
+        self.payment_vars["deposit"].set("")
+        self.payment_vars["bank"].set("01041108028002")
+        self.payment_vars["holder"].set("Khalid Salim Said Al Shanfari")
+        self.shop_var.set("")
+        self.elec_var.set("")
+        self.shop_tree.delete(*self.shop_tree.get_children())
+        self.shop_combo.configure(values=self._available_shop_numbers())
+        messagebox.showinfo(
+            T("New Contract"),
+            T("The form has been reset for a new reservation contract."),
+        )
+
     def prefill_from_saved_client(self):
         """
-        Clean, unified version of prefill logic.
-        Loads:
-        - main contract fields
-        - payment fields
-        - multi-shop entries (new structure)
+        Populate UI fields from self.saved_client_data (dict) or clear fields
+        when no saved client exists. Fully compatible with updated Client class
+        and the UI logic in import calendar.txt.
         """
 
         data = self.saved_client_data or {}
 
-        # ---------------------------------------------------------
-        # If no saved data → fill defaults
-        # ---------------------------------------------------------
+        # ------------------------------------------------------------
+        # CASE 1: No saved client → fill defaults
+        # ------------------------------------------------------------
         if not data:
-            default_contact = ""
-            self.main_vars["lessor"].set("")
-            self.main_vars["lessor contact"].set(default_contact)
+            self.main_vars["lessor"].set(KHALID_SECOND_PARTY_NAME)
+            self.main_vars["lessor contact"].set("")
             self.main_vars["business"].set("")
             self.main_vars["email"].set("")
             self.main_vars["address"].set("")
-            self.main_vars["lessee"].set("Khalid Salim Said")
-            self.main_vars["lessee contact"].set(default_contact)
+
+            # Lessee defaults
+            self.main_vars["lessee"].set("")
+            self.main_vars["lessee contact"].set("")
+
+            # Date defaults
             self.main_vars["date"].set(datetime.now().strftime("%d-%m-%Y"))
             self.main_vars["duration"].set("")
             self.renew_var.set("Yes")
+
+            # Payment defaults
             self.payment_vars["rent"].set("")
             self.payment_vars["deposit"].set("")
             self.payment_vars["bank"].set("01041108028002")
             self.payment_vars["holder"].set("Khalid Salim Said Al Shanfari")
+
+            # Shop fields
+            self.shop_var.set("")
+            self.elec_var.set("")
             return
 
-        # ---------------------------------------------------------
-        # MAIN CLIENT FIELDS
-        # ---------------------------------------------------------
-        client_name = str(data.get("name") or data.get("Client Name") or "").strip()
-        contact = str(data.get("contact") or data.get("Contact") or "").strip()
-        business = str(data.get("business") or data.get("Business") or "").strip()
-        email = str(data.get("email") or data.get("Email") or "").strip()
-        address = str(data.get("address") or data.get("Address") or "").strip()
+        # ------------------------------------------------------------
+        # CASE 2: Saved client exists → normalize and fill fields
+        # ------------------------------------------------------------
 
-        self.main_vars["lessor"].set(client_name)
-        self.main_vars["lessor contact"].set(contact)
+        # Basic fields
+        client_name = str(data.get("name", "")).strip()
+        contact = str(data.get("contact", "")).strip()
+        business = str(data.get("business", "")).strip()
+        email = str(data.get("email", "")).strip()
+        address = str(data.get("address", "")).strip()
+
+        # Multi‑shop support
+        raw_shop_numbers = data.get("shop_number", [])
+        shop_numbers = normalize_shop_numbers(raw_shop_numbers)
+
+        # Electrical meter (may come from notes or separate field)
+        electrical_meter = str(
+            data.get("electrical_meter")
+            or data.get("notes")
+            or ""
+        ).strip()
+
+        # Contract details block
+        contract_details = (
+            data.get("contract_details")
+            if isinstance(data.get("contract_details"), dict)
+            else {}
+        )
+
+        reservation_status = (
+            data.get("reservation_status")
+            if isinstance(data.get("reservation_status"), dict)
+            else {}
+        )
+
+        # ------------------------------------------------------------
+        # Fill main UI fields
+        # ------------------------------------------------------------
+        default_lessor = str(
+            contract_details.get("first_party")
+            or reservation_status.get("first_party")
+            or KHALID_SECOND_PARTY_NAME
+        ).strip()
+        if default_lessor not in SECOND_PARTY_OPTIONS:
+            default_lessor = KHALID_SECOND_PARTY_NAME
+        self.main_vars["lessor"].set(default_lessor)
+        self.main_vars["lessor contact"].set("")
         self.main_vars["business"].set(business)
         self.main_vars["email"].set(email)
         self.main_vars["address"].set(address)
-        self.main_vars["lessee"].set("Khalid Salim Said")
 
-        # ---------------------------------------------------------
-        # CONTRACT DETAILS
-        # ---------------------------------------------------------
-        contract_details = data.get("contract_details", {})
-        reservation_status = data.get("reservation_status", {})
+        # Lessee is the client.
+        self.main_vars["lessee"].set(client_name)
+        self.main_vars["lessee contact"].set(contact)
 
-        # Date
-        starting_date = normalize_python_date(
-            contract_details.get("starting_date") or datetime.now().strftime("%d-%m-%Y")
+        # Date normalization
+        starting_date = (
+            contract_details.get("starting_date")
+            or datetime.now().strftime("%d-%m-%Y")
         )
-        self.main_vars["date"].set(starting_date)
+        self.main_vars["date"].set(normalize_python_date(starting_date))
 
-        # Duration
+        # Duration normalization
         duration_value = normalize_duration_value(
             contract_details.get("duration_years")
             or contract_details.get("Municipal Contract Duration")
@@ -262,13 +342,15 @@ class ShopReservationForm(tk.Tk):
         )
         self.main_vars["duration"].set(duration_value)
 
-        # Renewable
-        renewable_value = normalize_renewable_value(contract_details.get("renewable") or "Yes")
+        # Renewable flag
+        renewable_value = normalize_renewable_value(
+            contract_details.get("renewable") or "Yes"
+        )
         self.renew_var.set(renewable_value)
 
-        # ---------------------------------------------------------
-        # PAYMENT FIELDS
-        # ---------------------------------------------------------
+        # ------------------------------------------------------------
+        # Payment fields
+        # ------------------------------------------------------------
         rent_value = str(
             contract_details.get("rent_value")
             or contract_details.get("monthly_rent")
@@ -289,47 +371,47 @@ class ShopReservationForm(tk.Tk):
         self.payment_vars["bank"].set("01041108028002")
         self.payment_vars["holder"].set("Khalid Salim Said Al Shanfari")
 
-        # ---------------------------------------------------------
-        # MULTI-SHOP LOADING (NEW CLEAN LOGIC)
-        # ---------------------------------------------------------
-        shops_list = data.get("shops", [])
+        # ------------------------------------------------------------
+        # Shop number + electrical meter handling (multi‑shop)
+        # ------------------------------------------------------------
+        if shop_numbers:
+            # For UI: show first shop number
+            first_shop = shop_numbers[0]
+            self.shop_var.set(first_shop)
 
-        # Clear existing rows first (if any)
-        for item in self.shop_tree.get_children():
-            self.shop_tree.delete(item)
+            # Resolve electrical meter if missing
+            if not electrical_meter:
+                electrical_meter = resolve_shop_electrical_meter(first_shop)
 
-        # Load each shop entry
-        for entry in shops_list:
-            if not isinstance(entry, dict):
-                continue
+            self.elec_var.set(electrical_meter)
 
-            shop = str(entry.get("Shop") or "").strip()
-            meter = str(entry.get("Elec meter") or "").strip()
+            # Add all shops to UI shop list
+            for shop in shop_numbers:
+                meter = resolve_shop_electrical_meter(shop)
+                self.add_shop(shop_number=shop, elec_value=meter, silent=True)
 
-            if shop:
-                # Auto-fill meter if missing
-                if not meter:
-                    meter = resolve_shop_electrical_meter(shop)
+        else:
+            # No shop numbers
+            self.shop_var.set("")
+            self.elec_var.set("")
 
-                self.add_shop(shop, meter, silent=True)
-
-        # ---------------------------------------------------------
-        # CONTACT FIELD (ensure correct binding)
-        # ---------------------------------------------------------
+        # ------------------------------------------------------------
+        # Ensure lessee contact exists in main_vars
+        # ------------------------------------------------------------
         if contact:
-            self.main_vars.setdefault("lessor contact", tk.StringVar(value=contact))
-            self.main_vars["lessor contact"].set(contact)
+            self.main_vars.setdefault("lessee contact", tk.StringVar(value=contact))
+            self.main_vars["lessee contact"].set(contact)
 
     def create_main_tab(self):
         fields = [
             (T("Date"), "date"),
             (T("First Party (Lessor)"), "lessor"),
             (T("Contact Number"), "lessor contact"),
+            (T("Second Party (Lessee)"), "lessee"),
+            (T("Contact Number"), "lessee contact"),
             (T("Business"), "business"),
             (T("Email"), "email"),
             (T("Address"), "address"),
-            (T("Second Party (Lessee)"), "lessee"),
-            (T("Contact Number"), "lessee contact"),
             (T("Municipal Contract Duration (Years)"), "duration"),
              ]
 
@@ -352,6 +434,14 @@ class ShopReservationForm(tk.Tk):
                 date_frame.columnconfigure(0, weight=1)
                 ttk.Entry(date_frame, textvariable=var, width=52).grid(row=0, column=0, sticky="ew", padx=(0, 6))
                 ttk.Button(date_frame, text="📅", width=3, command=lambda entry_var=var: self._pick_date(entry_var)).grid(row=0, column=1, sticky="e")
+            elif key == "lessor":
+                combo = ttk.Combobox(row, textvariable=var, values=SECOND_PARTY_OPTIONS, width=50, state="readonly")
+                combo.pack(side="left", fill="x", expand=True)
+                current_value = str(var.get() or "").strip()
+                if current_value and current_value in SECOND_PARTY_OPTIONS:
+                    combo.set(current_value)
+                else:
+                    combo.set(KHALID_SECOND_PARTY_NAME)
             else:
                 ttk.Entry(row, textvariable=var, width=52).pack(side="left", fill="x", expand=True)
 
@@ -394,7 +484,15 @@ class ShopReservationForm(tk.Tk):
 
         self.shop_var.trace_add("write", self._sync_meter_from_shop_number)
 
-        ttk.Entry(form_frame, textvariable=self.shop_var, width=22).grid(row=1, column=0, padx=(0, 8), sticky="ew")
+        self.shop_combo = ttk.Combobox(
+            form_frame,
+            textvariable=self.shop_var,
+            values=self._available_shop_numbers(),
+            state="readonly",
+            width=20,
+        )
+        self.shop_combo.grid(row=1, column=0, padx=(0, 8), sticky="ew")
+        self.shop_combo.bind("<FocusIn>", self._refresh_shop_number_options)
         ttk.Entry(form_frame, textvariable=self.elec_var, width=22).grid(row=1, column=1, padx=(0, 8), sticky="ew")
         ttk.Button(form_frame, text=T("Add Shop"), command=self.add_shop, width=16).grid(row=1, column=2, sticky="ew")
 
@@ -409,6 +507,20 @@ class ShopReservationForm(tk.Tk):
         meter_value = resolve_shop_electrical_meter(shop_number)
         if meter_value:
             self.elec_var.set(meter_value)
+
+    def _available_shop_numbers(self):
+        self.client_manager.load_clients()
+        available = self.client_manager.get_available_shop_numbers(
+            exclude_name=self.client_name
+        )
+        selected_in_form = {
+            shop
+            for shop, _ in self._get_shop_rows()
+        }
+        return [shop for shop in available if shop not in selected_in_form]
+
+    def _refresh_shop_number_options(self, event=None):
+        self.shop_combo.configure(values=self._available_shop_numbers())
 
     def _on_shop_selection_changed(self, event=None):
         selected = self.shop_tree.selection()
@@ -445,11 +557,13 @@ class ShopReservationForm(tk.Tk):
         return str(self.shop_var.get().strip() or "general")
 
     def add_shop(self, shop_number=None, elec_value=None, silent=False):
-        shop = (shop_number if shop_number is not None else self.shop_var.get()).strip()
+        raw_shop = (shop_number if shop_number is not None else self.shop_var.get()).strip()
+        normalized_shops = ShopNumber.normalize(raw_shop)
+        shop = normalized_shops[0] if normalized_shops else raw_shop
         elec = (elec_value if elec_value is not None else self.elec_var.get()).strip()
 
         rows = self._get_shop_rows()
-        valid, message = self.validate_shop_entry(shop, existing=rows)
+        valid, message = self.validate_shop_entry(raw_shop, existing=rows)
         if not valid:
             if not silent:
                 messagebox.showerror(T("Error"), T(message))
@@ -460,21 +574,26 @@ class ShopReservationForm(tk.Tk):
                 messagebox.showerror(T("Error"), T("Electricity account is required."))
             return
 
-        manager = ClientManager(resolve_clients_data_path())
-        if shop.isdigit():
-            valid, _ = manager.validate_shop_number(shop)
-            if not valid:
-                available = manager.get_available_shop_numbers()
-                if available:
-                    shop = available[0]
-                    if not silent:
-                        messagebox.showinfo(T("Shop number updated"), T("Shop '{used}' is already assigned. The next available shop number has been selected: {suggested}.", used=shop_number or self.shop_var.get(), suggested=shop))
-                else:
-                    if not silent:
-                        messagebox.showerror(T("Error"), T("All shop numbers from 1 to 36 are already assigned."))
-                    return
+        self.client_manager.load_clients()
+        valid, _ = self.client_manager.validate_shop_number(
+            shop,
+            exclude_name=self.client_name,
+        )
+        if not valid:
+            available = self.client_manager.get_available_shop_numbers(
+                exclude_name=self.client_name
+            )
+            if available:
+                shop = available[0]
+                if not silent:
+                    messagebox.showinfo(T("Shop number updated"), T("Shop '{used}' is already assigned. The next available shop number has been selected: {suggested}.", used=raw_shop or self.shop_var.get(), suggested=shop))
+            else:
+                if not silent:
+                    messagebox.showerror(T("Error"), T("All shop numbers from 1 to 37 are already assigned."))
+                return
 
         self.shop_tree.insert("", "end", values=(shop, elec))
+        self.shop_combo.configure(values=self._available_shop_numbers())
         if not silent:
             self.shop_var.set("")
             self.elec_var.set("")
@@ -650,7 +769,7 @@ class ShopReservationForm(tk.Tk):
             "starting_date": normalize_python_date(self.main_vars["date"].get()),
             "ending_date": "",
             "commercial_registration_number": "",
-            "authorized_signature_name": self.main_vars["lessee"].get().strip(),
+            "authorized_signature_name": self.main_vars["lessor"].get().strip(),
             "rent_value": self.payment_vars["rent"].get().strip(),
             "currency_type": "OMR",
             "open_issues": "",
@@ -693,13 +812,13 @@ class ShopReservationForm(tk.Tk):
         shop_numbers = [shop_number for shop_number, _ in shops]
 
         contract_details = self._get_contract_details()
-        contact_value = self._get_field_value("lessor contact")
+        contact_value = self._get_field_value("lessee contact")
         business_value = self._get_field_value("business")
         email_value = self._get_field_value("email")
         address_value = self._get_field_value("address")
         reservation_status = normalize_reservation_status(
             {
-                "client_name": self.main_vars["lessor"].get().strip(),
+                "client_name": self.main_vars["lessee"].get().strip(),
                 "contact": contact_value.strip(),
                 "shop_number": shop_numbers,
                 "deposit_status": "Deposite recieved" if str(self.payment_vars["deposit"].get().strip() or "0") not in {"", "0", "0.0"} else "Deposite not recieved",
@@ -710,12 +829,26 @@ class ShopReservationForm(tk.Tk):
             }
         )
 
-        if not messagebox.askyesno("Confirm", "Save contract data?"):
+        target_name = self.main_vars["lessee"].get().strip()
+        selected_name = self.client_name.strip()
+        if selected_name and selected_name.lower() == target_name.lower():
+            confirm_title = "Confirm contract update"
+            confirm_message = (
+                f"You are about to overwrite the saved contract for '{selected_name}'. "
+                "This will replace the existing reservation details in the client records. Continue?"
+            )
+        else:
+            confirm_title = "Confirm contract save"
+            confirm_message = (
+                "Create a new reservation contract and save it to the client records? "
+                "This will add a new saved record if the client does not already exist."
+            )
+
+        if not messagebox.askyesno(T(confirm_title), T(confirm_message)):
             return
 
         self.client_manager.load_clients()
         client = None
-        target_name = self.main_vars["lessor"].get().strip()
         if target_name:
             client = next((entry for entry in self.client_manager.clients if entry.name.strip().lower() == target_name.lower()), None)
 
@@ -760,4 +893,3 @@ def main():
     app = ShopReservationForm()
     app.mainloop()
     return app
-

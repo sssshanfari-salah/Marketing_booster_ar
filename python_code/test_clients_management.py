@@ -26,7 +26,28 @@ from python_code.logic.clients_management import (
     normalize_duration_value,
     normalize_reservation_status,
     normalize_shop_value,
+    normalize_transaction_entry,
+    remove_shop_from_selected_shops,
+    resolve_clients_data_path,
 )
+from python_code.logic.shop_management import normalize_shop_numbers
+from logic.models.contracts import normalize_contract_details as contracts_normalize_contract_details
+from logic.models.reservations import normalize_reservation_status as reservations_normalize_reservation_status
+from logic.models.transactions import normalize_transaction_entry as transactions_normalize_transaction_entry
+from logic.validations.Storage.reports.client_payment_report import (
+    build_client_payment_report_text as report_build_client_payment_report_text,
+)
+from logic.validations.Storage.client_storage import (
+    load_clients_from_file,
+    migrate_legacy_client_files,
+    save_clients_to_file,
+)
+from logic.validations.payment_rules import (
+    can_complete_payment,
+    is_payment_completed,
+    normalize_payment_method,
+)
+from python_code.logic.shops_conversion_to_dic import validate_shop
 from python_code.ui.dashboard import (
     Plan,
     ProgressApp,
@@ -54,6 +75,10 @@ except ImportError:
 
 
 class WelcomeAccessTests(unittest.TestCase):
+    def test_shop_validation_allows_office_number_37(self):
+        self.assertTrue(validate_shop("37")[0])
+        self.assertTrue(validate_shop("Office")[0])
+
     def test_translation_helpers_are_exposed(self):
         from python_code.ui import dashboard as ui
         self.assertTrue(callable(ui.T))
@@ -307,7 +332,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertTrue(result)
         expected_dir = Path(self.file_path).parent / "Clients" / "Alpha_Test_12"
         self.assertTrue(expected_dir.exists())
-        self.assertEqual(manager.clients[0].shop_number, "12")
+        self.assertEqual(manager.clients[0].shop_number, ["12"])
 
     def test_client_address_and_electrical_meter_are_persisted(self):
         client = Client(
@@ -356,6 +381,17 @@ class ClientManagerTests(unittest.TestCase):
 
         self.assertEqual(len(loaded.clients), 1)
         self.assertEqual(loaded.clients[0].name, "John")
+
+    def test_client_storage_helpers_load_and_save_client_records(self):
+        client = Client("Muna", "5551234", "Retail")
+        save_clients_to_file(self.file_path, [client])
+
+        loaded_clients = load_clients_from_file(self.file_path)
+        self.assertEqual(len(loaded_clients), 1)
+        self.assertEqual(loaded_clients[0].name, "Muna")
+
+        Path(self.file_path).write_text('{"not": "a client list"}', encoding="utf-8")
+        self.assertEqual(load_clients_from_file(self.file_path), [])
 
     def test_manager_starts_with_loaded_clients(self):
         manager = ClientManager(self.file_path)
@@ -463,6 +499,62 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(months[-1], "2026-03")
         self.assertIn("2026-02", months)
 
+    def test_contract_month_generation_preserves_date_inputs(self):
+        from datetime import datetime
+        from logic.months import generate_contract_months
+
+        cases = [
+            (None, None, []),
+            ("invalid", "invalid", []),
+            ("2026-03-10", "2026-01-15", ["2026-01", "2026-02", "2026-03"]),
+            (None, "2026-02-15", ["2026-02"]),
+            ("2026-02-28", None, ["2026-02"]),
+            ("invalid", "2026-02-15", ["2026-02"]),
+            ("2026-02-15", "invalid", ["2026-02"]),
+            ("2025-12-31", "2026-01-01", ["2025-12", "2026-01"]),
+            ("2024-02-29", "2024-02-29", ["2024-02"]),
+            ("2026-01-15T09:00:00", "2026-03-10T18:00:00",
+             ["2026-01", "2026-02", "2026-03"]),
+        ]
+        for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%Y/%m/%d"):
+            cases.append((
+                datetime(2026, 1, 15).strftime(fmt),
+                datetime(2026, 3, 10).strftime(fmt),
+                ["2026-01", "2026-02", "2026-03"],
+            ))
+        for start, end, expected in cases:
+            with self.subTest(start=start, end=end):
+                self.assertEqual(generate_contract_months(start, end), expected)
+
+    def test_contract_month_generation_uses_canonical_compatibility_imports(self):
+        from logic import business_logic, clients_management, months
+        from ui import dashboard
+
+        self.assertIs(clients_management.generate_contract_months, months.generate_contract_months)
+        self.assertIs(business_logic.generate_contract_months, months.generate_contract_months)
+        self.assertIs(dashboard.generate_contract_months, months.generate_contract_months)
+
+    def test_next_transaction_month_preserves_selection_and_end_limit(self):
+        from logic.starco_finance import ClientTransactionsWindow
+        from types import SimpleNamespace
+
+        options = ["2025-12", "2026-01", "2026-02"]
+        for saved, expected in [
+            ([], "2025-12"),
+            (["2025-12"], "2026-01"),
+            (["2026-01", "2025-12"], "2026-02"),
+            (["invalid", "2020-01"], "2025-12"),
+            (["2026-02", "2025-12"], "2026-02"),
+        ]:
+            with self.subTest(saved=saved):
+                window = SimpleNamespace(
+                    month_options=options,
+                    client=SimpleNamespace(transactions=[{"month": month} for month in saved]),
+                )
+                self.assertEqual(ClientTransactionsWindow._next_month_for_new_row(window), expected)
+        window.month_options = []
+        self.assertEqual(ClientTransactionsWindow._next_month_for_new_row(window), "")
+
     def test_duration_fields_are_normalized_consistently(self):
         contract = normalize_contract_details({"duration_years": "3 Years"})
         self.assertEqual(contract["duration_years"], "3")
@@ -488,6 +580,18 @@ class ClientManagerTests(unittest.TestCase):
         self.assertNotIn("1", available)
         self.assertNotIn("3", available)
 
+    def test_shop_management_normalizes_and_validates_office(self):
+        self.assertEqual(normalize_shop_numbers("Office, 12"), ["37", "12"])
+
+        manager = ClientManager(self.file_path)
+        manager.add_client("Ali", "123", "Retail", shop_number="Office")
+
+        self.assertEqual(manager.clients[0].shop_number, ["37"])
+        self.assertIn(37, manager.get_used_shop_numbers())
+        self.assertFalse(manager.validate_shop_number("Office")[0])
+        self.assertTrue(manager.validate_shop_number("12")[0])
+        self.assertFalse(manager.validate_shop_number("12, 12")[0])
+
     def test_add_client_with_email(self):
         manager = ClientManager(self.file_path)
         manager.add_client("Nora", "555", "Consulting", "nora@example.com")
@@ -502,6 +606,157 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(len(manager.clients), 1)
         self.assertEqual(manager.clients[0].name, "Ali")
 
+    def test_resolve_clients_data_path_uses_project_root(self):
+        resolved_path = resolve_clients_data_path()
+
+        self.assertEqual(resolved_path, PROJECT_ROOT / "clients.json")
+        self.assertNotEqual(resolved_path, PROJECT_ROOT / "python_code" / "clients.json")
+
+    def test_resolve_clients_data_path_has_no_migration_side_effects(self):
+        project_root = Path(self.temp_dir.name) / "project"
+        legacy_path = project_root / "python_code" / "clients.json"
+        legacy_path.parent.mkdir(parents=True)
+        legacy_path.write_text('[{"name": "Legacy", "contact": "1"}]', encoding="utf-8")
+
+        resolved_path = resolve_clients_data_path(project_root)
+
+        self.assertEqual(resolved_path, project_root.resolve() / "clients.json")
+        self.assertFalse(resolved_path.exists())
+        self.assertTrue(legacy_path.exists())
+
+    def test_app_startup_runs_legacy_client_migration(self):
+        from python_code.app import main as app_main
+
+        with (
+            mock.patch("logic.validations.Storage.client_storage.migrate_legacy_client_files") as migrate,
+            mock.patch("python_code.ui.dashboard.safe_main") as safe_main,
+        ):
+            self.assertEqual(app_main.main([]), 0)
+
+        migrate.assert_called_once_with(PROJECT_ROOT)
+        safe_main.assert_called_once_with()
+
+    def _migrate_clients_in_isolated_paths(self, project_root, working_dir, executable_dir):
+        with (
+            mock.patch("logic.validations.Storage.client_storage.Path.cwd", return_value=working_dir),
+            mock.patch("logic.validations.Storage.client_storage.sys.executable", str(executable_dir / "python.exe")),
+        ):
+            return migrate_legacy_client_files(project_root)
+
+    def test_migrate_canonical_clients_without_legacy_files_is_noop(self):
+        project_root = Path(self.temp_dir.name) / "project"
+        project_root.mkdir()
+        canonical_path = project_root / "clients.json"
+        original_contents = b'[{"name":"Canonical","contact":"1"}]'
+        canonical_path.write_bytes(original_contents)
+
+        migrated = self._migrate_clients_in_isolated_paths(
+            project_root,
+            Path(self.temp_dir.name) / "working",
+            Path(self.temp_dir.name) / "executable",
+        )
+
+        self.assertFalse(migrated)
+        self.assertEqual(canonical_path.read_bytes(), original_contents)
+
+    def test_migrate_legacy_clients_only(self):
+        project_root = Path(self.temp_dir.name) / "project"
+        legacy_path = project_root / "python_code" / "clients.json"
+        legacy_path.parent.mkdir(parents=True)
+        legacy_records = [{"name": "Legacy", "contact": "123", "custom": "preserved"}]
+        legacy_path.write_text(json.dumps(legacy_records), encoding="utf-8")
+
+        migrated = self._migrate_clients_in_isolated_paths(
+            project_root,
+            Path(self.temp_dir.name) / "working",
+            Path(self.temp_dir.name) / "executable",
+        )
+
+        canonical_path = project_root / "clients.json"
+        self.assertTrue(migrated)
+        self.assertEqual(json.loads(canonical_path.read_text(encoding="utf-8")), legacy_records)
+
+    def test_migrate_canonical_and_legacy_clients_deduplicates_by_identity(self):
+        project_root = Path(self.temp_dir.name) / "project"
+        working_dir = Path(self.temp_dir.name) / "working"
+        executable_dir = Path(self.temp_dir.name) / "executable"
+        legacy_path = project_root / "python_code" / "clients.json"
+        legacy_path.parent.mkdir(parents=True)
+        working_dir.mkdir()
+        executable_dir.mkdir()
+        canonical_records = [{"name": "Muna", "contact": "123", "source": "canonical"}]
+        canonical_path = project_root / "clients.json"
+        canonical_path.write_text(json.dumps(canonical_records), encoding="utf-8")
+        legacy_records = [
+            {"name": "muna", "contact": "123", "source": "legacy"},
+            {"name": "Salim", "contact": "456", "custom": "preserved"},
+        ]
+        legacy_path.write_text(json.dumps(legacy_records), encoding="utf-8")
+        (working_dir / "clients.json").write_text(
+            json.dumps([{"name": "Salim", "contact": "456", "source": "duplicate"}]),
+            encoding="utf-8",
+        )
+        (executable_dir / "clients.json").write_text(
+            json.dumps([{"name": "Nora", "contact": "789"}]),
+            encoding="utf-8",
+        )
+
+        migrated = self._migrate_clients_in_isolated_paths(project_root, working_dir, executable_dir)
+        first_contents = canonical_path.read_bytes()
+        repeated_migration = self._migrate_clients_in_isolated_paths(project_root, working_dir, executable_dir)
+        records = json.loads(canonical_path.read_text(encoding="utf-8"))
+
+        self.assertTrue(migrated)
+        self.assertFalse(repeated_migration)
+        self.assertEqual(canonical_path.read_bytes(), first_contents)
+        self.assertEqual([(item["name"].lower(), item["contact"]) for item in records], [
+            ("muna", "123"),
+            ("salim", "456"),
+            ("nora", "789"),
+        ])
+        self.assertEqual(records[1]["custom"], "preserved")
+
+    def test_migrate_legacy_clients_skips_malformed_sources(self):
+        project_root = Path(self.temp_dir.name) / "project"
+        working_dir = Path(self.temp_dir.name) / "working"
+        executable_dir = Path(self.temp_dir.name) / "executable"
+        malformed_path = project_root / "python_code" / "clients.json"
+        malformed_path.parent.mkdir(parents=True)
+        working_dir.mkdir()
+        malformed_path.write_text("{ malformed", encoding="utf-8")
+        (working_dir / "clients.json").write_text(
+            json.dumps([{"name": "Valid", "contact": "987"}]),
+            encoding="utf-8",
+        )
+
+        migrated = self._migrate_clients_in_isolated_paths(project_root, working_dir, executable_dir)
+
+        self.assertTrue(migrated)
+        self.assertEqual(
+            json.loads((project_root / "clients.json").read_text(encoding="utf-8")),
+            [{"name": "Valid", "contact": "987"}],
+        )
+
+    def test_migrate_legacy_clients_replaces_canonical_atomically(self):
+        project_root = Path(self.temp_dir.name) / "project"
+        legacy_path = project_root / "python_code" / "clients.json"
+        legacy_path.parent.mkdir(parents=True)
+        canonical_path = project_root / "clients.json"
+        original_contents = b'[{"name":"Canonical","contact":"1"}]'
+        canonical_path.write_bytes(original_contents)
+        legacy_path.write_text('[{"name":"Legacy","contact":"2"}]', encoding="utf-8")
+
+        with (
+            mock.patch("logic.validations.Storage.client_storage.Path.cwd", return_value=Path(self.temp_dir.name) / "working"),
+            mock.patch("logic.validations.Storage.client_storage.sys.executable", str(Path(self.temp_dir.name) / "executable" / "python.exe")),
+            mock.patch("logic.validations.Storage.client_storage.os.replace", side_effect=OSError("replace failed")),
+        ):
+            with self.assertRaisesRegex(OSError, "replace failed"):
+                migrate_legacy_client_files(project_root)
+
+        self.assertEqual(canonical_path.read_bytes(), original_contents)
+        self.assertEqual(list(project_root.glob(".clients.json.*.tmp")), [])
+
     def test_delete_client_removes_selected_client(self):
         manager = ClientManager(self.file_path)
         manager.add_client("Ali", "123", "Stationery")
@@ -512,6 +767,125 @@ class ClientManagerTests(unittest.TestCase):
         self.assertTrue(removed)
         self.assertEqual(len(manager.clients), 1)
         self.assertEqual(manager.clients[0].name, "Sara")
+
+    def test_delete_client_removes_deleted_shop_from_selected_shops(self):
+        selected_shops = [
+            {"Shop": "12", "Elec meter": "12345"},
+            {"Shop": "7", "Elec meter": "777"},
+        ]
+
+        cleaned = remove_shop_from_selected_shops(selected_shops, "12")
+
+        self.assertEqual(cleaned, [{"Shop": "7", "Elec meter": "777"}])
+
+    def test_delete_client_works_for_incomplete_saved_records(self):
+        manager = ClientManager(self.file_path)
+        manager.clients = [
+            Client("Ali", "", "Retail", shop_number=""),
+            Client("Sara", "456", "Boutique", shop_number="9"),
+        ]
+
+        removed = manager.delete_client("Ali")
+
+        self.assertTrue(removed)
+        self.assertEqual([client.name for client in manager.clients], ["Sara"])
+
+    def test_shop_validation_uses_canonical_client_manager(self):
+        from python_code.ui import dashboard as ui
+
+        class DummyVar:
+            def __init__(self, value=""):
+                self.value = value
+            def get(self):
+                return self.value
+            def set(self, value):
+                self.value = value
+
+        dummy = type("DummyUpdate", (), {})()
+        dummy.shop_number_var = DummyVar("12")
+        dummy.electrical_meter_var = DummyVar("")
+        dummy.selected_shops = [{"Shop": "12", "Elec meter": "12345"}]
+        dummy.client_manager = ClientManager(self.file_path)
+        dummy.client_manager.clients = [Client("Ali", "123", "Retail", shop_number="5")]
+        dummy.rebuild_selected_shops_from_clients = lambda: setattr(dummy, "selected_shops", [])
+
+        with mock.patch.object(dummy.client_manager, "validate_shop_number", return_value=(True, "")) as validate_mock, \
+             mock.patch.object(ui, "messagebox") as mock_messagebox:
+            ui.ProgressApp._sync_electrical_meter_from_shop_number(dummy)
+
+        validate_mock.assert_called_once_with("12", exclude_name="")
+        mock_messagebox.showerror.assert_not_called()
+
+    def test_refresh_client_combo_clears_stale_names_when_all_clients_are_deleted(self):
+        from python_code.ui import dashboard as ui
+
+        root = tk.Tk(); root.withdraw()
+        try:
+            app = ui.ProgressApp()
+            app.client_manager.clients = []
+            app.client_name_var.set("Ghost Client")
+            app.client_combo = ttk.Combobox(root, values=["Ghost Client"], state="normal")
+            app.refresh_client_combo()
+            self.assertEqual(app.client_name_var.get(), "")
+            self.assertEqual(app.client_combo.get(), "")
+            self.assertEqual(app.client_combo["values"], [T("<New Client>")])
+            app.destroy()
+        finally:
+            root.destroy()
+
+    def test_delete_progress_only_client_row_clears_stale_progress_record(self):
+        from python_code.ui import dashboard as ui
+
+        original_progress = ui.Plan.Clients_progress.copy()
+        ui.Plan.Clients_progress = {"Ghost Client": {"progress": 50, "pending_tasks": [], "all_tasks": ["Task 1"]}}
+        try:
+            root = tk.Tk(); root.withdraw()
+            window = ui.AllClientsProgressWindow(root)
+            window.tree.delete(*window.tree.get_children())
+            window.tree.insert("", "end", values=("Ghost Client", "", "", "", "", "Not reserved", "50%", "0 / 1"))
+            window.tree.selection_set(window.tree.get_children()[-1])
+
+            with mock.patch.object(ui.messagebox, "askyesno", return_value=True), \
+                 mock.patch.object(ui.messagebox, "showinfo") as mock_info, \
+                 mock.patch.object(ui.messagebox, "showwarning") as mock_warning:
+                window.delete_selected_client()
+
+            self.assertNotIn("Ghost Client", ui.Plan.Clients_progress)
+            self.assertFalse(mock_warning.called)
+            self.assertTrue(mock_info.called)
+            window.destroy()
+            root.destroy()
+        finally:
+            ui.Plan.Clients_progress = original_progress
+
+    def test_delete_selected_client_removes_multiple_rows(self):
+        from python_code.ui import dashboard as ui
+
+        root = tk.Tk(); root.withdraw()
+        try:
+            manager = ClientManager(self.file_path)
+            manager.clients = [
+                Client("Alice", "123", "Retail", shop_number="1"),
+                Client("Bob", "456", "Coffee", shop_number="2"),
+                Client("Cara", "789", "Books", shop_number="3"),
+            ]
+            manager.save_clients()
+
+            window = ui.AllClientsProgressWindow(root)
+            window.manager = manager
+            window.refresh_view()
+            selected = list(window.tree.get_children())[:2]
+            window.tree.selection_set(selected)
+
+            with mock.patch.object(ui.messagebox, "askyesno", return_value=True), \
+                 mock.patch.object(ui.messagebox, "showinfo") as mock_info:
+                window.delete_selected_client()
+
+            self.assertEqual([client.name for client in window.manager.clients], ["Cara"])
+            self.assertTrue(mock_info.called)
+            window.destroy()
+        finally:
+            root.destroy()
 
     def test_plan_sync_keeps_pending_tasks_in_sync(self):
         plan = Plan(Client("Sam", "123", "Marketing"), all_tasks=["Task 1", "Task 2", "Task 3"])
@@ -721,8 +1095,43 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(reloaded.clients[0].transactions[0]["cheque_number"], "CH-204")
         self.assertEqual(reloaded.clients[0].transactions[0]["bank_name"], "Bank Muscat")
 
+    def test_finance_exports_and_payment_report_use_shared_module(self):
+        from logic import starco_finance
+        from python_code.ui import dashboard
+
+        self.assertIs(normalize_contract_details, contracts_normalize_contract_details)
+        self.assertIs(starco_finance.normalize_contract_details, contracts_normalize_contract_details)
+        self.assertIs(normalize_reservation_status, reservations_normalize_reservation_status)
+        self.assertIs(starco_finance.normalize_reservation_status, reservations_normalize_reservation_status)
+        self.assertIs(starco_finance.normalize_transaction_entry, transactions_normalize_transaction_entry)
+        self.assertIs(normalize_transaction_entry, transactions_normalize_transaction_entry)
+        self.assertIs(dashboard.build_client_payment_report_text, report_build_client_payment_report_text)
+        self.assertIs(dashboard.ClientTransactionsWindow, starco_finance.ClientTransactionsWindow)
+        self.assertIs(dashboard.ReservationStatusWindow, starco_finance.ReservationStatusWindow)
+        self.assertIs(normalize_contract_details, starco_finance.normalize_contract_details)
+        self.assertIs(normalize_reservation_status, starco_finance.normalize_reservation_status)
+
+        manager = ClientManager(self.file_path)
+        manager.add_client("Ali", "123456", "Retail")
+        manager.clients[0].transactions = [{
+            "month": "2026-09",
+            "status": "Paid",
+            "amount": "250",
+            "payment_method": "Bank Transaction",
+            "bank_transaction_details": "REF-123",
+        }]
+        manager.save_clients()
+        report = report_build_client_payment_report_text("Ali", manager)
+        self.assertIn("2026-09: Paid | 250 | Bank Transaction", report)
+        self.assertIn("REF-123", report)
+        self.assertEqual(manager.clients[0].transactions[0]["bank_transaction_details"], "REF-123")
+
+        file_report = report_build_client_payment_report_text("Ali", self.file_path)
+        self.assertIn("2026-09: Paid | 250 | Bank Transaction", file_report)
+        self.assertIn("REF-123", file_report)
+
     def test_transaction_window_has_client_selector_dropdown(self):
-        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
+        source_path = Path(__file__).resolve().parent / "logic" / "starco_finance.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -731,7 +1140,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("self._switch_client_for_transactions", source)
 
     def test_transaction_status_uses_checkbox_and_completion_popup(self):
-        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
+        source_path = Path(__file__).resolve().parent / "logic" / "starco_finance.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -743,27 +1152,60 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("state=\"disabled\"", source)
 
     def test_transaction_completion_popup_requires_valid_saved_row(self):
-        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
+        source_path = Path(__file__).resolve().parent / "logic" / "starco_finance.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
-        self.assertIn("def _can_complete_payment", source)
+        self.assertIn("self.finance.mark_status(entry, completed)", source)
         self.assertIn("if not completed:", source)
-        self.assertIn("entry[\"status\"] = \"Pending\"", source)
-        self.assertIn("return bool(cheque_number)", source)
-        self.assertIn("return bool(bank_detail)", source)
+        self.assertIn("if not success:", source)
         self.assertIn("save_transactions", source)
         self.assertIn("Payment completed", source)
         self.assertIn("showinfo", source)
 
     def test_previous_month_must_be_paid_before_next_month_completion(self):
-        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
+        source_path = Path(__file__).resolve().parent / "logic" / "starco_finance.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
-        self.assertIn("def _get_previous_month", source)
-        self.assertIn("previous_month = self.month_options[current_index - 1]", source)
+        self.assertIn("from logic.months import get_month_index, get_previous_month", source)
+        self.assertIn("get_previous_month(entry.get(\"month\", \"\"), self.month_options)", source)
+        self.assertIn("self.finance.mark_status(entry, completed)", source)
         self.assertIn("Outstanding payment", source)
+
+    def test_starco_finance_uses_shared_payment_rules(self):
+        source_path = Path(__file__).resolve().parent / "logic" / "starco_finance.py"
+        source = source_path.read_text(encoding="utf-8")
+
+        self.assertIn("from logic.validations.payment_rules import (", source)
+        self.assertNotIn("def _normalize_payment_method", source)
+        self.assertNotIn("def _is_payment_completed", source)
+        self.assertNotIn("def _can_complete_payment", source)
+        self.assertNotIn("def _get_month_order_index", source)
+
+    def test_payment_completion_rules_are_shared_for_prior_month_statuses(self):
+        month_options = ["2026-01", "2026-02"]
+        current_payment = {
+            "month": "2026-02",
+            "amount": "100",
+            "payment_method": "Cash",
+            "due_date": "28-02-2026",
+        }
+
+        for status in ("Paid", "Completed", "Complete", "Success", "Successful", "Yes", "True", "1"):
+            with self.subTest(status=status):
+                previous_payment = {"month": "2026-01", "status": status}
+                self.assertTrue(is_payment_completed(previous_payment))
+                self.assertTrue(can_complete_payment(current_payment, month_options, [previous_payment]))
+
+        previous_payment = {"month": "2026-01", "status": "Pending"}
+        self.assertFalse(is_payment_completed(previous_payment))
+        self.assertFalse(can_complete_payment(current_payment, month_options, [previous_payment]))
+
+    def test_payment_method_normalization_uses_shared_rules(self):
+        self.assertEqual(normalize_payment_method("cash"), "Cash")
+        self.assertEqual(normalize_payment_method("bank transaction"), "Bank Transaction")
+        self.assertEqual(normalize_payment_method("unknown"), "Cash")
 
     def test_payment_follow_up_actions_are_generated_from_pending_months(self):
         source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
@@ -775,18 +1217,208 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("self.plan.pending_tasks", source)
 
     def test_due_date_matches_selected_month(self):
-        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
+        source_path = Path(__file__).resolve().parent / "logic" / "starco_finance.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
-        self.assertIn("def _coerce_due_date_for_month", source)
-        self.assertIn("calendar.monthrange", source)
-        self.assertIn("normalized = self._coerce_due_date_for_month", source)
+        self.assertNotIn("def _coerce_due_date_for_month", source)
+        self.assertIn("self.finance.update_due_date(", source)
+        self.assertIn("self.finance.update_month(entry, var.get())", source)
+
+    def test_finance_manager_preserves_transaction_editing_behavior(self):
+        from logic.finance_manager import FinanceManager
+
+        client = Client("Ali", "123", "Retail", contract_details={
+            "starting_date": "2026-01-01",
+            "ending_date": "2026-02-28",
+        })
+        finance = FinanceManager(client)
+        self.assertEqual(finance.get_month_options(), ["2026-01", "2026-02"])
+        transaction = finance.add_transaction_for_month("2026-01")
+        self.assertEqual(transaction.status, "Pending")
+        entry = client.transactions[0]
+        finance.update_month(entry, "2026-02")
+        self.assertEqual(entry["due_date"], "28-02-2026")
+        entry.update(cheque_number="CH-1", bank_transaction_details="REF-1")
+        finance.update_payment_method(entry, "Cash")
+        self.assertEqual(entry["cheque_number"], "")
+        self.assertEqual(entry["bank_transaction_details"], "")
+        entry["amount"] = "100"
+        self.assertFalse(finance.mark_status(entry, True))
+        client.transactions.insert(0, {"month": "2026-01", "status": "Paid"})
+        self.assertTrue(finance.mark_status(entry, True))
+        self.assertEqual(entry["status"], "Paid")
+        self.assertFalse(finance.mark_status(entry, False))
+        self.assertEqual(entry["status"], "Pending")
+
+    def test_transaction_window_payment_method_preserves_widget_updates(self):
+        from logic.finance_manager import FinanceManager
+        from logic.starco_finance import ClientTransactionsWindow
+        from types import SimpleNamespace
+
+        for method in ("Cash", "Cheque", "Bank Transaction"):
+            with self.subTest(method=method):
+                client = Client("Ali", "123", "Retail")
+                finance = FinanceManager(client)
+                entry = {"cheque_number": "CH-1", "bank_transaction_details": "REF-1"}
+                cheque_widget, bank_widget = mock.Mock(), mock.Mock()
+                cheque_var, bank_var = mock.Mock(), mock.Mock()
+                window = SimpleNamespace(
+                    finance=finance, tree=mock.Mock(),
+                    cheque_entries={"row": cheque_widget},
+                    bank_transaction_entries={"row": bank_widget},
+                    cheque_vars={"row": cheque_var},
+                    bank_transaction_vars={"row": bank_var},
+                )
+                var = mock.Mock()
+                var.get.return_value = method
+                ClientTransactionsWindow._update_payment_method(window, "row", entry, var)
+                window.tree.set.assert_called_once_with("row", "method", method)
+                cheque_widget.configure.assert_called_once_with(
+                    state="normal" if method == "Cheque" else "disabled"
+                )
+                bank_widget.configure.assert_called_once_with(
+                    state="normal" if method == "Bank Transaction" else "disabled"
+                )
+                if method == "Cheque":
+                    self.assertEqual(entry["cheque_number"], "CH-1")
+                    cheque_var.set.assert_not_called()
+                else:
+                    self.assertEqual(entry["cheque_number"], "")
+                    cheque_var.set.assert_called_once_with("")
+                if method == "Bank Transaction":
+                    self.assertEqual(entry["bank_transaction_details"], "REF-1")
+                    bank_var.set.assert_not_called()
+                else:
+                    self.assertEqual(entry["bank_transaction_details"], "")
+                    bank_var.set.assert_called_once_with("")
+
+    def test_transaction_window_status_preserves_widget_updates(self):
+        from logic.finance_manager import FinanceManager
+        from logic.starco_finance import ClientTransactionsWindow
+        from types import SimpleNamespace
+
+        for completed, amount, expected in [
+            (False, "100", "Pending"), (True, "", "Pending"), (True, "100", "Paid")
+        ]:
+            with self.subTest(completed=completed, amount=amount):
+                client = Client("Ali", "123", "Retail")
+                entry = {
+                    "month": "2026-01", "status": "Paid", "amount": amount,
+                    "due_date": "31-01-2026", "payment_method": "Cash",
+                }
+                client.transactions = [entry]
+                finance = FinanceManager(client)
+                finance.mark_status = mock.Mock(wraps=finance.mark_status)
+                window = SimpleNamespace(finance=finance, tree=mock.Mock(), month_options=[])
+                var = mock.Mock()
+                var.get.return_value = completed
+                with mock.patch("logic.starco_finance.messagebox") as messages:
+                    ClientTransactionsWindow._toggle_status(window, "row", entry, var)
+                finance.mark_status.assert_called_once_with(entry, completed)
+                self.assertEqual(entry["status"], expected)
+                window.tree.set.assert_called_once_with("row", "status", expected)
+                if completed and not amount:
+                    var.set.assert_called_once_with(False)
+                    messages.showwarning.assert_called_once()
+                else:
+                    var.set.assert_not_called()
+                    messages.showwarning.assert_not_called()
+
+    def test_starco_finance_delegates_to_finance_manager(self):
+        from logic.finance_manager import FinanceManager
+        from logic.starco_finance import ClientTransactionsWindow
+        from types import SimpleNamespace
+
+        client = Client("Ali", "123", "Retail")
+        window = SimpleNamespace(
+            finance=FinanceManager(client),
+            tree=mock.Mock(),
+            due_date_vars={},
+            cheque_entries={},
+            bank_transaction_entries={},
+        )
+        entry = {"month": "2026-01", "due_date": "", "cheque_number": "CH-1"}
+        var = mock.Mock()
+        var.get.return_value = "2026-02"
+        ClientTransactionsWindow._update_month(window, "row", entry, var)
+        self.assertEqual(entry["due_date"], "28-02-2026")
+        var.get.return_value = "Cash"
+        ClientTransactionsWindow._update_payment_method(window, "row", entry, var)
+        self.assertEqual(entry["cheque_number"], "")
+
+    def test_starco_finance_adds_pending_rows_and_preserves_contract_end_limit(self):
+        from logic.finance_manager import FinanceManager
+        from logic.starco_finance import ClientTransactionsWindow
+        from types import SimpleNamespace
+
+        client = Client("Ali", "123", "Retail")
+        window = SimpleNamespace(
+            client=client,
+            finance=FinanceManager(client),
+            month_options=["2026-01", "2026-02"],
+            _next_month_for_new_row=mock.Mock(return_value="2026-02"),
+            refresh_view=mock.Mock(),
+        )
+        ClientTransactionsWindow.add_transaction_row(window)
+        self.assertEqual(client.transactions[0]["month"], "2026-02")
+        self.assertEqual(client.transactions[0]["status"], "Pending")
+        ClientTransactionsWindow.add_transaction_row(window)
+        self.assertEqual(len(client.transactions), 1)
+        window.refresh_view.assert_called_once()
+
+    def test_starco_finance_rebinds_finance_manager_on_client_switch(self):
+        from logic.starco_finance import ClientTransactionsWindow
+        from types import SimpleNamespace
+
+        client = Client("Sara", "456", "Retail")
+        selector = mock.Mock()
+        selector.get.return_value = "Sara"
+        window = SimpleNamespace(
+            client_selector_var=selector,
+            _find_client=mock.Mock(return_value=client),
+            refresh_view=mock.Mock(),
+        )
+        ClientTransactionsWindow._switch_client_for_transactions(window)
+        self.assertIs(window.finance.client, client)
+        window.refresh_view.assert_called_once()
+
+    def test_starco_finance_saves_validated_rows_to_reloaded_client(self):
+        from logic.finance_manager import FinanceManager
+        from logic.starco_finance import ClientTransactionsWindow
+        from types import SimpleNamespace
+
+        for amount, expected_status in [("100", "Paid"), ("", "Pending")]:
+            with self.subTest(amount=amount):
+                client = Client("Ali", "123", "Retail")
+                reloaded = Client("Ali", "123", "Retail")
+                finance = FinanceManager(client)
+                finance.add_transaction_for_month("2026-01")
+                client.transactions[0].update(amount=amount, due_date="31-01-2026")
+                status = mock.Mock()
+                status.get.return_value = True
+                manager = mock.Mock()
+                manager.clients = [reloaded]
+                tree = mock.Mock()
+                tree.get_children.return_value = ["row"]
+                window = SimpleNamespace(
+                    client=client, finance=finance, manager=manager, tree=tree,
+                    month_vars={}, amount_vars={}, cheque_vars={}, due_date_vars={},
+                    bank_name_vars={}, bank_transaction_vars={}, method_vars={},
+                    status_vars={"row": status}, refresh_view=mock.Mock(),
+                )
+                with mock.patch("logic.starco_finance.messagebox") as messages:
+                    ClientTransactionsWindow.save_transactions(window)
+                self.assertEqual(reloaded.transactions[0]["status"], expected_status)
+                manager.load_clients.assert_called_once()
+                manager.save_clients.assert_called_once()
+                self.assertEqual(messages.showwarning.called, not bool(amount))
 
     def test_transaction_row_edits_and_payment_preview_are_available(self):
         source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
+        source += (Path(__file__).resolve().parent / "logic" / "starco_finance.py").read_text(encoding="utf-8")
 
         self.assertIn("def _update_amount", source)
         self.assertIn("def _update_due_date", source)
@@ -795,7 +1427,7 @@ class ClientManagerTests(unittest.TestCase):
         self.assertIn("text_widget.insert(\"1.0\", self.build_report_text())", source)
 
     def test_transaction_due_date_picker_and_next_month_logic_are_present(self):
-        source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
+        source_path = Path(__file__).resolve().parent / "logic" / "starco_finance.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
 
@@ -808,6 +1440,8 @@ class ClientManagerTests(unittest.TestCase):
         source_path = Path(__file__).resolve().parent / "ui" / "dashboard.py"
         with source_path.open("r", encoding="utf-8") as source_file:
             source = source_file.read()
+        source += (Path(__file__).resolve().parent / "logic" / "validations" / "Storage" / "reports" / "client_payment_report.py").read_text(encoding="utf-8")
+        source += (Path(__file__).resolve().parent / "logic" / "starco_finance.py").read_text(encoding="utf-8")
 
         self.assertIn("build_client_payment_report_text", source)
         self.assertIn("Contract Period Status", source)
@@ -944,6 +1578,16 @@ class ClientManagerTests(unittest.TestCase):
         self.assertFalse(valid)
         self.assertIn("already exists", message.lower())
 
+    def test_reservation_shop_validation_accepts_office_alias_and_37(self):
+        module_path = Path(__file__).resolve().parent / "ui" / "reservation_contract.py"
+        spec = importlib.util.spec_from_file_location("ui_reservation_contract_module_office_check", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        self.assertTrue(module.ShopReservationForm.validate_shop_entry("Office", existing=[])[0])
+        self.assertTrue(module.ShopReservationForm.validate_shop_entry("37", existing=[("12", "123")])[0])
+        self.assertFalse(module.ShopReservationForm.validate_shop_entry("Office", existing=[("37", "28609686")])[0])
+
     def test_reservation_preview_falls_back_when_mapped_contract_file_is_missing(self):
         module_path = Path(__file__).resolve().parent / "ui" / "reservation_contract.py"
         spec = importlib.util.spec_from_file_location("ui_reservation_contract_module_preview", module_path)
@@ -1023,6 +1667,98 @@ class ClientManagerTests(unittest.TestCase):
         self.assertEqual(form.main_vars["address"].get(), "Muscat")
         self.assertEqual(form.shop_var.get(), "12")
         self.assertEqual(form.elec_var.get(), "28609687")
+
+    def test_contract_form_reset_clears_values_and_shop_rows(self):
+        module_path = Path(__file__).resolve().parent / "ui" / "reservation_contract.py"
+        spec = importlib.util.spec_from_file_location("ui_reservation_contract_module_reset", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        class DummyVar:
+            def __init__(self, value=""):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+            def set(self, value):
+                self.value = value
+
+        form = object.__new__(module.ShopReservationForm)
+        form.saved_client_data = {"name": "Ali"}
+        form.client_name = "Ali"
+        form.main_vars = {
+            key: DummyVar("old")
+            for key in (
+                "lessor", "lessor contact", "business", "email", "address",
+                "lessee", "lessee contact", "date", "duration",
+            )
+        }
+        form.renew_var = DummyVar("No")
+        form.payment_vars = {
+            key: DummyVar("old") for key in ("rent", "deposit", "bank", "holder")
+        }
+        form.shop_var = DummyVar("12")
+        form.elec_var = DummyVar("meter")
+        form.shop_tree = mock.Mock()
+        form.shop_tree.get_children.return_value = ("row-1",)
+        form.shop_combo = mock.Mock()
+        form._available_shop_numbers = mock.Mock(return_value=["13"])
+
+        with mock.patch.object(module.messagebox, "showinfo") as showinfo:
+            form.reset_form()
+
+        self.assertEqual(form.saved_client_data, {})
+        self.assertEqual(form.client_name, "")
+        self.assertEqual(form.main_vars["lessor"].get(), module.KHALID_SECOND_PARTY_NAME)
+        self.assertEqual(form.main_vars["lessee"].get(), "")
+        self.assertEqual(form.main_vars["duration"].get(), "")
+        self.assertEqual(form.renew_var.get(), "Yes")
+        self.assertEqual(form.payment_vars["rent"].get(), "")
+        self.assertEqual(form.payment_vars["bank"].get(), "01041108028002")
+        self.assertEqual(form.shop_var.get(), "")
+        self.assertEqual(form.elec_var.get(), "")
+        form.shop_tree.delete.assert_called_once_with("row-1")
+        form.shop_combo.configure.assert_called_once_with(values=["13"])
+        showinfo.assert_called_once()
+
+    def test_contract_save_confirmation_distinguishes_update_from_create(self):
+        module_path = Path(__file__).resolve().parent / "ui" / "reservation_contract.py"
+        spec = importlib.util.spec_from_file_location("ui_reservation_contract_module_confirmation", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        class DummyVar:
+            def __init__(self, value=""):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+        for current_name, expected_title in (
+            ("Ali", "Confirm contract update"),
+            ("", "Confirm contract save"),
+        ):
+            form = object.__new__(module.ShopReservationForm)
+            form.client_name = current_name
+            form.main_vars = {
+                "lessee": DummyVar("Ali"),
+                "duration": DummyVar("1"),
+            }
+            form.payment_vars = {
+                "rent": DummyVar("100"),
+                "deposit": DummyVar("50"),
+            }
+            form._get_shop_rows = lambda: [("12", "meter")]
+            form._get_contract_details = lambda: {}
+            form._get_field_value = lambda key: ""
+            form.client_manager = mock.Mock()
+
+            with mock.patch.object(module.messagebox, "askyesno", return_value=False) as askyesno:
+                form.save_contract()
+
+            self.assertEqual(askyesno.call_args.args[0], module.T(expected_title))
+            form.client_manager.load_clients.assert_not_called()
 
 
 if __name__ == "__main__":

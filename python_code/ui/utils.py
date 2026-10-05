@@ -11,7 +11,11 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     arabic_reshaper = None
 
-from bidi.algorithm import get_display
+try:
+    from bidi.algorithm import get_display
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    def get_display(value):
+        return value
 
 from config.translations import T
 
