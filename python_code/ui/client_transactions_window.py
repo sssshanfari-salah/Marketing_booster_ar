@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from config.translations import T
+from config.translations import T, refresh_translatable_widgets
 from logic.clients_management import ClientManager, resolve_clients_data_path
 from logic.finance_manager import FinanceManager
 from logic.validations.payment_rules import normalize_payment_method
@@ -14,6 +14,8 @@ class ClientTransactionsWindow(tk.Toplevel):
 
     def __init__(self, master=None, client_name: str = ""):
         super().__init__(master)
+        self.translatable_labels = []
+        self.translatable_buttons = []
         self.title(T("Client Transactions"))
         self.geometry("980x560")
         self.minsize(780, 420)
@@ -63,9 +65,9 @@ class ClientTransactionsWindow(tk.Toplevel):
         header_fields.pack(fill="x")
         header_fields.columnconfigure(1, weight=1)
 
-        ttk.Label(header_fields, text=f"{T('Client')}:", font=("Segoe UI", 11, "bold")).grid(
-            row=0, column=0, sticky="w", padx=(0, 8)
-        )
+        client_label = ttk.Label(header_fields, text=f"{T('Client')}:", font=("Segoe UI", 11, "bold"))
+        client_label.grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.translatable_labels.append((client_label, "Client"))
         self.client_selector_var = tk.StringVar(value=self.client_name or "")
         self.client_selector = ttk.Combobox(
             header_fields,
@@ -112,12 +114,48 @@ class ClientTransactionsWindow(tk.Toplevel):
 
         controls = ttk.Frame(main)
         controls.pack(fill="x", pady=(8, 0))
-        ttk.Button(controls, text=T("Add Month"), command=self.add_transaction_row).pack(side="left", padx=(0, 8))
-        ttk.Button(controls, text=T("Save Transactions"), command=self.save_transactions).pack(side="left", padx=(0, 8))
-        ttk.Button(controls, text=T("Back"), command=self.go_back).pack(side="left", padx=(0, 8))
-        ttk.Button(controls, text=T("Home"), command=self.go_home).pack(side="left")
+        add_month_button = ttk.Button(controls, text=T("Add Month"), command=self.add_transaction_row)
+        add_month_button.pack(side="left", padx=(0, 8))
+        self.translatable_buttons.append((add_month_button, "Add Month"))
+        save_transactions_button = ttk.Button(controls, text=T("Save Transactions"), command=self.save_transactions)
+        save_transactions_button.pack(side="left", padx=(0, 8))
+        self.translatable_buttons.append((save_transactions_button, "Save Transactions"))
+        back_button = ttk.Button(controls, text=T("Back"), command=self.go_back)
+        back_button.pack(side="left", padx=(0, 8))
+        self.translatable_buttons.append((back_button, "Back"))
+        home_button = ttk.Button(controls, text=T("Home"), command=self.go_home)
+        home_button.pack(side="left")
+        self.translatable_buttons.append((home_button, "Home"))
 
         self.refresh_view()
+
+    def refresh_lang_ui(self):
+        refresh_translatable_widgets(self)
+        self.title(T("Client Transactions"))
+        if hasattr(self, "tree"):
+            headings = [
+                ("month", "Month"),
+                ("status", "Status"),
+                ("amount", "Amount"),
+                ("method", "Payment Method"),
+                ("cheque", "Cheque Number"),
+                ("due_date", "Due Date"),
+                ("bank", "Bank Name"),
+                ("bank_transaction_detail", "Bank Transaction Details"),
+            ]
+            for column_name, key in headings:
+                try:
+                    self.tree.heading(column_name, text=T(key))
+                except Exception:
+                    continue
+
+    def switch_language(self, event=None):
+        if hasattr(self, "language_var"):
+            selected = str(self.language_var.get() or "eng").strip().lower()
+            from config import translations as lang
+            lang.set_language(selected)
+            self.language_var.set(lang.CURRENT_LANGUAGE)
+        self.refresh_lang_ui()
 
     def go_back(self):
         from ui.dashboard import close_popup_and_return

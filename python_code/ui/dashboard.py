@@ -17,23 +17,35 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 try:
-    from python_code.ui.utils import (
+    from config.translations import (
+        CURRENT_LANGUAGE,
+        T,
         apply_bidi_text,
         configure_emoji_label,
         get_emoji_font_families,
         is_arabic_text,
         refresh_translatable_widget,
+        refresh_translatable_widgets,
         set_emoji_translated_label,
+        set_language,
+        validate_translation_coverage,
     )
 except ImportError:  # pragma: no cover - script execution fallback
-    from ui.utils import (
+    from config.translations import (
+        CURRENT_LANGUAGE,
+        T,
         apply_bidi_text,
         configure_emoji_label,
         get_emoji_font_families,
         is_arabic_text,
         refresh_translatable_widget,
+        refresh_translatable_widgets,
         set_emoji_translated_label,
+        set_language,
+        validate_translation_coverage,
     )
+
+from config import translations as translations_core
 
 try:
     import win32print
@@ -74,7 +86,7 @@ for candidate in [
 if APP_ICON is None:
     APP_ICON = Path(__file__).resolve().parent.parent / "starco_icon.ico"
 
-CURRENT_LANGUAGE = "eng"
+CURRENT_LANGUAGE = translations_core.CURRENT_LANGUAGE
 APP_ROOT = Path(__file__).resolve().parent.parent
 
 try:
@@ -917,45 +929,15 @@ def print_report_document(title, lines):
 
 
 def set_language(lang):
-    global CURRENT_LANGUAGE
-    code = str(lang or "eng").strip().lower()
-    if code in ("ar", "arabic"):
-        CURRENT_LANGUAGE = "ar"
-    else:
-        CURRENT_LANGUAGE = "eng"
-    return CURRENT_LANGUAGE
-
-
-# def T(text, **kwargs):
-#     language_map = TRANSLATIONS.get(CURRENT_LANGUAGE, TRANSLATIONS["eng"])
-#     translated = language_map.get(text, text)
-#     if kwargs:
-#         return translated.format(**kwargs)
-#     return translated
+    return translations_core.set_language(lang)
 
 
 def T(text, **kwargs):
-    language_map = TRANSLATIONS.get(CURRENT_LANGUAGE, TRANSLATIONS["eng"])
-    translated = language_map.get(text, text)
-
-    if kwargs:
-        translated = translated.format(**kwargs)
-
-    if CURRENT_LANGUAGE == "ar":
-        translated = apply_bidi_text(translated)
-
-    return translated
+    return translations_core.T(text, **kwargs)
 
 
 def validate_translation_coverage():
-    english_keys = set(TRANSLATIONS.get("eng", {}).keys())
-    arabic_keys = set(TRANSLATIONS.get("ar", {}).keys())
-    missing = sorted(key for key in english_keys if key not in arabic_keys)
-    if missing:
-        raise ValueError(
-            "Missing Arabic translations for UI labels:\n" + "\n".join(f" - {key}" for key in missing[:50])
-        )
-    return None
+    return translations_core.validate_translation_coverage()
 
 
 def build_task_log_report_text(plan=None, client_name=""):
@@ -3351,7 +3333,7 @@ class ProgressApp(tk.Tk):
         lang_label = ttk.Label(lang_frame, text=T("Language"))
         lang_label.pack(side="left", padx=(0, 6))
         self.translatable_labels.append((lang_label, "Language"))
-        self.language_var = tk.StringVar(value=CURRENT_LANGUAGE)
+        self.language_var = tk.StringVar(value=translations_core.CURRENT_LANGUAGE)
         self.language_combo = ttk.Combobox(
             lang_frame,
             textvariable=self.language_var,
@@ -3698,28 +3680,11 @@ class ProgressApp(tk.Tk):
         if selected not in {"eng", "ar"}:
             selected = "eng"
         set_language(selected)
-        self.language_var.set(CURRENT_LANGUAGE)
+        self.language_var.set(translations_core.CURRENT_LANGUAGE)
         self.refresh_lang_ui()
 
     def refresh_lang_ui(self):
-        for widget, original_text in getattr(self, "translatable_labels", []):
-            try:
-                emoji_prefix = getattr(widget, "_emoji_prefix", "")
-                if emoji_prefix:
-                    updated_text = f"{emoji_prefix}{T(original_text)}"
-                    widget.configure(text=updated_text)
-                    configure_emoji_label(widget, updated_text, size=10, bold=True)
-                else:
-                    widget.configure(text=T(original_text))
-            except Exception:
-                pass
-
-        for widget, original_text in getattr(self, "translatable_buttons", []):
-            try:
-                widget.configure(text=T(original_text))
-            except Exception:
-                pass
-
+        refresh_translatable_widgets(self)
         self.title(T("Client Progress Manager"))
         self.refresh_client_combo()
         if hasattr(self, "all_tasks_box"):

@@ -24,7 +24,7 @@ except ImportError:  # pragma: no cover - script execution fallback
     from ui.dashboard import pick_date
 from logic.shops_conversion_to_dic import resolve_shop_electrical_meter as _resolve_shop_electrical_meter
 from logic.shop_management import ShopNumber
-from config.translations import T
+from config.translations import T, refresh_translatable_widgets
 
 KHALID_SECOND_PARTY_NAME = "Khalid Salim Said Al Shanfari"
 SALAH_SECOND_PARTY_NAME = "Salah Salim Said Al Shanfari"
@@ -93,6 +93,8 @@ class ShopReservationForm(tk.Tk):
 
     def __init__(self, client_name=None, client_data=None, client_obj=None):
         super().__init__()
+        self.translatable_labels = []
+        self.translatable_buttons = []
         self.title(T("Advanced Shop Reservation Form - Starco Commercial Complex"))
         self.geometry("980x760")
         self.minsize(920, 680)
@@ -151,11 +153,16 @@ class ShopReservationForm(tk.Tk):
 
         title_frame = ttk.Frame(header)
         title_frame.pack(side="left", fill="x", expand=True)
-        ttk.Label(title_frame, text=T("Starco Commercial Complex"), style="Header.TLabel").pack(anchor="w")
-        ttk.Label(title_frame, text=T("Reservation Contract Form"), style="Info.TLabel").pack(anchor="w", pady=(2, 0))
+        title_label = ttk.Label(title_frame, text=T("Starco Commercial Complex"), style="Header.TLabel")
+        title_label.pack(anchor="w")
+        self.translatable_labels.append((title_label, "Starco Commercial Complex"))
+        subtitle_label = ttk.Label(title_frame, text=T("Reservation Contract Form"), style="Info.TLabel")
+        subtitle_label.pack(anchor="w", pady=(2, 0))
+        self.translatable_labels.append((subtitle_label, "Reservation Contract Form"))
 
         notebook = ttk.Notebook(self)
         notebook.pack(fill="both", expand=True, padx=18, pady=(0, 10))
+        self.notebook = notebook
 
         self.main_tab = ttk.Frame(notebook, padding=18)
         self.shops_tab = ttk.Frame(notebook, padding=18)
@@ -164,6 +171,11 @@ class ShopReservationForm(tk.Tk):
         notebook.add(self.main_tab, text=T("Contract Details"))
         notebook.add(self.shops_tab, text=T("Shop Information"))
         notebook.add(self.payment_tab, text=T("Payment & Bank"))
+        self.tab_texts = {
+            "Contract Details": "Contract Details",
+            "Shop Information": "Shop Information",
+            "Payment & Bank": "Payment & Bank",
+        }
 
         self.create_main_tab()
         self.create_shops_tab()
@@ -172,9 +184,45 @@ class ShopReservationForm(tk.Tk):
 
         button_row = ttk.Frame(self, padding=(0, 0, 0, 18))
         button_row.pack()
-        ttk.Button(button_row, text=T("New Contract"), command=self.reset_form, width=18).pack(side="left", padx=(0, 10))
-        ttk.Button(button_row, text=T("Save Contract"), command=self.save_contract, width=18).pack(side="left", padx=(0, 10))
-        ttk.Button(button_row, text=T("Preview Contract"), command=self.preview_saved_contract, width=18).pack(side="left")
+        new_contract_btn = ttk.Button(button_row, text=T("New Contract"), command=self.reset_form, width=18)
+        new_contract_btn.pack(side="left", padx=(0, 10))
+        self.translatable_buttons.append((new_contract_btn, "New Contract"))
+        save_contract_btn = ttk.Button(button_row, text=T("Save Contract"), command=self.save_contract, width=18)
+        save_contract_btn.pack(side="left", padx=(0, 10))
+        self.translatable_buttons.append((save_contract_btn, "Save Contract"))
+        preview_contract_btn = ttk.Button(button_row, text=T("Preview Contract"), command=self.preview_saved_contract, width=18)
+        preview_contract_btn.pack(side="left")
+        self.translatable_buttons.append((preview_contract_btn, "Preview Contract"))
+
+    def refresh_lang_ui(self):
+        refresh_translatable_widgets(self)
+        self.title(T("Advanced Shop Reservation Form - Starco Commercial Complex"))
+
+        tabs = [
+            (self.main_tab, "Contract Details"),
+            (self.shops_tab, "Shop Information"),
+            (self.payment_tab, "Payment & Bank"),
+        ]
+        for tab, key in tabs:
+            try:
+                self.notebook.tab(tab, text=T(key))
+            except Exception:
+                continue
+
+        if hasattr(self, "shop_tree"):
+            for column, key in (("shop", "Shop Number"), ("electricity", "Electricity Account")):
+                try:
+                    self.shop_tree.heading(column, text=T(key))
+                except Exception:
+                    continue
+
+    def switch_language(self, event=None):
+        if hasattr(self, "language_var"):
+            selected = str(self.language_var.get() or "eng").strip().lower()
+            from config import translations as lang
+            lang.set_language(selected)
+            self.language_var.set(lang.CURRENT_LANGUAGE)
+        self.refresh_lang_ui()
 
     def load_saved_client_data(self, client_name=None):
         data_file = resolve_clients_data_path()
@@ -404,28 +452,32 @@ class ShopReservationForm(tk.Tk):
 
     def create_main_tab(self):
         fields = [
-            (T("Date"), "date"),
-            (T("First Party (Lessor)"), "lessor"),
-            (T("Contact Number"), "lessor contact"),
-            (T("Second Party (Lessee)"), "lessee"),
-            (T("Contact Number"), "lessee contact"),
-            (T("Business"), "business"),
-            (T("Email"), "email"),
-            (T("Address"), "address"),
-            (T("Municipal Contract Duration (Years)"), "duration"),
-             ]
+            ("Date", "date"),
+            ("First Party (Lessor)", "lessor"),
+            ("Contact Number", "lessor contact"),
+            ("Second Party (Lessee)", "lessee"),
+            ("Contact Number", "lessee contact"),
+            ("Business", "business"),
+            ("Email", "email"),
+            ("Address", "address"),
+            ("Municipal Contract Duration (Years)", "duration"),
+        ]
 
         self.main_vars = {}
 
         info_card = ttk.Frame(self.main_tab, padding=18)
         info_card.pack(fill="both", expand=True)
 
-        ttk.Label(info_card, text=T("Contract Information"), style="Section.TLabel").pack(anchor="w", pady=(0, 12))
+        contract_info_label = ttk.Label(info_card, text=T("Contract Information"), style="Section.TLabel")
+        contract_info_label.pack(anchor="w", pady=(0, 12))
+        self.translatable_labels.append((contract_info_label, "Contract Information"))
 
         for label, key in fields:
             row = ttk.Frame(info_card)
             row.pack(fill="x", pady=8)
-            ttk.Label(row, text=label, width=28, anchor="w", style="Info.TLabel").pack(side="left")
+            label_widget = ttk.Label(row, text=T(label), width=28, anchor="w", style="Info.TLabel")
+            label_widget.pack(side="left")
+            self.translatable_labels.append((label_widget, label))
             var = tk.StringVar()
             self.main_vars[key] = var
             if key == "date":
@@ -447,7 +499,9 @@ class ShopReservationForm(tk.Tk):
 
         row = ttk.Frame(info_card)
         row.pack(fill="x", pady=(8, 0))
-        ttk.Label(row, text=T("Renewable"), width=28, anchor="w", style="Info.TLabel").pack(side="left")
+        renewable_label = ttk.Label(row, text=T("Renewable"), width=28, anchor="w", style="Info.TLabel")
+        renewable_label.pack(side="left")
+        self.translatable_labels.append((renewable_label, "Renewable"))
         self.renew_var = tk.StringVar(value="Yes")
         ttk.Combobox(row, textvariable=self.renew_var, values=["Yes", "No"], width=50, state="readonly").pack(side="left", fill="x", expand=True)
 
@@ -463,7 +517,9 @@ class ShopReservationForm(tk.Tk):
         card = ttk.Frame(self.shops_tab, padding=16)
         card.pack(fill="both", expand=True)
 
-        ttk.Label(card, text=T("Shop Registration"), style="Section.TLabel").pack(anchor="w", pady=(0, 12))
+        shop_registration_label = ttk.Label(card, text=T("Shop Registration"), style="Section.TLabel")
+        shop_registration_label.pack(anchor="w", pady=(0, 12))
+        self.translatable_labels.append((shop_registration_label, "Shop Registration"))
 
         self.shop_tree = ttk.Treeview(card, columns=("shop", "electricity"), show="headings", height=10)
         self.shop_tree.heading("shop", text=T("Shop Number"))
@@ -476,8 +532,12 @@ class ShopReservationForm(tk.Tk):
         form_frame = ttk.Frame(card)
         form_frame.pack(fill="x")
 
-        ttk.Label(form_frame, text=T("Shop Number"), width=18, anchor="w", style="Info.TLabel").grid(row=0, column=0, padx=(0, 8), pady=(0, 6), sticky="w")
-        ttk.Label(form_frame, text=T("Electricity Account"), width=20, anchor="w", style="Info.TLabel").grid(row=0, column=1, padx=(0, 8), pady=(0, 6), sticky="w")
+        shop_number_label = ttk.Label(form_frame, text=T("Shop Number"), width=18, anchor="w", style="Info.TLabel")
+        shop_number_label.grid(row=0, column=0, padx=(0, 8), pady=(0, 6), sticky="w")
+        self.translatable_labels.append((shop_number_label, "Shop Number"))
+        electricity_label = ttk.Label(form_frame, text=T("Electricity Account"), width=20, anchor="w", style="Info.TLabel")
+        electricity_label.grid(row=0, column=1, padx=(0, 8), pady=(0, 6), sticky="w")
+        self.translatable_labels.append((electricity_label, "Electricity Account"))
 
         self.shop_var = tk.StringVar()
         self.elec_var = tk.StringVar()
@@ -494,7 +554,9 @@ class ShopReservationForm(tk.Tk):
         self.shop_combo.grid(row=1, column=0, padx=(0, 8), sticky="ew")
         self.shop_combo.bind("<FocusIn>", self._refresh_shop_number_options)
         ttk.Entry(form_frame, textvariable=self.elec_var, width=22).grid(row=1, column=1, padx=(0, 8), sticky="ew")
-        ttk.Button(form_frame, text=T("Add Shop"), command=self.add_shop, width=16).grid(row=1, column=2, sticky="ew")
+        add_shop_btn = ttk.Button(form_frame, text=T("Add Shop"), command=self.add_shop, width=16)
+        add_shop_btn.grid(row=1, column=2, sticky="ew")
+        self.translatable_buttons.append((add_shop_btn, "Add Shop"))
 
         form_frame.columnconfigure(0, weight=1)
         form_frame.columnconfigure(1, weight=1)
@@ -600,10 +662,10 @@ class ShopReservationForm(tk.Tk):
 
     def create_payment_tab(self):
         fields = [
-            (T("Monthly Rent (OMR)"), "rent"),
-            (T("Security Deposit (OMR)"), "deposit"),
-            (T("Bank Account Number"), "bank"),
-            (T("Account Holder"), "holder"),
+            ("Monthly Rent (OMR)", "rent"),
+            ("Security Deposit (OMR)", "deposit"),
+            ("Bank Account Number", "bank"),
+            ("Account Holder", "holder"),
         ]
 
         self.payment_vars = {}
@@ -611,12 +673,16 @@ class ShopReservationForm(tk.Tk):
         card = ttk.Frame(self.payment_tab, padding=18)
         card.pack(fill="both", expand=True)
 
-        ttk.Label(card, text=T("Payment Details"), style="Section.TLabel").pack(anchor="w", pady=(0, 12))
+        payment_details_label = ttk.Label(card, text=T("Payment Details"), style="Section.TLabel")
+        payment_details_label.pack(anchor="w", pady=(0, 12))
+        self.translatable_labels.append((payment_details_label, "Payment Details"))
 
         for label, key in fields:
             row = ttk.Frame(card)
             row.pack(fill="x", pady=8)
-            ttk.Label(row, text=label, width=28, anchor="w", style="Info.TLabel").pack(side="left")
+            label_widget = ttk.Label(row, text=T(label), width=28, anchor="w", style="Info.TLabel")
+            label_widget.pack(side="left")
+            self.translatable_labels.append((label_widget, label))
             var = tk.StringVar()
             self.payment_vars[key] = var
             ttk.Entry(row, textvariable=var, width=52).pack(side="left", fill="x", expand=True)

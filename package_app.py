@@ -1,3 +1,4 @@
+import ast
 import json
 import os
 import shutil
@@ -141,7 +142,63 @@ def discover_package_imports():
         "ui",
         "config",
         "python_code",
+        "win32com",
+        "win32com.client",
+        "json",
+        "pathlib",
+        "email",
+        "multiprocessing",
+        "queue",
+        "threading",
+        "urllib.request",
+        "csv",
+        "datetime",
+        "tempfile",
+        "shutil",
+        "sqlite3",
+        "importlib",
+        "importlib.util",
+        "typing",
     }
+
+    def record_module_name(module_name):
+        if not module_name:
+            return
+        stripped = str(module_name).strip()
+        if not stripped:
+            return
+        discovered.add(stripped)
+        parts = stripped.split(".")
+        for index in range(1, len(parts)):
+            discovered.add(".".join(parts[:index]))
+
+    def record_aliases_from_ast(source_path):
+        try:
+            source = source_path.read_text(encoding="utf-8")
+        except OSError:
+            return
+        try:
+            parsed = ast.parse(source, filename=str(source_path))
+        except SyntaxError:
+            return
+
+        for node in ast.walk(parsed):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name:
+                        record_module_name(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                if node.module:
+                    record_module_name(node.module)
+            elif isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Attribute) and func.attr == "import_module":
+                    if isinstance(func.value, ast.Name) and func.value.id == "importlib":
+                        if isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                            record_module_name(node.args[0].value)
+                elif isinstance(func, ast.Name) and func.id == "__import__":
+                    if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                        record_module_name(node.args[0].value)
 
     for root_name, root_dir in package_roots:
         if not root_dir.exists():
@@ -156,13 +213,27 @@ def discover_package_imports():
                 module_name = root_name
             else:
                 module_name = ".".join([root_name, *relative_parts])
-            if module_name:
-                discovered.add(module_name)
+            record_module_name(module_name)
+            record_aliases_from_ast(path)
+
+    for root_dir in (APP_DIR / "python_code",):
+        if not root_dir.exists():
+            continue
+        for path in sorted(root_dir.rglob("*.py")):
+            if any(part in {"__pycache__", "build", "dist"} for part in path.parts):
+                continue
+            if path.name.startswith("test_"):
+                continue
+            record_aliases_from_ast(path)
 
     return sorted(discovered)
 
 
 PACKAGING_HIDDEN_IMPORTS = discover_package_imports()
+PACKAGING_SUBMODULE_ROOTS = tuple(
+    item for item in sorted({name for name in PACKAGING_HIDDEN_IMPORTS if name and "." not in name})
+    if item in {"logic", "ui", "config", "python_code"}
+)
 PYTHON_SOURCE_FILES = sorted(
     path
     for path in SOURCE_DIR.rglob("*.py")
@@ -271,14 +342,16 @@ def validate_runtime_asset_catalog():
 
     ui_markers = [
         "from logic.validations.Storage.reports.client_payment_report import build_client_payment_report_text",
+        "from config import translations as translations_core",
         "def set_language(lang):",
         "def T(text, **kwargs):",
-        "def validate_translation_coverage():",
+        "def refresh_lang_ui(self):",
+        "refresh_translatable_widgets(self)",
         "def safe_main():",
         "def is_desktop_environment_available():",
         "Headless mode detected: Tkinter GUI startup skipped because no desktop session is available.",
         "Runtime startup issue after window creation: a GUI callback failed during startup.",
-        "CURRENT_LANGUAGE = \"eng\"",
+        "CURRENT_LANGUAGE = translations_core.CURRENT_LANGUAGE",
         "Logged in as: {user_name}",
         "Client Details",
         "self.selected_shops = remove_shop_from_selected_shops(self.selected_shops, deleted_shop_number)",
@@ -293,10 +366,11 @@ def validate_runtime_asset_catalog():
     ]
 
     ui_utils_markers = [
-        "def refresh_translatable_widget",
-        "def set_emoji_translated_label",
-        "def is_arabic_text",
-        "def apply_bidi_text",
+        "from config.translations import (",
+        "refresh_translatable_widget",
+        "set_emoji_translated_label",
+        "is_arabic_text",
+        "apply_bidi_text",
     ]
 
     session_markers = [
@@ -364,6 +438,7 @@ def validate_runtime_asset_catalog():
         "def set_language(lang_code)",
         '"Guest user selected"',
         '"Logged in as {user_name}"',
+        "CURRENT_LANGUAGE = \"eng\"",
     ]
 
     required_file_sets = [
@@ -522,19 +597,28 @@ TARGET_EXE = find_built_exe()
 
 
 def normalize_payment_method(value):
-    text = str(value or "").strip().lower()
+    if value is None:
+        return "Cash"
+
+    text = str(value).strip()
     if not text:
         return "Cash"
-    mapping = {
-        "cash": "Cash",
-        "cheque": "Cheque",
-        "check": "Cheque",
-        "bank transaction": "Bank Transaction",
-        "bank_transaction": "Bank Transaction",
-        "bank": "Bank Transaction",
-        "bank transfer": "Bank Transaction",
-    }
-    return mapping.get(text, text.title())
+
+    normalized = text.lower()
+    choices = ("Cash", "Cheque", "Bank Transaction")
+    lookup = {choice.lower(): choice for choice in choices}
+    if normalized in lookup:
+        return lookup[normalized]
+
+    for choice in choices:
+        if normalized in choice.lower():
+            return choice
+
+    for alias in ("check", "bank_transaction", "bank transfer", "bank-transfer", "bank"):
+        if normalized == alias:
+            return "Bank Transaction"
+
+    return "Cash"
 
 
 def normalize_legacy_client_data(records):
@@ -862,7 +946,13 @@ def build_app():
     for hidden_import in PACKAGING_HIDDEN_IMPORTS:
         cmd.extend(["--hidden-import", hidden_import])
 
-    for package_name in ("logic", "ui", "config", "python_code"):
+    for package_name in PACKAGING_SUBMODULE_ROOTS:
+        cmd.extend(["--collect-submodules", package_name])
+
+    for package_name in sorted({
+        name for name in PACKAGING_HIDDEN_IMPORTS
+        if name.startswith(("logic.", "ui.", "config.", "python_code."))
+    }):
         cmd.extend(["--collect-submodules", package_name])
 
     cmd.extend([

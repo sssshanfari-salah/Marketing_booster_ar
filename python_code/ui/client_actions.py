@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 from config import translations as lang
-from config.translations import T
+from config.translations import T, refresh_translatable_widgets
 from logic.clients_management import Client, ClientManager, resolve_clients_data_path
 
 
@@ -56,8 +56,13 @@ class ClientManagementMixin:
         selected = self.language_var.get()
         lang.set_language(selected)
         self.language_var.set(lang.CURRENT_LANGUAGE)
+
         if hasattr(self, "refresh_lang_ui"):
             self.refresh_lang_ui()
+            return
+
+        if hasattr(self, "translatable_labels") or hasattr(self, "translatable_buttons"):
+            refresh_translatable_widgets(self)
 
 
 class ClientActions(ClientManagementMixin):
