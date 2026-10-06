@@ -311,18 +311,6 @@ TRANSLATIONS = {
 }
 
 
-def is_arabic_text(value):
-    text = str(value or "")
-    return any(
-        0x0600 <= ord(ch) <= 0x06FF
-        or 0x0750 <= ord(ch) <= 0x077F
-        or 0x08A0 <= ord(ch) <= 0x08FF
-        or 0xFB50 <= ord(ch) <= 0xFDFF
-        or 0xFE70 <= ord(ch) <= 0xFEFF
-        for ch in text
-    )
-
-
 def set_emoji_translated_label(widget, original_text, emoji_prefix=""):
     if widget is None:
         return

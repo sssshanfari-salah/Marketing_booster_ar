@@ -16,34 +16,19 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-try:
-    from config.translations import (
-        CURRENT_LANGUAGE,
-        T,
-        apply_bidi_text,
-        configure_emoji_label,
-        get_emoji_font_families,
-        is_arabic_text,
-        refresh_translatable_widget,
-        refresh_translatable_widgets,
-        set_emoji_translated_label,
-        set_language,
-        validate_translation_coverage,
-    )
-except ImportError:  # pragma: no cover - script execution fallback
-    from config.translations import (
-        CURRENT_LANGUAGE,
-        T,
-        apply_bidi_text,
-        configure_emoji_label,
-        get_emoji_font_families,
-        is_arabic_text,
-        refresh_translatable_widget,
-        refresh_translatable_widgets,
-        set_emoji_translated_label,
-        set_language,
-        validate_translation_coverage,
-    )
+from config.translations import (
+    CURRENT_LANGUAGE,
+    T,
+    apply_bidi_text,
+    configure_emoji_label,
+    get_emoji_font_families,
+    is_arabic_text,
+    refresh_translatable_widget,
+    refresh_translatable_widgets,
+    set_emoji_translated_label,
+    set_language,
+    validate_translation_coverage,
+)
 
 from config import translations as translations_core
 
@@ -928,18 +913,6 @@ def print_report_document(title, lines):
         return False
 
 
-def set_language(lang):
-    return translations_core.set_language(lang)
-
-
-def T(text, **kwargs):
-    return translations_core.T(text, **kwargs)
-
-
-def validate_translation_coverage():
-    return translations_core.validate_translation_coverage()
-
-
 def build_task_log_report_text(plan=None, client_name=""):
     lines = [T("Task log"), "====================", ""]
 
@@ -1023,7 +996,7 @@ def build_startup_splash():
         bg="#1d2736",
         fg="#f5c451",
         font=("Segoe UI", 12, "bold"),
-        text="â˜…",
+        text="★",
     )
     logo_label.pack()
 
