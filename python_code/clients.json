@@ -1,0 +1,173 @@
+[
+  {
+    "name": "al al arjan",
+    "contact": "+968966504855183",
+    "business": "Resturant",
+    "email": "",
+    "shop_number": [
+      "4"
+    ],
+    "address": "",
+    "electrical_meter": [
+      "28602714"
+    ],
+    "notes": [
+      "28602714"
+    ],
+    "contract_details": {
+      "contract_number": "12345",
+      "starting_date": "1/10/2026",
+      "ending_date": "29/9/2027",
+      "commercial_registration_number": "8678686",
+      "authorized_signature_name": "jfdj kldjfkldj",
+      "rent_value": "500",
+      "currency_type": "OMR",
+      "open_issues": "nothing to report",
+      "duration_years": "",
+      "renewable": "Yes",
+      "first_party": "",
+      "second_party": ""
+    },
+    "reservation_status": {
+      "client_name": "",
+      "contact": "",
+      "shop_number": "",
+      "deposit_status": "",
+      "contract_status": "",
+      "contract_duration": "",
+      "rent_value": "",
+      "deposit_amount": "",
+      "last_updated": ""
+    },
+    "reviews": [
+      {
+        "date": "2026-09-19 22:08:34",
+        "review": "i need corner shop",
+        "comment": "all corner shop are booked.  we will keep you in our waiting list"
+      },
+      {
+        "date": "2026-09-19 22:13:41",
+        "review": "i need only one corner shop",
+        "comment": "corner shops comes in pair.  so you need to rent both shops"
+      }
+    ]
+  },
+  {
+    "name": "Salah",
+    "contact": "+96896181142",
+    "business": "realaadljkl",
+    "email": "",
+    "shop_number": [
+      "6"
+    ],
+    "address": "",
+    "electrical_meter": [],
+    "notes": [],
+    "contract_details": {
+      "contract_number": "989878787",
+      "starting_date": "1/11/2026",
+      "ending_date": "29/10/2027",
+      "commercial_registration_number": "i7897979",
+      "authorized_signature_name": "Salah",
+      "rent_value": "200",
+      "currency_type": "OMR",
+      "open_issues": "nothing to report again",
+      "duration_years": "",
+      "renewable": "Yes",
+      "first_party": "",
+      "second_party": ""
+    },
+    "reservation_status": {
+      "client_name": "",
+      "contact": "",
+      "shop_number": "",
+      "deposit_status": "",
+      "contract_status": "",
+      "contract_duration": "",
+      "rent_value": "",
+      "deposit_amount": "",
+      "last_updated": ""
+    },
+    "reviews": []
+  },
+  {
+    "name": "Salim Salah",
+    "contact": "+9688999809890",
+    "business": "HR business",
+    "email": "",
+    "shop_number": [
+      "9"
+    ],
+    "address": "",
+    "electrical_meter": [],
+    "notes": [
+      "28609691"
+    ],
+    "contract_details": {
+      "contract_number": "",
+      "starting_date": "",
+      "ending_date": "",
+      "commercial_registration_number": "",
+      "authorized_signature_name": "",
+      "rent_value": "",
+      "currency_type": "OMR",
+      "open_issues": "",
+      "duration_years": "",
+      "renewable": "Yes",
+      "first_party": "",
+      "second_party": ""
+    },
+    "reservation_status": {
+      "client_name": "",
+      "contact": "",
+      "shop_number": "",
+      "deposit_status": "",
+      "contract_status": "",
+      "contract_duration": "",
+      "rent_value": "",
+      "deposit_amount": "",
+      "last_updated": ""
+    },
+    "reviews": []
+  },
+  {
+    "name": "Abdullah Ahmed",
+    "contact": "+9689878978",
+    "business": "Resturant",
+    "email": "",
+    "shop_number": [
+      "5"
+    ],
+    "address": "Salalah",
+    "electrical_meter": [],
+    "notes": [
+      "28602692"
+    ],
+    "contract_details": {
+      "contract_number": "",
+      "starting_date": "",
+      "ending_date": "",
+      "commercial_registration_number": "",
+      "authorized_signature_name": "",
+      "rent_value": "",
+      "currency_type": "OMR",
+      "open_issues": "",
+      "duration_years": "",
+      "renewable": "Yes",
+      "first_party": "",
+      "second_party": ""
+    },
+    "reservation_status": {
+      "client_name": "",
+      "contact": "",
+      "shop_number": "",
+      "deposit_status": "",
+      "contract_status": "",
+      "contract_duration": "",
+      "rent_value": "",
+      "deposit_amount": "",
+      "last_updated": ""
+    },
+    "reviews": []
+  }
+]

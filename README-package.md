@@ -11,43 +11,43 @@ python package_app.py
 This will:
 - install PyInstaller if needed
 - package the app into a single Windows executable
-- create a desktop shortcut on the Windows Desktop
+- create a desktop shortcut named Clients Manager on the Windows Desktop
 
 ## 2) Desktop shortcut
 
 The script creates a shortcut named:
 
 ```text
-Marketing Booster AR.lnk
+Clients Manager.lnk
 ```
 
 ## 3) Notes
 
 - The packaged app reads and writes the client data file next to the executable if present.
 - If no data file is found, it will create one in the executable folder.
+- The current app branding is Clients Manager, while the executable build name remains the project’s legacy package name for compatibility.
 
 اسم المشروع
-معزّز التسويق النسخة العربية
-Marketing Booster
+Clients Manager
 
 الهدف
-توفير أدوات ومسارات عمل تساعد في تخطيط وإنشاء وتحسين الحملات التسويقية باستخدام لغة بايثون.
+إدارة سجلات العملاء وتفاصيل الاتصال والأعمال وتقدم المهام من خلال تطبيق سطح مكتب بسيط.
 
 المميزات
-تخطيط وتنظيم الحملات التسويقية
+تسجيل العملاء وإدارة جهات الاتصال
 
-دعم إنشاء المحتوى التسويقي
+تنسيق أرقام الاتصال حسب الدولة
 
-معالجة البيانات وتحليلها
+مراجعات العملاء وتتبع تقدم المهام
 
-مسارات عمل قابلة للتوسّع مبنية على بايثون
+تصدير معلومات العميل بصيغة نصية أو vCard
 
-تتبّع تقدّم الحملات التسويقية لكل عميل
+تدفق سطح مكتب بسيط لإدارة العملاء محليًا
 
 طريقة التشغيل
 أكمل خطوات الإعداد الموضّحة أدناه.
 
-افتح موجّه الأوامر داخل مجلد المشروع.
+افتح موجه الأوامر داخل مجلد المشروع.
 
 شغّل نقطة الدخول المناسبة في بايثون، على سبيل المثال:
 

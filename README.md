@@ -1,75 +1,77 @@
-# Project name
+# Clients Manager
 
-Marketing Booster AR
+Desktop client-management application for tracking clients, reservations, shops, contracts, and related business workflow data.
 
-## Objective
+## Project layout
 
-Provide tools and workflows to help plan, create, and improve marketing campaigns using Python.
+The active Python package is organized under the repository root and the package directory below:
 
-## Features
+- [python_code/app/main.py](python_code/app/main.py) — application entry point
+- [python_code/project_paths.py](python_code/project_paths.py) — shared path bootstrap helpers
+- [python_code/ui/dashboard.py](python_code/ui/dashboard.py) — main desktop dashboard
+- [python_code/ui/session.py](python_code/ui/session.py) — user/session/profile logic
+- [python_code/ui/reservation_contract.py](python_code/ui/reservation_contract.py) — reservation/contract form
+- [python_code/logic/clients_management.py](python_code/logic/clients_management.py) — client records and business logic
+- [python_code/logic/starco_finance.py](python_code/logic/starco_finance.py) — transaction editor and reservation-status window; transaction operations delegate to FinanceManager
+- [python_code/logic/finance_manager.py](python_code/logic/finance_manager.py) — contract month options, Pending transaction creation, payment-method edits, due-date updates, and validated payment status changes
+- [python_code/logic/months.py](python_code/logic/months.py) — canonical contract-month generation, month indexing, previous-month lookup, and due-date coercion; client management and business logic retain compatibility imports
+- [python_code/config/translations.py](python_code/config/translations.py) — language and translation logic
+- [clients.json](clients.json), [users.json](users.json), [guests.json](guests.json) — runtime data files at the project root
 
-- Campaign planning and organization
-- Marketing content support
-- Data processing and analysis
-- Extensible Python-based workflows
-- Track each client marketing progress
+## Run the app
 
-## How to run
-
-1. Complete the setup steps below.
-2. Open a terminal in the project directory.
-3. Run the relevant Python entry point, for example:
-
-	```bash
-	python main.py
-	```
-
-## Setup
+From the project root, use the package entry point instead of a legacy root-level launcher:
 
 ```bash
-git clone <repository-url>
-cd "python code"
+python -m python_code.app.main
+```
+
+Open the reservation/contract form directly:
+
+```bash
+python -m python_code.app.main --reservation-form
+```
+
+## Environment setup
+
+Create and activate a virtual environment:
+
+```bash
 python -m venv .venv
 ```
 
-Activate the virtual environment:
+On Windows:
+
+```powershell
+.venv\Scripts\activate
+```
+
+On macOS/Linux:
 
 ```bash
-# Windows
-.venv\Scripts\activate
-
-# macOS/Linux
 source .venv/bin/activate
 ```
 
-Install dependencies if a requirements file is provided:
+Install the required Python packages:
+
+```bash
+pip install tkinter
+pip install bidi arabic-reshaper pillow
+```
+
+If a project requirements file is added later, install from it with:
 
 ```bash
 pip install -r requirements.txt
 ```
-arabic translation:
-اسم المشروع
-معزّز التسويق
-Marketing Booster
 
-الهدف
-توفير أدوات ومسارات عمل تساعد في تخطيط وإنشاء وتحسين الحملات التسويقية باستخدام لغة بايثون.
+## Notes
 
-المميزات
-تخطيط وتنظيم الحملات التسويقية
+- The project is a Tkinter desktop app and needs a real desktop environment for GUI startup.
+- In headless environments, the app detects that condition and skips GUI startup instead of crashing.
+- The canonical app entry point is the module under [python_code/app/main.py](python_code/app/main.py), not a root-level script.
+- Data files are kept at the repository root and are resolved by the logic layer through the project path helpers.
 
-دعم إنشاء المحتوى التسويقي
+## Optional packaging
 
-معالجة البيانات وتحليلها
-
-مسارات عمل قابلة للتوسّع مبنية على بايثون
-
-تتبّع تقدّم الحملات التسويقية لكل عميل
-
-طريقة التشغيل
-أكمل خطوات الإعداد الموضّحة أدناه.
-
-افتح موجّه الأوامر داخل مجلد المشروع.
-
-شغّل نقطة الدخول المناسبة في بايثون، على سبيل المثال:
-
+The build/package flow is managed separately via [package_app.py](package_app.py) and the PyInstaller spec file [marketing_booster_ar.spec](marketing_booster_ar.spec).
