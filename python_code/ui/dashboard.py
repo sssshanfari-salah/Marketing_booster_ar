@@ -3940,22 +3940,16 @@ class ProgressApp(tk.Tk):
         self.refresh_display()
 
     def open_task_details_window(self):
-        if is_guest_profile(CURRENT_SESSION_PROFILE):
-            if self.plan is None:
-                messagebox.showwarning(T("No client plan"), T("Create a client plan first."))
-                return
-        elif self._require_registered_user_for_changes(T("Task details")):
-            return
-        if self.plan is None:
-            messagebox.showwarning(T("No client plan"), T("Create a client plan first."))
+        if not is_guest_profile(CURRENT_SESSION_PROFILE) and self._require_registered_user_for_changes(T("Task details")):
             return
 
+        plan = self.plan
         TaskDetailsWindow(
             self,
-            client_name=self.client_name_var.get().strip() or self.plan.client_name,
-            plan=self.plan,
-            all_tasks=list(self.plan.all_tasks),
-            pending_tasks=list(self.plan.pending_tasks),
+            client_name=self.client_name_var.get().strip() or (plan.client_name if plan else "Client"),
+            plan=plan,
+            all_tasks=list(plan.all_tasks) if plan else [],
+            pending_tasks=list(plan.pending_tasks) if plan else [],
         )
 
     def open_contract_details_window(self):
@@ -4903,4 +4897,3 @@ class AllClientsProgressWindow(tk.Toplevel):
 
 if __name__ == "__main__":
     safe_main()
-
