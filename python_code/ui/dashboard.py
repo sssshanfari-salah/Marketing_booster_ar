@@ -4369,6 +4369,134 @@ class ClientDetailsWindow(tk.Toplevel):
         self.destroy()
 
 
+class ClientForm(ttk.Frame):
+    """Read-only presentation of a client's full record.
+
+    All of the data shown here (client info, contract details and reservation
+    status) is sourced exclusively from the Reservation Contract project's
+    client records -- this form never writes back, so it cannot drift out of
+    sync with, or conflict with, the Reservation Contract as the single
+    source of truth for client data.
+    """
+
+    def __init__(self, master, client_data):
+        super().__init__(master)
+        self.client = client_data or {}
+        self.build_ui()
+
+    def section(self, parent, title):
+        frame = ttk.LabelFrame(parent, text=title)
+        frame.pack(fill="x", padx=10, pady=6)
+        return frame
+
+    def add_field(self, parent, label, value):
+        row = ttk.Frame(parent)
+        row.pack(fill="x", pady=2)
+
+        ttk.Label(row, text=label, width=28).pack(side="left")
+        entry = ttk.Entry(row)
+        entry.pack(side="left", fill="x", expand=True)
+        entry.insert(0, value)
+        entry.configure(state="readonly")
+        return entry
+
+    @staticmethod
+    def _join_list(value):
+        if isinstance(value, (list, tuple, set)):
+            return ", ".join(str(item).strip() for item in value if str(item).strip())
+        return str(value or "")
+
+    def build_ui(self):
+        # -----------------------------
+        # CLIENT INFORMATION SECTION
+        # -----------------------------
+        sec1 = self.section(self, T("Client Information"))
+
+        self.name = self.add_field(sec1, T("Client Name") + ":", self.client.get("name", ""))
+        self.contact = self.add_field(sec1, T("Contact") + ":", self.client.get("contact", ""))
+        self.business = self.add_field(sec1, T("Business") + ":", self.client.get("business", ""))
+        self.email = self.add_field(sec1, T("Email") + ":", self.client.get("email", ""))
+        self.address = self.add_field(sec1, T("Address") + ":", self.client.get("address", ""))
+
+        self.shop_number = self.add_field(sec1, T("Shop Numbers") + ":", self._join_list(self.client.get("shop_number", [])))
+        self.electrical_meter = self.add_field(sec1, T("Electrical Meters") + ":", self._join_list(self.client.get("electrical_meter", [])))
+        self.notes = self.add_field(sec1, T("Notes") + ":", self._join_list(self.client.get("notes", [])))
+
+        # -----------------------------
+        # CONTRACT DETAILS SECTION
+        # -----------------------------
+        sec2 = self.section(self, T("Contract Details"))
+        cd = self.client.get("contract_details", {}) or {}
+
+        self.contract_number = self.add_field(sec2, T("Contract Number") + ":", cd.get("contract_number", ""))
+        self.start_date = self.add_field(sec2, T("Starting Date") + ":", cd.get("starting_date", ""))
+        self.end_date = self.add_field(sec2, T("Ending Date") + ":", cd.get("ending_date", ""))
+        self.cr_number = self.add_field(sec2, T("Commercial Registration Number") + ":", cd.get("commercial_registration_number", ""))
+        self.auth_name = self.add_field(sec2, T("Authorized Signature Name") + ":", cd.get("authorized_signature_name", ""))
+        self.rent_value = self.add_field(sec2, T("Rent Value") + ":", cd.get("rent_value", ""))
+        self.currency = self.add_field(sec2, T("Currency Type") + ":", cd.get("currency_type", ""))
+        self.open_issues = self.add_field(sec2, T("Open Issues Requiring Attention") + ":", cd.get("open_issues", ""))
+        self.renewable = self.add_field(sec2, T("Renewable") + ":", cd.get("renewable", ""))
+
+        # -----------------------------
+        # RESERVATION STATUS SECTION
+        # -----------------------------
+        sec3 = self.section(self, T("Reservation Status"))
+        rs = self.client.get("reservation_status", {}) or {}
+
+        self.rs_client = self.add_field(sec3, T("Client Name") + ":", rs.get("client_name", ""))
+        self.rs_contact = self.add_field(sec3, T("Contact") + ":", rs.get("contact", ""))
+        self.rs_shop = self.add_field(sec3, T("Shop Number") + ":", rs.get("shop_number", ""))
+        self.rs_deposit = self.add_field(sec3, T("Deposit Status") + ":", rs.get("deposit_status", ""))
+        self.rs_contract_status = self.add_field(sec3, T("Contract Status") + ":", rs.get("contract_status", ""))
+        self.rs_duration = self.add_field(sec3, T("Contract Duration") + ":", rs.get("contract_duration", ""))
+        self.rs_rent = self.add_field(sec3, T("Rent Value") + ":", rs.get("rent_value", ""))
+
+
+class ClientDetailsFormWindow(tk.Toplevel):
+    """Toplevel wrapper that shows ClientForm for a single client, scrollable.
+
+    This replaces the old editable client-details window for the "All
+    Clients" list: it only ever reads from the Reservation Contract client
+    record (via Client.to_dict()) and never links to any client-editing UI.
+    """
+
+    def __init__(self, master=None, client_name=None, manager=None):
+        super().__init__(master)
+        self.title(T("Client Details"))
+        self.geometry("560x680")
+        self.minsize(480, 420)
+
+        self.manager = manager or ClientManager(resolve_clients_data_path())
+        self.manager.load_clients()
+        client = next(
+            (entry for entry in self.manager.clients if entry.name.strip().lower() == str(client_name or "").strip().lower()),
+            None,
+        )
+        client_data = client.to_dict() if client is not None else {"name": client_name or ""}
+
+        canvas_holder = ttk.Frame(self)
+        canvas_holder.pack(fill="both", expand=True)
+        canvas = tk.Canvas(canvas_holder, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(canvas_holder, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        form = ClientForm(canvas, client_data)
+        form_window = canvas.create_window((0, 0), window=form, anchor="nw")
+
+        def _sync_scroll_region(event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _sync_form_width(event):
+            canvas.itemconfigure(form_window, width=event.width)
+
+        form.bind("<Configure>", _sync_scroll_region)
+        canvas.bind("<Configure>", _sync_form_width)
+
+        ttk.Button(self, text=T("Close"), command=self.destroy).pack(pady=(0, 10))
+
 
 class AllClientsProgressWindow(tk.Toplevel):
     def __init__(self, master=None):
@@ -4402,7 +4530,7 @@ class AllClientsProgressWindow(tk.Toplevel):
         self.tree.pack(fill="both", expand=True, padx=12, pady=(12, 8))
 
         self.tree.configure(selectmode="extended")
-        self.tree.bind("<Double-1>", self.open_selected_client_reservation_contract)
+        self.tree.bind("<Double-1>", self.view_selected_client_details)
         self.tree.bind("<Delete>", lambda event: self.delete_selected_client())
         self.tree.bind("<BackSpace>", lambda event: self.delete_selected_client())
         self.tree.bind("<Control-a>", lambda event: self.select_all_clients())
@@ -4410,7 +4538,7 @@ class AllClientsProgressWindow(tk.Toplevel):
         button_row = ttk.Frame(self)
         button_row.pack(pady=(0, 12))
         ttk.Button(button_row, text=T("Select All"), command=self.select_all_clients).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Reservation Status"), command=self.open_selected_client_reservation_contract).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Client Details"), command=self.view_selected_client_details).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Delete Selected Client"), command=self.delete_selected_client).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
@@ -4444,7 +4572,7 @@ class AllClientsProgressWindow(tk.Toplevel):
     def export_log(self):
         ExportClientsLogWindow(self, self.manager)
 
-    def open_selected_client_reservation_contract(self, event=None):
+    def view_selected_client_details(self, event=None):
         selection = self.tree.selection()
         if not selection:
             messagebox.showwarning(T("No client selected"), T("Select a client row first."))
@@ -4455,14 +4583,7 @@ class AllClientsProgressWindow(tk.Toplevel):
             return
 
         client_name = values[0]
-
-        if self.master and hasattr(self.master, "open_reservation_status_window"):
-            self.master.open_reservation_status_window(client_name=client_name)
-            if self.master and hasattr(self.master, "refresh_client_combo"):
-                self.master.refresh_client_combo()
-            self.refresh_view()
-        else:
-            messagebox.showerror(T("Form unavailable"), T("The reservation contract form could not be loaded."))
+        ClientDetailsFormWindow(self, client_name=client_name, manager=self.manager)
 
     def select_all_clients(self):
         children = self.tree.get_children()
