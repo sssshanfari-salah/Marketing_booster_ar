@@ -444,6 +444,45 @@ class Client:
     # Convenience Methods (Optional for UI)
     # ------------------------------------------------------------
 
+    def to_vcard(self):
+        """Build a vCard 3.0 text block for this client (used for copy/share)."""
+        def escape(value):
+            text = str(value or "")
+            return (
+                text.replace("\\", "\\\\")
+                .replace(",", "\\,")
+                .replace(";", "\\;")
+                .replace("\n", "\\n")
+            )
+
+        shop_numbers = ", ".join(str(item) for item in self.shop_number if str(item).strip())
+        notes_parts = []
+        if shop_numbers:
+            notes_parts.append(f"Shop: {shop_numbers}")
+        meter_values = list(self.electrical_meter) or list(self.notes)
+        if meter_values:
+            notes_parts.append(f"Electrical Meter: {', '.join(meter_values)}")
+        notes_text = " | ".join(notes_parts)
+
+        lines = [
+            "BEGIN:VCARD",
+            "VERSION:3.0",
+            f"FN:{escape(self.name)}",
+            f"N:{escape(self.name)};;;;",
+        ]
+        if self.contact:
+            lines.append(f"TEL;TYPE=CELL:{escape(self.contact)}")
+        if self.email:
+            lines.append(f"EMAIL:{escape(self.email)}")
+        if self.business:
+            lines.append(f"ORG:{escape(self.business)}")
+        if self.address:
+            lines.append(f"ADR;TYPE=WORK:;;{escape(self.address)};;;;")
+        if notes_text:
+            lines.append(f"NOTE:{escape(notes_text)}")
+        lines.append("END:VCARD")
+        return "\n".join(lines) + "\n"
+
     def add_review(self, text: str):
         """Add a new review directly to the client."""
         review = self._normalize_review_text(text)
