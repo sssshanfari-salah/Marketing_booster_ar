@@ -4193,12 +4193,12 @@ class ProgressApp(tk.Tk):
     def open_all_clients(self):
         AllClientsProgressWindow(self)
 
-    def open_reservation_status_window(self):
+    def open_reservation_status_window(self, client_name=None):
         if not is_registered_user_profile() or is_guest_profile(CURRENT_SESSION_PROFILE):
             messagebox.showwarning(T("Access Denied"), T("Registered users only. Guest access is limited to clients, reviews, tasks and payment reports."))
             return
 
-        client_name = str(self.client_name_var.get() or "").strip()
+        client_name = str(client_name if client_name is not None else self.client_name_var.get() or "").strip()
 
         try:
             from ui.reservation_contract import ShopReservationForm
@@ -4402,7 +4402,7 @@ class AllClientsProgressWindow(tk.Toplevel):
         self.tree.pack(fill="both", expand=True, padx=12, pady=(12, 8))
 
         self.tree.configure(selectmode="extended")
-        self.tree.bind("<Double-1>", self.edit_selected_client)
+        self.tree.bind("<Double-1>", self.open_selected_client_reservation_contract)
         self.tree.bind("<Delete>", lambda event: self.delete_selected_client())
         self.tree.bind("<BackSpace>", lambda event: self.delete_selected_client())
         self.tree.bind("<Control-a>", lambda event: self.select_all_clients())
@@ -4410,7 +4410,7 @@ class AllClientsProgressWindow(tk.Toplevel):
         button_row = ttk.Frame(self)
         button_row.pack(pady=(0, 12))
         ttk.Button(button_row, text=T("Select All"), command=self.select_all_clients).pack(side="left", padx=(0, 8))
-        ttk.Button(button_row, text=T("Edit Selected Client"), command=self.edit_selected_client).pack(side="left", padx=(0, 8))
+        ttk.Button(button_row, text=T("Reservation Status"), command=self.open_selected_client_reservation_contract).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Delete Selected Client"), command=self.delete_selected_client).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Refresh"), command=self.refresh_view).pack(side="left", padx=(0, 8))
         ttk.Button(button_row, text=T("Print"), command=self.print_report).pack(side="left", padx=(0, 8))
@@ -4444,7 +4444,7 @@ class AllClientsProgressWindow(tk.Toplevel):
     def export_log(self):
         ExportClientsLogWindow(self, self.manager)
 
-    def edit_selected_client(self, event=None):
+    def open_selected_client_reservation_contract(self, event=None):
         selection = self.tree.selection()
         if not selection:
             messagebox.showwarning(T("No client selected"), T("Select a client row first."))
@@ -4455,14 +4455,14 @@ class AllClientsProgressWindow(tk.Toplevel):
             return
 
         client_name = values[0]
-        business = values[2] if len(values) > 2 else "N/A"
 
-        if self.master and hasattr(self.master, "open_client_window"):
-            self.master.open_client_window(client_name=client_name)
-        elif self.master and hasattr(self.master, "load_client_progress"):
-            self.master.load_client_progress(client_name, business)
-
-        self.destroy()
+        if self.master and hasattr(self.master, "open_reservation_status_window"):
+            self.master.open_reservation_status_window(client_name=client_name)
+            if self.master and hasattr(self.master, "refresh_client_combo"):
+                self.master.refresh_client_combo()
+            self.refresh_view()
+        else:
+            messagebox.showerror(T("Form unavailable"), T("The reservation contract form could not be loaded."))
 
     def select_all_clients(self):
         children = self.tree.get_children()
