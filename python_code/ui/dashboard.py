@@ -1,4 +1,4 @@
-﻿import calendar
+import calendar
 import json
 import os
 import re
@@ -1201,12 +1201,9 @@ def update_window_login_status(window, profile=None):
     display_name = session_name or session_email or "Guest"
     if hasattr(window, "login_status_var"):
         try:
-            window.login_status_var.set(T("Logged in as: {user_name}", user_name=display_name))
+            window.login_status_var.set(display_name)
         except Exception:
-            try:
-                window.login_status_var.set(f"Logged in as: {display_name}")
-            except Exception:
-                pass
+            pass
 
     label = getattr(window, "login_status_label", None)
     if label is not None:
