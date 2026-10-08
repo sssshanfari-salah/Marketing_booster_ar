@@ -218,6 +218,8 @@ class ShopReservationForm(tk.Tk):
         self.client_selector_var = tk.StringVar()
         self._build_client_selector_row()
         self.refresh_client_selector()
+        if self.client_name and self.client_name in self.client_selector["values"]:
+            self.client_selector_var.set(self.client_name)
         self.prefill_from_saved_client()
 
         button_row = ttk.Frame(self, padding=(0, 0, 0, 18))
