@@ -149,9 +149,42 @@ RESERVATION_CONTRACT_DIR_ALIASES = (
 )
 
 
+def _default_project_root():
+    # PyInstaller onefile builds flatten "python_code/logic/..." down to a
+    # top-level "logic/..." package inside the extraction temp dir, so this
+    # module's __file__ sits one level shallower than it does in the source
+    # tree. Using the dev-only parents[2] here would resolve to the parent of
+    # the temp extraction folder (e.g. a throwaway %TEMP% directory), which
+    # silently produces a brand-new, empty clients.json instead of the real
+    # data. Prefer the actual executable's folder (and its parent, matching
+    # this project's dist/<exe> layout) so existing client data is found;
+    # fall back to the bundled seed copy in the extraction dir, and finally to
+    # the plain source-tree calculation for normal (non-frozen) execution.
+    if getattr(sys, "frozen", False):
+        candidates = []
+        exe_path = getattr(sys, "executable", None)
+        if exe_path:
+            exe_dir = Path(exe_path).resolve().parent
+            candidates.extend([exe_dir.parent, exe_dir])
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass))
+
+        for candidate in candidates:
+            if (candidate / "clients.json").exists():
+                return candidate
+            for alias in RESERVATION_CONTRACT_DIR_ALIASES:
+                if (candidate.parent / alias).is_dir():
+                    return candidate
+        if candidates:
+            return candidates[0]
+
+    return Path(__file__).resolve().parents[2]
+
+
 def resolve_clients_data_path(project_root=None):
     if project_root is None:
-        project_root = Path(__file__).resolve().parents[2]
+        project_root = _default_project_root()
 
     project_root = Path(project_root).resolve()
 
