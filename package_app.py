@@ -526,9 +526,12 @@ def validate_runtime_asset_catalog():
         "self.tree.bind(\"<Control-a>\", lambda event: self.select_all_clients())",
         "def rebuild_selected_shops_from_clients(self):",
         "self.rebuild_selected_shops_from_clients()",
-        "self.client_manager.validate_shop_number(",
-        "self.selected_shops.append({\"Shop\": shop_number, \"Elec meter\": str(meter_value or \"\")})",
-        "if not names:\n            self.client_name_var.set(\"\")\n            self.client_combo.set(\"\")\n            return",
+        "self.manager.validate_shop_number(shop_number, exclude_name=name)",
+        "self.selected_shops.append({\n                \"Shop\": shop_number,\n                \"Elec meter\": str(getattr(client, \"electrical_meter\", \"\") or getattr(client, \"notes\", \"\") or \"\"),\n            })",
+        "if not names or current_name not in names:\n            self.client_name_var.set(\"\")\n            self.client_combo.set(\"\")\n            return",
+        "Select Client",
+        "state=\"readonly\"",
+        "def _save_client_progress(self):",
     ]
 
     ui_utils_markers = [
@@ -617,6 +620,12 @@ def validate_runtime_asset_catalog():
         "from config import translations as lang",
         "from config.translations import",
         "import config.translations",
+        # Client-detail editing was intentionally removed from the dashboard; the
+        # Reservation Contract form is now the sole place to edit client details.
+        'T("Add Client")',
+        'T("Save Client")',
+        "def add_new_client(self):",
+        "def save_current_client(self):",
     ]
 
     required_file_sets = [
