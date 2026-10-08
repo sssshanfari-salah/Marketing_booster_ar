@@ -96,6 +96,7 @@ try:
         append_report_footer,
         build_report_issuer_footer,
         ensure_default_guest_session,
+        get_registered_user_name,
         is_admin_registration_allowed,
         is_guest_login_credentials,
         is_guest_profile,
@@ -126,6 +127,7 @@ except ImportError:  # pragma: no cover - script execution fallback
         append_report_footer,
         build_report_issuer_footer,
         ensure_default_guest_session,
+        get_registered_user_name,
         is_admin_registration_allowed,
         is_guest_login_credentials,
         is_guest_profile,
@@ -1713,6 +1715,7 @@ class WelcomeWindow(tk.Tk):
             return
 
         self.guest_mode = False
+        user_name = get_registered_user_name(user_name, user_email)
         save_user_profile(user_name, user_email)
         set_current_session_profile(user_name=user_name, user_email=user_email)
         self.user_name_var.set(user_name)
@@ -1833,6 +1836,7 @@ class WelcomeWindow(tk.Tk):
             return
 
         self.guest_mode = False
+        user_name = get_registered_user_name(user_name, user_email)
         save_user_profile(user_name, user_email)
         set_current_session_profile(user_name=user_name, user_email=user_email)
         self.user_name_var.set(user_name)
@@ -1974,6 +1978,7 @@ class LoginWindow(tk.Toplevel):
             )
             return
 
+        user_name = get_registered_user_name(user_name, user_email)
         save_user_profile(user_name, user_email)
         if self.master is not None and hasattr(self.master, "_apply_logged_in_user"):
             self.master._apply_logged_in_user(user_name, user_email)
