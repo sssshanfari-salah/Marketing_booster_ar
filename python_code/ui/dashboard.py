@@ -4400,6 +4400,17 @@ class ClientForm(ttk.Frame):
         entry.configure(state="readonly")
         return entry
 
+    def add_text_block(self, parent, label, value, height=5):
+        row = ttk.Frame(parent)
+        row.pack(fill="x", pady=2)
+
+        ttk.Label(row, text=label).pack(anchor="w")
+        text = tk.Text(row, height=height, wrap="word", font=("Segoe UI", 9))
+        text.pack(fill="x", expand=True, pady=(2, 0))
+        text.insert("1.0", value)
+        text.configure(state="disabled")
+        return text
+
     @staticmethod
     def _join_list(value):
         if isinstance(value, (list, tuple, set)):
@@ -4452,6 +4463,48 @@ class ClientForm(ttk.Frame):
         self.rs_duration = self.add_field(sec3, T("Contract Duration") + ":", rs.get("contract_duration", ""))
         self.rs_rent = self.add_field(sec3, T("Rent Value") + ":", rs.get("rent_value", ""))
 
+        # -----------------------------
+        # PROGRESS & TASKS SECTION
+        # -----------------------------
+        sec4 = self.section(self, T("Progress & Tasks"))
+        progress_info = self.client.get("progress_info", {}) or {}
+        all_tasks = progress_info.get("all_tasks", []) or []
+        pending_tasks = progress_info.get("pending_tasks", []) or []
+        completed_count = max(len(all_tasks) - len(pending_tasks), 0)
+
+        self.progress_percent = self.add_field(
+            sec4, T("Progress") + ":", f"{progress_info.get('progress', 0)}%"
+        )
+        self.tasks_summary = self.add_field(
+            sec4, T("Tasks Completed") + ":", f"{completed_count} / {len(all_tasks)}"
+        )
+        self.pending_tasks_box = self.add_text_block(
+            sec4, T("Pending Tasks") + ":", self._join_list(pending_tasks), height=3
+        )
+        self.all_tasks_box = self.add_text_block(
+            sec4, T("All Tasks") + ":", self._join_list(all_tasks), height=3
+        )
+
+        # -----------------------------
+        # REVIEWS SECTION
+        # -----------------------------
+        sec5 = self.section(self, T("Client Reviews"))
+        reviews = self.client.get("reviews", []) or []
+        if reviews:
+            review_lines = [
+                "[{date}] {review} -- {comment}".format(
+                    date=str(entry.get("date", "")).strip(),
+                    review=str(entry.get("review", "")).strip(),
+                    comment=str(entry.get("comment", "")).strip(),
+                )
+                for entry in reviews
+                if isinstance(entry, dict)
+            ]
+            review_text = "\n".join(review_lines)
+        else:
+            review_text = T("No reviews yet.")
+        self.reviews_box = self.add_text_block(sec5, T("Reviews") + ":", review_text, height=6)
+
 
 class ClientDetailsFormWindow(tk.Toplevel):
     """Toplevel wrapper that shows ClientForm for a single client, scrollable.
@@ -4474,6 +4527,17 @@ class ClientDetailsFormWindow(tk.Toplevel):
             None,
         )
         client_data = client.to_dict() if client is not None else {"name": client_name or ""}
+
+        # Keep the Progress & Tasks section in sync with the live task tracker
+        # (Plan.Clients_progress) used across the dashboard, falling back to
+        # whatever was last attached to the client object in this session.
+        resolved_name = client.name if client is not None else str(client_name or "")
+        progress_info = dict(Plan.Clients_progress.get(resolved_name, {}))
+        if not progress_info and client is not None:
+            existing_progress = getattr(client, "progress", None)
+            if isinstance(existing_progress, dict):
+                progress_info = dict(existing_progress)
+        client_data["progress_info"] = progress_info
 
         canvas_holder = ttk.Frame(self)
         canvas_holder.pack(fill="both", expand=True)
